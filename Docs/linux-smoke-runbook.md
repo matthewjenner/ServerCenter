@@ -14,37 +14,58 @@ earlier ones passed. The `[works today]` / `[needs seeding]` / `[gap]` tags say 
 
 ## 0. Prereqs (on the hypervisor host)
 
-- Docker (or Podman) with `docker compose`.
+- Docker with `docker compose` (the image is public on GHCR - no login needed).
 - libvirt running; the RW socket at `/var/run/libvirt/libvirt-sock`; `virsh list --all` works as the
-  user Docker runs as.
+  user Docker runs as. VMs under `qemu:///system` (the compose mounts the system socket).
 - At least one defined guest domain for the libvirt smoke (e.g. `virsh list --all` shows `plex-vm`).
 - The controller listens h2c (HTTP/2 cleartext) in plaintext mode, so REST calls need
   `curl --http2-prior-knowledge` (or use the dashboard, which speaks gRPC/HTTP-2).
 
-## 1. Bring up the controller  [works today]
+## 1. Bring up node zero: controller + host agent, one command  [works today]
+
+The hypervisor is node zero - it runs the same agent as guests. Because you install that agent
+anyway, `install.sh --with-controller` also stands up the controller container, so node zero is a
+single command (nothing copied from a workstation - it all comes from the GitHub release + the
+public GHCR image):
 
 ```bash
-cd Deploy/controller
-mkdir -p templates/cs2                       # config templates, keyed by schemaRef
-# put your server.cfg template at templates/cs2/server.cfg, e.g.:  hostname={{name}}\nrcon_password={{rcon.password}}
-docker compose up --build -d
-docker compose logs -f                       # watch for startup + agent connects
+curl -L -O https://github.com/matthewjenner/ServerCenter/releases/download/agent-v<version>/servercenter-agent-<version>-linux-x64.tar.gz
+mkdir agent && tar -xzf servercenter-agent-<version>-linux-x64.tar.gz -C agent && cd agent
+sudo ./install.sh --with-controller
 ```
 
-Verify: the container is up, `/data/servercenter.db` exists in the `controller-data` volume, no errors
-in the logs. Note the host IP/hostname agents will dial (e.g. `10.0.0.2:5080`).
+This pulls + starts the controller on `http://127.0.0.1:5080` (plaintext bring-up), seeds the host
+agent's env (`SERVERCENTER_NODE_KIND=host`, `SERVERCENTER_AGENT_ID=host`, loopback controller), and
+starts the service. If a controller is already running here it is left as-is and only the agent
+installs. Config templates go under `/opt/servercenter-controller/templates/<schemaRef>/` (mounted
+read-only into the container at `/templates`), e.g. `/opt/servercenter-controller/templates/cs2/server.cfg`
+with `hostname={{name}}` / `rcon_password={{rcon.password}}`.
 
-## 2. Install node zero (the host agent)  [works today]
+Verify: `docker ps` shows `servercenter-controller` up; `/data/servercenter.db` exists in the
+`controller-data` volume; `journalctl -u servercenter-agent -f` settles and the controller logs
+`Agent host connected`. Note the host LAN IP guests will dial (e.g. `10.0.0.2:5080`).
 
-On the hypervisor host itself (node zero runs the SAME agent as guests):
+Controller-only alternative (a box that is not itself a managed node): copy just
+`Deploy/controller/docker-compose.yml` + a `templates/` dir and run `docker compose pull && up -d`.
 
-- Install from the GitHub release or `Scripts/publish-agent.sh linux-x64` + `Deploy/install.sh`.
-- Configure `Deploy/servercenter-agent.env`: point `SERVERCENTER_CONTROLLER_ADDRESS` at
-  `http://<host>:5080`, set `SERVERCENTER_NODE_KIND=host`, and the agent id.
-- `systemctl start servercenter-agent` (Type=notify, journald).
+## 2. Add the guest agents  [works today]
 
-Verify: controller logs `Agent <id> connected`; `journalctl -u servercenter-agent` shows the dial loop
-settle.
+On each guest VM (same tarball; the VM keeps running - you are only adding a systemd service):
+
+```bash
+curl -L -O https://github.com/matthewjenner/ServerCenter/releases/download/agent-v<version>/servercenter-agent-<version>-linux-x64.tar.gz
+mkdir agent && tar -xzf servercenter-agent-<version>-linux-x64.tar.gz -C agent && cd agent
+sudo ./install.sh
+sudo sed -i \
+  -e 's|^SERVERCENTER_CONTROLLER=.*|SERVERCENTER_CONTROLLER=http://<host-lan-ip>:5080|' \
+  -e 's|^SERVERCENTER_AGENT_ID=.*|SERVERCENTER_AGENT_ID=<unique-id>|' \
+  /etc/servercenter-agent/agent.env
+sudo systemctl start servercenter-agent && journalctl -u servercenter-agent -f
+```
+
+`SERVERCENTER_AGENT_ID` must be UNIQUE per node (blank collides on `dev-agent` in the plaintext
+path); leave `SERVERCENTER_NODE_KIND=guest`. Verify: the controller logs `Agent <id> connected` and
+the node appears in the dashboard.
 
 ## 3. Dashboard (dual-truth)  [works today]
 
@@ -105,7 +126,7 @@ and the job shows Succeeded.
 SQLite directly for now (the `body_json` must match `GameDescriptorSerializer`; keep it minimal):
 
 ```bash
-docker compose exec controller sqlite3 /data/servercenter.db \
+docker exec servercenter-controller sqlite3 /data/servercenter.db \
   "INSERT INTO game_descriptor(id,version,body_json,created_at) VALUES
    ('cs2-dedicated',3,'{\"id\":\"cs2-dedicated\",\"version\":3,\"steamApp\":{\"appId\":730,\"installDir\":\"/opt/cs2\"}}',0);
    INSERT INTO server_instance(id,node_id,descriptor_id,descriptor_version,instance_params_json,created_at) VALUES
@@ -140,7 +161,7 @@ S3 backup is deferred. For now, snapshot the precious state with a consistent co
 live file):
 
 ```bash
-docker compose exec controller sh -c 'sqlite3 /data/servercenter.db "VACUUM INTO '\''/data/backup.db'\''"'
+docker exec servercenter-controller sh -c 'sqlite3 /data/servercenter.db "VACUUM INTO '\''/data/backup.db'\''"'
 ```
 
 Copy `/data/backup.db` off-box. Test the restore into a scratch controller before trusting it.

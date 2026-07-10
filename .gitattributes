@@ -1,0 +1,24 @@
+# Normalize line endings. Text files are stored as LF in the repository and checked out as LF on
+# every platform, so bash scripts and CI stay correct regardless of the developer's OS.
+* text=auto eol=lf
+
+# Batch files are the exception - the Windows command interpreter wants CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets git must never line-ending-convert or diff as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.tar  binary
+*.dll  binary
+*.exe  binary
+*.db   binary
+*.pfx  binary
+*.p12  binary
+*.snk  binary
