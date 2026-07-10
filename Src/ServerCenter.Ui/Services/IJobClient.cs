@@ -11,8 +11,10 @@ public interface IJobClient
     Task<string> RestartServiceAsync(string agentId, string unit, CancellationToken ct);
 
     Task<UpdateTriggerResult> TriggerUpdateAsync(string agentId, string policyId, string? serviceUnit, CancellationToken ct);
+
+    Task<UpdateTriggerResult> TriggerVmActionAsync(string nodeId, string action, CancellationToken ct);
 }
 
-// The controller's response to an update trigger: "Dispatched" carries a job id; the other outcomes
-// (PolicyNotFound / NotEligible / NeedsConfirmation) carry a reason for the operator.
+// The controller's response to an operator trigger: "Dispatched" carries a job id; other outcomes
+// (e.g. NotFound / NoDomain / NeedsConfirmation) carry a reason for the operator.
 public sealed record UpdateTriggerResult(string Outcome, string? JobId, string Reason);

@@ -3,7 +3,7 @@
         x:Class="ServerCenter.Ui.MainWindow"
         Title="ServerCenter"
         Width="1100" Height="780">
-  <Grid Margin="12" RowDefinitions="Auto,2*,Auto,Auto,Auto,3*">
+  <Grid Margin="12" RowDefinitions="Auto,2*,Auto,Auto,Auto,Auto,3*">
 
     <TextBlock Grid.Row="0" Margin="4,4,4,8" FontSize="14" Text="{Binding Fleet.ConnectionStatus}" />
 
@@ -37,7 +37,15 @@
       <TextBlock Text="{Binding Jobs.UpdateStatus}" VerticalAlignment="Center" />
     </StackPanel>
 
-    <DataGrid Grid.Row="5"
+    <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+      <TextBox PlaceholderText="node id (VM)" Text="{Binding Jobs.VmNodeId}" Width="180" />
+      <Button Content="Start" Command="{Binding Jobs.VmActionCommand}" CommandParameter="start" />
+      <Button Content="Stop" Command="{Binding Jobs.VmActionCommand}" CommandParameter="stop" />
+      <Button Content="Restart" Command="{Binding Jobs.VmActionCommand}" CommandParameter="restart" />
+      <TextBlock Text="{Binding Jobs.VmStatus}" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <DataGrid Grid.Row="6"
               ItemsSource="{Binding Jobs.Jobs}"
               IsReadOnly="True" AutoGenerateColumns="False" GridLinesVisibility="Horizontal">
       <DataGrid.Columns>

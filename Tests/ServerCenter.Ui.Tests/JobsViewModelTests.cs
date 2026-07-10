@@ -74,6 +74,30 @@ public sealed class JobsViewModelTests
     }
 
     [Fact]
+    public async Task Vm_action_triggers_the_selected_action_for_the_node()
+    {
+        var client = new RecordingJobClient { Result = new UpdateTriggerResult("Dispatched", "vmjob1234", string.Empty) };
+        var vm = new JobsViewModel(client) { VmNodeId = " cs2-node " };
+
+        await vm.VmActionCommand.ExecuteAsync("restart");
+
+        client.LastVmAction.Should().Be(("cs2-node", "restart"));
+        vm.VmStatus.Should().Be("restart dispatched vmjob123");
+    }
+
+    [Fact]
+    public async Task Vm_action_requires_a_node_id()
+    {
+        var client = new RecordingJobClient();
+        var vm = new JobsViewModel(client) { VmNodeId = "" };
+
+        await vm.VmActionCommand.ExecuteAsync("start");
+
+        vm.VmStatus.Should().Contain("node id");
+        client.LastVmAction.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Trigger_update_surfaces_a_non_dispatched_outcome()
     {
         var client = new RecordingJobClient
@@ -100,11 +124,16 @@ public sealed class JobsViewModelTests
         public Task<UpdateTriggerResult> TriggerUpdateAsync(
             string agentId, string policyId, string? serviceUnit, CancellationToken ct) =>
             Task.FromResult(new UpdateTriggerResult("Dispatched", string.Empty, string.Empty));
+
+        public Task<UpdateTriggerResult> TriggerVmActionAsync(string nodeId, string action, CancellationToken ct) =>
+            Task.FromResult(new UpdateTriggerResult("Dispatched", string.Empty, string.Empty));
     }
 
     private sealed class RecordingJobClient : IJobClient
     {
         public (string Agent, string Policy, string? Unit)? LastUpdate { get; private set; }
+
+        public (string Node, string Action)? LastVmAction { get; private set; }
 
         public UpdateTriggerResult Result { get; set; } = new("Dispatched", string.Empty, string.Empty);
 
@@ -120,6 +149,12 @@ public sealed class JobsViewModelTests
             string agentId, string policyId, string? serviceUnit, CancellationToken ct)
         {
             LastUpdate = (agentId, policyId, serviceUnit);
+            return Task.FromResult(Result);
+        }
+
+        public Task<UpdateTriggerResult> TriggerVmActionAsync(string nodeId, string action, CancellationToken ct)
+        {
+            LastVmAction = (nodeId, action);
             return Task.FromResult(Result);
         }
     }

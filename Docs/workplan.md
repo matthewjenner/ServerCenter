@@ -9,10 +9,12 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 6 (libvirt: read + VM lifecycle) - IN PROGRESS. 6a ILibvirtHost (parser + virsh adapter +
-  fake); 6b VM-running truth into the fleet (dual-truth is now REAL: a node's libvirt_domain ->
-  DomainState -> NodeState.vm_state, fed by a background poller, gated on Libvirt:Enabled). 6c (VM
-  lifecycle as controller-driven jobs + UI) pending. libvirt is CONTROLLER-driven.
+- Phase: 6 (libvirt: read + VM lifecycle) - DoD MET (6a+6b+6c). ILibvirtHost realized; dual-truth is
+  REAL (VM-running from libvirt alongside agent-online); VM start/stop/restart run as CONTROLLER-driven
+  jobs (execute on the controller via local libvirt, not pushed to an agent) with a dashboard control.
+  Gated on Libvirt:Enabled (dev/test = NullLibvirtHost). Real virsh is the user's Tier-3 smoke on the
+  hypervisor. Next: Phase 7 (provisioning + build recipes). REMAINING as hardening: a `virsh event`
+  push stream (WatchEvents polls now); libvirt DI wiring smoke on the real hypervisor.
 - Phase: 5 (SteamCMD game-server capability layer) - DoD MET (5a-5f). Descriptor-driven server jobs
   work end to end: store descriptor + instance -> controller resolves -> dispatches server.install
   (anonymous SteamCMD) / server.config-apply (templates shipped inline, rendered on the agent) ->
@@ -35,8 +37,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (99 Core + 41 Agent + 54 Controller + 8 integration + 6 UI +
-  13 Capabilities = 221).
+  on); `dotnet test` green (99 Core + 41 Agent + 58 Controller + 8 integration + 8 UI +
+  13 Capabilities = 227).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -390,8 +392,13 @@ Windows, reuse before bespoke.
     keeps dev/test at Unknown + fails lifecycle loudly; real VirshLibvirtHost + the poller only when
     configured. node.libvirt_domain now read (NodeRow) + settable (AgentNodeRepository.SetLibvirtDomainAsync
     + POST /nodes/{id}/libvirt-domain; provisioning will set it in Phase 7). Tier 1 (+5).
-  - [ ] 6c - VM lifecycle as CONTROLLER-driven jobs (start/stop/restart a domain) - a controller-local
-    executor (not pushed to an agent) + dispatch + a UI trigger. Tier 1 + integration.
+  - [x] 6c - VM lifecycle as CONTROLLER-driven jobs. `VmLifecycleService` (start/stop/restart) resolves
+    a node's linked domain, persists a real vm.{start,stop,restart} job, and executes it INLINE on the
+    controller against ILibvirtHost (Queued -> Running -> terminal) - the libvirt verbs return fast
+    (they request the transition; the poller reflects it). NotFound / NoDomain outcomes. New JobView
+    gRPC TriggerVmAction (node-keyed, VmLifecycleAction enum) + IJobClient.TriggerVmActionAsync +
+    dashboard VM control row (node id + Start/Stop/Restart buttons via a parameterized RelayCommand).
+    AgentNodeRepository.GetNodeAsync added. Tier 1 (VmLifecycleService 4, JobsViewModel VM 2). DoD MET.
 - DoD: list / dominfo / dumpxml via the local socket feed VM-running truth; start / stop /
   restart the domain as controller-driven jobs. Cheap because local.
 
@@ -465,6 +472,19 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 6c - VM lifecycle as CONTROLLER-driven jobs closes Phase 6. Unlike every prior
+  job (controller -> agent), these execute ON the controller against local libvirt (brief 3.2/3.3:
+  the host control plane is strictly controller-driven; the two planes never conflate). Still a REAL
+  persisted job - visible in JobView, in history - just with a controller-local execution path
+  instead of the agent transport. Executed INLINE (not fire-and-forget): the libvirt verbs
+  (start/shutdown/reboot) only REQUEST a transition and return fast; the domain changes async and the
+  6b poller reflects it - so inline keeps the job state deterministic + Tier-1 testable without
+  WaitUntil. The trigger is keyed by NODE, not agent (VM lifecycle targets a node's domain; the
+  controller resolves it) - a new JobView.TriggerVmAction gRPC with a typed VmLifecycleAction enum;
+  the dashboard uses one parameterized RelayCommand with three buttons. A libvirt failure persists a
+  FAILED job (dispatch still returns Dispatched - the job record carries the outcome, same as agent
+  jobs). Tier 1 (+6). Phase 6 DoD MET; real virsh is the user's Tier-3 hypervisor smoke.
 
 - 2026-07-10: Phase 6b - dual-truth becomes REAL. VM-running truth lives in an in-memory cache
   (LibvirtDomainStates, mirroring AgentPresenceStore - transient live truth, NOT persisted) fed by a

@@ -65,6 +65,7 @@ public static class ControllerHost
         // controller has the socket; elsewhere a null host keeps VM state Unknown and fails lifecycle
         // loudly. The state poller runs only when libvirt is configured.
         services.AddSingleton<LibvirtDomainStates>();
+        services.AddSingleton<VmLifecycleService>();
         if (libvirtEnabled)
         {
             services.AddSingleton<ILibvirtHost>(sp =>

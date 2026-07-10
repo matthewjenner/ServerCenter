@@ -11,7 +11,11 @@ namespace ServerCenter.Controller.Grpc;
 // restart or a policy-driven update. Not client-cert authenticated (operator auth deferred, like
 // FleetView). JobState here is the proto enum; the domain enum is fully qualified to avoid the clash.
 public sealed class JobViewService(
-    JobRepository jobs, JobDispatcher dispatcher, UpdateJobDispatcher updates, TimeProvider clock) : JobView.JobViewBase
+    JobRepository jobs,
+    JobDispatcher dispatcher,
+    UpdateJobDispatcher updates,
+    VmLifecycleService vms,
+    TimeProvider clock) : JobView.JobViewBase
 {
     private static readonly TimeSpan PushInterval = TimeSpan.FromSeconds(2);
 
@@ -53,6 +57,32 @@ public sealed class JobViewService(
             request.Packages.ToList(), serviceUnit, context.CancellationToken);
 
         return new TriggerUpdateResponse
+        {
+            JobId = result.JobId ?? string.Empty,
+            Outcome = result.Outcome.ToString(),
+            Reason = result.Reason ?? string.Empty
+        };
+    }
+
+    // VM lifecycle runs on the controller (local libvirt), keyed by node - the controller resolves the
+    // node's domain.
+    public override async Task<TriggerVmActionResponse> TriggerVmAction(TriggerVmActionRequest request, ServerCallContext context)
+    {
+        var action = request.Action switch
+        {
+            VmLifecycleAction.Start => VmAction.Start,
+            VmLifecycleAction.Stop => VmAction.Stop,
+            VmLifecycleAction.Restart => VmAction.Restart,
+            _ => (VmAction?)null
+        };
+
+        if (action is null)
+        {
+            return new TriggerVmActionResponse { Outcome = "NotFound", Reason = "unspecified VM action" };
+        }
+
+        var result = await vms.DispatchAsync(request.NodeId, action.Value, context.CancellationToken);
+        return new TriggerVmActionResponse
         {
             JobId = result.JobId ?? string.Empty,
             Outcome = result.Outcome.ToString(),

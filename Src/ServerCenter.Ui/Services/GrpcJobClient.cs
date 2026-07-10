@@ -43,4 +43,22 @@ public sealed class GrpcJobClient(string address) : IJobClient
         return new UpdateTriggerResult(
             response.Outcome, string.IsNullOrEmpty(response.JobId) ? null : response.JobId, response.Reason);
     }
+
+    public async Task<UpdateTriggerResult> TriggerVmActionAsync(string nodeId, string action, CancellationToken ct)
+    {
+        using var channel = GrpcChannels.Create(address);
+        var client = new JobView.JobViewClient(channel);
+        var response = await client.TriggerVmActionAsync(
+            new TriggerVmActionRequest { NodeId = nodeId, Action = MapAction(action) }, cancellationToken: ct);
+        return new UpdateTriggerResult(
+            response.Outcome, string.IsNullOrEmpty(response.JobId) ? null : response.JobId, response.Reason);
+    }
+
+    private static VmLifecycleAction MapAction(string action) => action.Trim().ToLowerInvariant() switch
+    {
+        "start" => VmLifecycleAction.Start,
+        "stop" => VmLifecycleAction.Stop,
+        "restart" => VmLifecycleAction.Restart,
+        _ => VmLifecycleAction.Unspecified
+    };
 }
