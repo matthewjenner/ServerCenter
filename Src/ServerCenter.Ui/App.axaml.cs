@@ -8,7 +8,7 @@ namespace ServerCenter.Ui;
 
 public partial class App : Application
 {
-    private CancellationTokenSource? _cts;
+    private MainWindowViewModel? _main;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -16,19 +16,20 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            string address = Environment.GetEnvironmentVariable("SERVERCENTER_CONTROLLER") ?? "https://localhost:5443";
-
+            ConnectionSettings settings = new ConnectionSettings();
             DashboardViewModel fleet = new DashboardViewModel();
-            JobsViewModel jobs = new JobsViewModel(new GrpcJobClient(address));
+            JobsViewModel jobs = new JobsViewModel(new GrpcJobClient(settings.ResolveStartupAddress()));
 
-            _cts = new CancellationTokenSource();
-            _ = fleet.RunAsync(new GrpcFleetClient(address), _cts.Token);
-            _ = jobs.RunAsync(_cts.Token);
+            _main = new MainWindowViewModel(fleet, jobs, CreateClients, settings);
+            _main.ConnectCommand.Execute(null);   // initial connect using the saved/env/default address
 
-            desktop.MainWindow = new MainWindow { DataContext = new MainWindowViewModel(fleet, jobs) };
-            desktop.ShutdownRequested += (_, _) => _cts.Cancel();
+            desktop.MainWindow = new MainWindow { DataContext = _main };
+            desktop.ShutdownRequested += (_, _) => _main.Dispose();
         }
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    private static (IFleetClient Fleet, IJobClient Jobs) CreateClients(string address) =>
+        (new GrpcFleetClient(address), new GrpcJobClient(address));
 }

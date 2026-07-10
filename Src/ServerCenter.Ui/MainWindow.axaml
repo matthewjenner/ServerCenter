@@ -5,7 +5,12 @@
         Width="1100" Height="780">
   <Grid Margin="12" RowDefinitions="Auto,2*,Auto,Auto,Auto,Auto,3*">
 
-    <TextBlock Grid.Row="0" Margin="4,4,4,8" FontSize="14" Text="{Binding Fleet.ConnectionStatus}" />
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="4,4,4,8">
+      <TextBlock Text="Controller" VerticalAlignment="Center" />
+      <TextBox Width="320" Text="{Binding ControllerAddress}" PlaceholderText="http://host:5080" />
+      <Button Content="Connect" Command="{Binding ConnectCommand}" />
+      <TextBlock FontSize="14" Text="{Binding Fleet.ConnectionStatus}" VerticalAlignment="Center" Margin="8,0,0,0" />
+    </StackPanel>
 
     <DataGrid Grid.Row="1"
               ItemsSource="{Binding Fleet.Nodes}"

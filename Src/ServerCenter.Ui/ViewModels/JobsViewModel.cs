@@ -9,8 +9,15 @@ namespace ServerCenter.Ui.ViewModels;
 
 // The jobs panel: live recent-jobs list plus a trigger for a service restart. Apply() is pure and
 // UI-thread-agnostic (testable); RunAsync() marshals onto the UI thread.
-public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
+public sealed partial class JobsViewModel : ObservableObject
 {
+    private IJobClient _client;
+
+    public JobsViewModel(IJobClient client) => _client = client;
+
+    // Re-point at a new controller when the operator reconnects (see MainWindowViewModel).
+    public void UseClient(IJobClient client) => _client = client;
+
     [ObservableProperty] private string _restartAgentId = string.Empty;
     [ObservableProperty] private string _restartUnit = string.Empty;
     [ObservableProperty] private string _triggerStatus = string.Empty;
@@ -63,7 +70,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
 
         try
         {
-            string jobId = await client.RestartServiceAsync(RestartAgentId.Trim(), RestartUnit.Trim(), CancellationToken.None);
+            string jobId = await _client.RestartServiceAsync(RestartAgentId.Trim(), RestartUnit.Trim(), CancellationToken.None);
             TriggerStatus = $"dispatched {(jobId.Length > 8 ? jobId[..8] : jobId)}";
         }
         catch (Exception ex)
@@ -83,7 +90,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
 
         try
         {
-            UpdateTriggerResult result = await client.TriggerUpdateAsync(
+            UpdateTriggerResult result = await _client.TriggerUpdateAsync(
                 UpdateAgentId.Trim(),
                 UpdatePolicyId.Trim(),
                 string.IsNullOrWhiteSpace(UpdateServiceUnit) ? null : UpdateServiceUnit.Trim(),
@@ -114,7 +121,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
 
         try
         {
-            UpdateTriggerResult result = await client.TriggerVmActionAsync(VmNodeId.Trim(), action, CancellationToken.None);
+            UpdateTriggerResult result = await _client.TriggerVmActionAsync(VmNodeId.Trim(), action, CancellationToken.None);
             VmStatus = result is { Outcome: "Dispatched", JobId: { } jobId }
                 ? $"{action} dispatched {(jobId.Length > 8 ? jobId[..8] : jobId)}"
                 : $"{result.Outcome}: {result.Reason}";
@@ -131,7 +138,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
         {
             try
             {
-                await foreach (JobListSnapshot snapshot in client.Watch(ct))
+                await foreach (JobListSnapshot snapshot in _client.Watch(ct))
                 {
                     await Dispatcher.UIThread.InvokeAsync(() => Apply(snapshot));
                 }
