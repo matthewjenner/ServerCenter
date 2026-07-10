@@ -80,6 +80,18 @@ public sealed class JobRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListRecentJobs_returns_newest_first()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await _jobs.InsertAsync(NewJob("old") with { CreatedAtUnixMs = 1000 }, ct);
+        await _jobs.InsertAsync(NewJob("new") with { CreatedAtUnixMs = 2000 }, ct);
+
+        var recent = await _jobs.ListRecentJobsAsync(10, ct);
+
+        recent.Select(j => j.Id).Should().Equal("new", "old");
+    }
+
+    [Fact]
     public async Task AckLog_moves_the_watermark_forward_only()
     {
         var ct = TestContext.Current.CancellationToken;

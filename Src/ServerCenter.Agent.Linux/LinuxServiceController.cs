@@ -1,26 +1,69 @@
+using System.Runtime.CompilerServices;
 using ServerCenter.Core.Platform;
 
 namespace ServerCenter.Agent.Linux;
 
-// Real impl (Phase 3) uses DBus/busctl for structured state and change subscription rather
-// than parsing `systemctl status`. Stub against the proven interface for now.
-public sealed class LinuxServiceController : IServiceController
+// systemd service control via systemctl. State is read with a structured property query
+// (`systemctl show --property=ActiveState --value`), not by parsing the free-text status output
+// (brief 3.11). WatchAsync polls for now; a DBus PropertiesChanged subscription is the preferred
+// push-based upgrade once a DBus dependency is added.
+public sealed class LinuxServiceController(IProcessRunner runner) : IServiceController
 {
-    public Task<ServiceState> GetStateAsync(string unit, CancellationToken ct) =>
-        throw new NotImplementedException("Linux service control lands in Phase 3.");
+    public async Task<ServiceState> GetStateAsync(string unit, CancellationToken ct)
+    {
+        var result = await runner.RunAsync("systemctl", ["show", unit, "--property=ActiveState", "--value"], ct);
+        return MapState(result.StandardOutput);
+    }
 
-    public Task StartAsync(string unit, CancellationToken ct) =>
-        throw new NotImplementedException("Linux service control lands in Phase 3.");
+    public Task StartAsync(string unit, CancellationToken ct) => RunUnitVerbAsync("start", unit, ct);
 
-    public Task StopAsync(string unit, CancellationToken ct) =>
-        throw new NotImplementedException("Linux service control lands in Phase 3.");
+    public Task StopAsync(string unit, CancellationToken ct) => RunUnitVerbAsync("stop", unit, ct);
 
-    public Task RestartAsync(string unit, CancellationToken ct) =>
-        throw new NotImplementedException("Linux service control lands in Phase 3.");
+    public Task RestartAsync(string unit, CancellationToken ct) => RunUnitVerbAsync("restart", unit, ct);
 
     public Task EnsureEnabledAsync(string unit, bool enabled, CancellationToken ct) =>
-        throw new NotImplementedException("Linux service control lands in Phase 3.");
+        RunUnitVerbAsync(enabled ? "enable" : "disable", unit, ct);
 
-    public IAsyncEnumerable<ServiceState> WatchAsync(string unit, CancellationToken ct) =>
-        throw new NotImplementedException("Linux service control lands in Phase 3.");
+    public async IAsyncEnumerable<ServiceState> WatchAsync(string unit, [EnumeratorCancellation] CancellationToken ct)
+    {
+        ServiceState? last = null;
+        while (!ct.IsCancellationRequested)
+        {
+            var state = await GetStateAsync(unit, ct);
+            if (state != last)
+            {
+                last = state;
+                yield return state;
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+            }
+            catch (OperationCanceledException)
+            {
+                yield break;
+            }
+        }
+    }
+
+    private async Task RunUnitVerbAsync(string verb, string unit, CancellationToken ct)
+    {
+        var result = await runner.RunAsync("systemctl", [verb, unit], ct);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"systemctl {verb} {unit} failed (exit {result.ExitCode}): {result.StandardError}");
+        }
+    }
+
+    private static ServiceState MapState(string activeState) => activeState.Trim() switch
+    {
+        "active" => ServiceState.Active,
+        "inactive" => ServiceState.Inactive,
+        "failed" => ServiceState.Failed,
+        "activating" => ServiceState.Activating,
+        "deactivating" => ServiceState.Deactivating,
+        _ => ServiceState.Unknown
+    };
 }

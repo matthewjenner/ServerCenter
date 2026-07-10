@@ -31,7 +31,7 @@ public sealed class AgentWorker(
             // Same binary, per-OS service control (real impls land in Phase 3b / Phase 8).
             IServiceController services = OperatingSystem.IsWindows()
                 ? new WindowsServiceController()
-                : new LinuxServiceController();
+                : new LinuxServiceController(new ProcessRunner());
             var jobStore = new AgentJobStore();
             var commandHandler = new JobExecutingCommandHandler(
                 new IJobExecutor[] { new ServiceRestartExecutor(services) },

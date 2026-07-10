@@ -45,6 +45,7 @@ public static class ControllerHost
     {
         app.MapGrpcService<AgentLinkService>();
         app.MapGrpcService<FleetService>();
+        app.MapGrpcService<JobViewService>();
         app.MapEnrollment();
         app.MapJobs();
         app.MapGet("/", () => "ServerCenter Controller. AgentLink + FleetView gRPC + enrollment + jobs endpoints are mapped.");

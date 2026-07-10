@@ -2,17 +2,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ServerCenter.Ui.MainWindow"
         Title="ServerCenter"
-        Width="1000" Height="640">
-  <DockPanel Margin="12">
-    <TextBlock DockPanel.Dock="Top"
-               Margin="4,4,4,10"
-               FontSize="14"
-               Text="{Binding ConnectionStatus}" />
-    <DataGrid ItemsSource="{Binding Nodes}"
-              IsReadOnly="True"
-              AutoGenerateColumns="False"
-              GridLinesVisibility="Horizontal"
-              CanUserResizeColumns="True">
+        Width="1100" Height="780">
+  <Grid Margin="12" RowDefinitions="Auto,2*,Auto,Auto,3*">
+
+    <TextBlock Grid.Row="0" Margin="4,4,4,8" FontSize="14" Text="{Binding Fleet.ConnectionStatus}" />
+
+    <DataGrid Grid.Row="1"
+              ItemsSource="{Binding Fleet.Nodes}"
+              IsReadOnly="True" AutoGenerateColumns="False" GridLinesVisibility="Horizontal">
       <DataGrid.Columns>
         <DataGridTextColumn Header="Node" Binding="{Binding DisplayName}" Width="2*" />
         <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="Auto" />
@@ -22,5 +19,28 @@
         <DataGridTextColumn Header="Resources" Binding="{Binding Resources}" Width="3*" />
       </DataGrid.Columns>
     </DataGrid>
-  </DockPanel>
+
+    <TextBlock Grid.Row="2" Margin="4,14,4,6" FontSize="14" FontWeight="Bold" Text="Jobs" />
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+      <TextBox PlaceholderText="agent id" Text="{Binding Jobs.RestartAgentId}" Width="180" />
+      <TextBox PlaceholderText="unit (e.g. plex.service)" Text="{Binding Jobs.RestartUnit}" Width="240" />
+      <Button Content="Restart service" Command="{Binding Jobs.RestartCommand}" />
+      <TextBlock Text="{Binding Jobs.TriggerStatus}" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <DataGrid Grid.Row="4"
+              ItemsSource="{Binding Jobs.Jobs}"
+              IsReadOnly="True" AutoGenerateColumns="False" GridLinesVisibility="Horizontal">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Job" Binding="{Binding ShortId}" Width="Auto" />
+        <DataGridTextColumn Header="Node" Binding="{Binding NodeId}" Width="*" />
+        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="Auto" />
+        <DataGridTextColumn Header="State" Binding="{Binding StateText}" Width="Auto" />
+        <DataGridTextColumn Header="Progress" Binding="{Binding ProgressText}" Width="Auto" />
+        <DataGridTextColumn Header="Detail" Binding="{Binding Detail}" Width="3*" />
+      </DataGrid.Columns>
+    </DataGrid>
+
+  </Grid>
 </Window>

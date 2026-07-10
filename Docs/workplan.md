@@ -9,16 +9,16 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 3 (first jobs) - IN PROGRESS. Phases 1, 1.5, 2 complete. Slices 3a (agent execution) +
-  3b (controller dispatch + progress persistence) done: a job dispatched on the controller runs
-  on the agent and persists its result (proven end to end over real gRPC). Remaining: real Linux
-  IServiceController (3c), UI job view (3d).
+- Phase: 3 (first jobs) - COMPLETE. Phases 0-3 + 1.5 all done. Full job spine works: dispatch on
+  the controller -> execute on the agent -> stream progress -> persist result; live jobs + a
+  trigger in the dashboard; real Linux service control (systemctl). Next: Phase 4 (updates) or 6
+  (libvirt / real VM column). The dashboard smoke works via `Scripts/dev-stack.sh`.
 - Dev convenience: `Scripts/dev-stack.sh` (bash) launches controller + agent + dashboard for
   smoke-testing. Scripts are always bash per the house rule.
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (57 Core + 2 Agent + 33 Controller + 6 integration + 2 UI = 100).
+  on); `dotnet test` green (57 Core + 10 Agent + 34 Controller + 6 integration + 3 UI = 110).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -85,11 +85,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: Phase 3c (real Linux `IServiceController` via systemctl/DBus) so a dispatched job
-  actually restarts a service and reports Succeeded on a real Linux node; then 3d (UI job view).
-  After 3c/3d, Phase 3 is complete -> then the planned lessons-learned memory write + a
-  post-compact prompt to prep for compaction.
-  (Also open: installing node zero on the real hypervisor from the first agent release.)
+- Next: Phase 4 (Ubuntu updates as policy-driven jobs; needs the apt + Plex "what" providers) OR
+  Phase 6 (libvirt, to make the dashboard's VM column real). Phase 4 extends the now-proven job
+  spine with UpdatePolicy; Phase 6 is the other dual-truth half (needs the real hypervisor host).
+  (Also open: smoke the real Linux job execution + install node zero on the hypervisor.)
 
 ## Standing conventions (decided)
 
@@ -213,9 +212,15 @@ Windows, reuse before bespoke.
     runs on the agent (fake IServiceController) and persists Succeeded. NOTE: on the Windows dev
     stack the real service controller is a stub, so a dispatched job FAILS with NotImplemented
     until 3c - the spine works, the executor does not yet.
-  - [ ] 3c - real Linux `IServiceController` (DBus/busctl or systemctl) - Tier 2, user smokes
-    on the Linux host.
-  - [ ] 3d - UI job view: jobs list + live progress/log in the dashboard.
+  - [x] 3c - real Linux `IServiceController` via systemctl (structured `show --property=ActiveState`,
+    not free-text status; verbs start/stop/restart/enable; WatchAsync polls - DBus PropertiesChanged
+    is the future push upgrade). Behind an injectable IProcessRunner so command/parse logic is
+    unit-tested on Windows (ServerCenter.Agent.Tests); real execution smokes on a Linux node.
+    Wired into AgentWorker.
+  - [x] 3d - UI job view: controller `JobView` gRPC (WatchJobs streaming + RestartService) +
+    JobRepository.ListRecentJobsAsync; dashboard gained a jobs DataGrid (live) + a trigger row
+    (agent id + unit + Restart button) via JobsViewModel/JobRowViewModel/GrpcJobClient +
+    MainWindowViewModel. Tier 1 tests (JobsViewModel.Apply, ListRecentJobs newest-first).
 - DoD: restart a systemd service as a persisted job; progress + log stream to the UI; the
   job survives a mid-run disconnect and resyncs correctly (exercises the whole spine).
 
@@ -353,6 +358,13 @@ Windows, reuse before bespoke.
 - 2026-07-10: Dev launcher + scripts policy. `Scripts/dev-stack.sh` (bash) runs the plaintext
   dev stack. House rule reaffirmed: ALL scripts are bash run from Git Bash, never PowerShell
   (recorded in memory). Removed the initial .ps1.
+- 2026-07-10: Phase 3c/3d - Linux service control + UI job view (Phase 3 COMPLETE). Linux
+  IServiceController shells `systemctl` behind an injectable IProcessRunner (testable on Windows;
+  structured property query, not free-text status). JobView is a third operator gRPC service
+  (WatchJobs stream + RestartService), following FleetView's pattern; dashboard now has a jobs
+  grid + a restart trigger. Recurring proto/domain enum-name clashes (JobState/LogStream/
+  AgentLiveness/VmState) resolved by qualifying the proto side or naming VM props ...Text.
+  Avalonia 12: Watermark -> PlaceholderText.
 - 2026-07-10: Phase 3b - controller job dispatch. ConnectedAgents maps agent id -> live stream
   (KeyValuePair-remove so a stale disconnect cannot evict a reconnect). PersistingSessionSink
   replaced the presence-only sink: it delegates heartbeat/status to AgentPresenceStore AND

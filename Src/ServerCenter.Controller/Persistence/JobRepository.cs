@@ -77,6 +77,24 @@ public sealed class JobRepository(ServerCenterDatabase database)
         return jobs;
     }
 
+    // Recent jobs across the fleet, newest first, for the operator job view.
+    public async Task<IReadOnlyList<Job>> ListRecentJobsAsync(int limit, CancellationToken ct)
+    {
+        await using var connection = await database.OpenConnectionAsync(ct);
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT {SelectColumns} FROM job ORDER BY created_at DESC LIMIT @limit;";
+        cmd.Parameters.AddWithValue("@limit", limit);
+
+        var jobs = new List<Job>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            jobs.Add(Map(reader));
+        }
+
+        return jobs;
+    }
+
     public async Task UpdateStateAsync(
         string jobId, JobState state, string? failReason, long? terminalAtUnixMs, CancellationToken ct)
     {

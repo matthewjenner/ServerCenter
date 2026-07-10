@@ -17,12 +17,15 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var address = Environment.GetEnvironmentVariable("SERVERCENTER_CONTROLLER") ?? "https://localhost:5443";
-            var dashboard = new DashboardViewModel();
+
+            var fleet = new DashboardViewModel();
+            var jobs = new JobsViewModel(new GrpcJobClient(address));
 
             _cts = new CancellationTokenSource();
-            _ = dashboard.RunAsync(new GrpcFleetClient(address), _cts.Token);
+            _ = fleet.RunAsync(new GrpcFleetClient(address), _cts.Token);
+            _ = jobs.RunAsync(_cts.Token);
 
-            desktop.MainWindow = new MainWindow { DataContext = dashboard };
+            desktop.MainWindow = new MainWindow { DataContext = new MainWindowViewModel(fleet, jobs) };
             desktop.ShutdownRequested += (_, _) => _cts.Cancel();
         }
 

@@ -213,3 +213,37 @@ enum VmState {
   VM_STATE_RUNNING = 1;
   VM_STATE_STOPPED = 2;
 }
+
+// -------- Operator-facing job view (the dashboard's jobs panel) --------
+service JobView {
+  rpc WatchJobs(WatchJobsRequest) returns (stream JobListSnapshot); // recent jobs, pushed on a cadence
+  rpc RestartService(RestartServiceRequest) returns (RestartServiceResponse); // trigger a service.restart job
+}
+
+message WatchJobsRequest {}
+
+message JobListSnapshot {
+  repeated JobInfo jobs = 1;
+  int64 generated_unix_ms = 2;
+}
+
+message JobInfo {
+  string job_id            = 1;
+  string node_id           = 2;
+  string type              = 3;
+  JobState state           = 4;
+  int32 progress_pct       = 5; // -1 = indeterminate
+  string progress_note     = 6;
+  string fail_reason       = 7;
+  int64 created_unix_ms    = 8;
+  int64 terminal_unix_ms   = 9; // 0 if not terminal
+}
+
+message RestartServiceRequest {
+  string agent_id = 1;
+  string unit     = 2;
+}
+
+message RestartServiceResponse {
+  string job_id = 1;
+}
