@@ -9,6 +9,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
+- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a done (the RCON primitive -
+  Source RCON client, built early per the brief; also back-fills Phase 4's deferred drain/quiesce
+  preflights). 5b+ pending (descriptor/instance model, SteamCMD, capabilities, wiring). See the
+  Phase 5 tracker.
 - Phase: 4 (Ubuntu updates as policy-driven jobs) - COMPLETE (4a+4b+4c+4d). Updates run as
   policy-driven jobs end to end: store a policy -> controller resolves it -> dispatches update.apply
   -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists; the dashboard has an
@@ -24,7 +28,7 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (77 Core + 30 Agent + 41 Controller + 7 integration + 6 UI = 161).
+  on); `dotnet test` green (84 Core + 30 Agent + 41 Controller + 7 integration + 6 UI = 168).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -291,6 +295,25 @@ Windows, reuse before bespoke.
   client logic against a fake, save-backup path selection against a fake S3 client; Tier 2 -
   real anonymous SteamCMD install, RCON against a real running dedicated-server process,
   real file-set backup, real readiness probe.
+- Sub-steps:
+  - [x] 5a - the RCON primitive (built early per the brief - highest leverage; also back-fills
+    Phase 4's deferred drain/quiesce preflights). Real Source RCON client: `SourceRconClient`/session
+    over an `IRconChannel` seam so the sequencing logic (auth handshake + the empty-follow-up
+    multi-packet accumulation trick) is Tier 1 testable; `RconProtocol` is the pure little-endian
+    length-prefixed byte framing (round-trip tested); `TcpRconChannel(Factory)` is the thin real-TCP
+    adapter (Tier 2 smoke). Constants/packet/seam live in Core so `FakeRconChannel` (TestFakes,
+    scripted server incl. multi-part responses + bad-password reject) needs no Primitives dep. Tier
+    1 (+7, Core.Tests). RconAuthenticationException on bad password.
+  - [ ] 5b - the declarative surface: `GameDescriptor` C# model (steamApp + capabilities, matching
+    phase-0-contracts.md 4) + `server_instance` persistence (schema V4) + instance-param token
+    resolution reusing ConfigTemplateRenderer (class-vs-instance).
+  - [ ] 5c - the SteamCMD primitive (anonymous +app_update validate; buildid compare for
+    update-detect) behind a seam via IProcessRunner. Tier 1 command/parse; Tier 2 real install.
+  - [ ] 5d - capabilities implementing ICapability, composing the primitives: ConfigGen (template ->
+    write), SaveBackup (file-set -> IObjectStore, optional RCON quiesce), Readiness (port-probe/
+    query/log-scrape - game-level, NOT process-alive), Stats + Shutdown (RCON).
+  - [ ] 5e - wire capabilities into the job spine (server.install / config-apply / backup executors)
+    + dispatch + a descriptor-driven stand-up flow. Integration test.
 - DoD: stand up an anonymous SteamCMD dedicated server driven by a descriptor; config is
   templated from instance params; readiness reflects game-level "accepting players" (not
   process-alive); save-backup writes to its own S3 path with optional RCON quiesce.
@@ -376,6 +399,19 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 5a - the RCON primitive, built first (brief: highest leverage, build early and
+  solid) and it back-fills Phase 4's deferred drain/quiesce preflights. Seam choice: a packet-level
+  `IRconChannel` (send/receive RconPacket) rather than a raw-socket seam, so the actual client
+  LOGIC - the auth handshake (tolerate the pre-auth junk RESPONSE_VALUE, reject on id -1 / mismatch)
+  and the multi-packet accumulation (send an empty follow-up packet, accumulate response parts until
+  the server echoes it - Valve's documented trick) - is fully Tier 1 testable; the byte framing is a
+  thin length-prefixed TCP adapter smoked at Tier 2. RconPacket + type constants + the seam + the
+  auth exception live in Core so FakeRconChannel (TestFakes) needs no Primitives reference; the pure
+  RconProtocol byte codec + SourceRconClient + TcpRconChannel live in ServerCenter.Primitives. Note
+  ExecCommand and AuthResponse share wire type 2 (direction-disambiguated); ids are positive
+  monotonic so they never collide with the -1 auth-failure sentinel. Tier 1 only (+7); real RCON
+  against a running dedicated server is the Tier 2 smoke.
 
 - 2026-07-10: Phase 4d - the dashboard can drive updates. Added JobView.TriggerUpdate (gRPC),
   symmetric with the existing RestartService trigger: it dispatches through UpdateJobDispatcher as a
