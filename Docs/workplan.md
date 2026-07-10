@@ -9,10 +9,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a RCON; 5b declarative surface
-  (GameDescriptor + ServerInstance + schema V4 + instance-param resolution); 5c SteamCMD primitive;
-  5d ConfigGen + Stats + Shutdown capabilities (new ServerCenter.Capabilities.Tests project). 5e
-  (SaveBackup + Readiness) + 5f (wiring into the job spine) pending. See the Phase 5 tracker.
+- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a RCON; 5b declarative surface;
+  5c SteamCMD primitive; 5d ConfigGen + Stats + Shutdown; 5e SaveBackup + Readiness. All five
+  ICapability impls now exist. Only 5f pending: wire capabilities into the job spine + a
+  descriptor-driven stand-up flow (closes the Phase 5 DoD). See the Phase 5 tracker.
 - Phase: 4 (Ubuntu updates as policy-driven jobs) - COMPLETE (4a+4b+4c+4d). Updates run as
   policy-driven jobs end to end: store a policy -> controller resolves it -> dispatches update.apply
   -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists; the dashboard has an
@@ -29,7 +29,7 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
   on); `dotnet test` green (90 Core + 37 Agent + 45 Controller + 7 integration + 6 UI +
-  7 Capabilities = 192).
+  13 Capabilities = 198).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -334,9 +334,15 @@ Windows, reuse before bespoke.
     endpoint from instance params (loopback default, ports.rcon + rcon.password, fail loudly). Seams
     IConfigTemplateSource/IConfigWriter in Core.Capabilities (+ File* real impls in Capabilities,
     fakes in TestFakes). New ServerCenter.Capabilities.Tests project. Tier 1 (+7).
-  - [ ] 5e - the capabilities that need new file/network seams: `SaveBackup` (file-set enumerate ->
-    archive -> IObjectStore at the instance's own key prefix, optional RCON quiesce) + `Readiness`
-    (port-probe / query-protocol / log-scrape - game-level "accepting players", NOT process-alive).
+  - [x] 5e - SaveBackup + Readiness (the file/network-seam capabilities). `SaveBackupCapability`:
+    optional RCON quiesce -> `IFileSetArchiver.CreateArchive(paths, exclude)` -> `IObjectStore.Put`
+    at the instance's OWN key `saves/{instanceId}/saves.zip` (versioned store = each backup a new
+    version, a snapshot id IS a version id; game saves are data-plane on their own path, brief 3.9);
+    Restore fetches a version + extracts. `ReadinessCapability`: game-level, resolves the port TOKEN
+    ("{{ports.game}}") via ConfigTemplateRenderer then probes; port-probe only for now (a2s/log-scrape
+    fail loudly, not pretend). New seams: IFileSetArchiver (Core.Capabilities, real ZipFileSetArchiver
+    Tier 2), IPortProbe (Core.Primitives, real TcpPortProbe). Fakes: FakeObjectStore (in-memory
+    versioned) + FakePortProbe + FakeFileSetArchiver. Tier 1 (+6). All 5 ICapability impls now exist.
   - [ ] 5f - wire capabilities into the job spine (server.install via SteamCMD / config-apply /
     backup executors) + dispatch + a descriptor-driven stand-up flow. Integration test. DoD close.
 - DoD: stand up an anonymous SteamCMD dedicated server driven by a descriptor; config is
@@ -424,6 +430,21 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 5e - SaveBackup + Readiness (completing all 5 ICapability impls). SaveBackup key
+  layout: a STABLE instance-scoped key (saves/{instanceId}/saves.zip) rather than timestamped keys -
+  the object store is versioned (S3), so each backup is a new version and a "snapshot id" IS an
+  object version id; no clock needed, and it mirrors the controller-DB one-backup pattern. Game
+  saves are explicitly data-plane on their own path (brief 3.9), separate from the controller's
+  precious surface. The archiving (glob enumerate + zip) sits behind IFileSetArchiver so the
+  capability's TESTABLE logic - quiesce-runs-before-archive, the S3 key, Put-called - is Tier 1
+  against a fake; the real ZipFileSetArchiver (absolute POSIX paths as entry names, restore re-roots
+  at "/") is Tier 2. Readiness reuses the config-templating primitive to resolve the port TOKEN
+  ("{{ports.game}}") from instance params - no bespoke parsing. Only port-probe is implemented (the
+  most universal game-level "is the port listening" signal, which is already NOT process-alive);
+  query-protocol/a2s and log-scrape throw NotSupported rather than silently degrading to a weaker
+  signal (a2s is the real accepting-players truth; faking it would lie). Added FakeObjectStore
+  (in-memory versioned) - the first IObjectStore fake. Tier 1 only (+6).
 
 - 2026-07-10: Phase 5d - the first capabilities (ConfigGen, Stats, Shutdown), those that compose
   primitives ALREADY built (config templating + RCON), split from the file/network-seam ones
