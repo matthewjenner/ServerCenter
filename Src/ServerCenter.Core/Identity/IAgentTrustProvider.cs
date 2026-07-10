@@ -11,13 +11,22 @@ public interface IAgentTrustProvider
 
     Task<bool> VerifyAsync(PresentedIdentity presented, CancellationToken ct);
 
-    Task RotateAsync(string agentId, CancellationToken ct);
+    // Mints a fresh cert for an existing agent, re-pins its fingerprint, and returns the new
+    // bundle to deliver to the agent. The old fingerprint stops verifying.
+    Task<EnrollmentResult> RotateAsync(string agentId, CancellationToken ct);
 
     Task RevokeAsync(string agentId, CancellationToken ct);
 }
 
 public sealed record EnrollmentRequest(string DisplayName, string OneTimeToken);
 
-public sealed record EnrollmentResult(string AgentId, string CertPem, string CertFingerprint);
+// The bundle handed to the agent at bootstrap: its issued client cert + private key, plus the
+// CA cert so it can validate the controller. The fingerprint is what the controller pins.
+public sealed record EnrollmentResult(
+    string AgentId,
+    string CertPem,
+    string PrivateKeyPem,
+    string CaCertPem,
+    string CertFingerprint);
 
 public sealed record PresentedIdentity(string AgentId, string CertFingerprint);

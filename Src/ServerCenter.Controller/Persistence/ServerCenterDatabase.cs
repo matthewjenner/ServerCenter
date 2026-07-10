@@ -23,6 +23,13 @@ public sealed class ServerCenterDatabase(string dataSource)
         return connection;
     }
 
+    // Ordered migrations, applied by user_version. Each new schema change appends an entry.
+    private static readonly (long Version, string Ddl)[] Migrations =
+    [
+        (1, SchemaV1.Ddl),
+        (2, SchemaV2.Ddl)
+    ];
+
     public async Task InitializeAsync(CancellationToken ct)
     {
         await using var connection = await OpenConnectionAsync(ct);
@@ -31,15 +38,18 @@ public sealed class ServerCenterDatabase(string dataSource)
         await ExecuteAsync(connection, null, "PRAGMA journal_mode = WAL;", ct);
 
         var version = Convert.ToInt64(await ScalarAsync(connection, "PRAGMA user_version;", ct));
-        if (version >= SchemaV1.Version)
+        foreach (var (target, ddl) in Migrations)
         {
-            return;
-        }
+            if (version >= target)
+            {
+                continue;
+            }
 
-        await using var tx = (SqliteTransaction)await connection.BeginTransactionAsync(ct);
-        await ExecuteAsync(connection, tx, SchemaV1.Ddl, ct);
-        await ExecuteAsync(connection, tx, $"PRAGMA user_version = {SchemaV1.Version};", ct);
-        await tx.CommitAsync(ct);
+            await using var tx = (SqliteTransaction)await connection.BeginTransactionAsync(ct);
+            await ExecuteAsync(connection, tx, ddl, ct);
+            await ExecuteAsync(connection, tx, $"PRAGMA user_version = {target};", ct);
+            await tx.CommitAsync(ct);
+        }
     }
 
     private static async Task ExecuteAsync(SqliteConnection connection, SqliteTransaction? tx, string sql, CancellationToken ct)

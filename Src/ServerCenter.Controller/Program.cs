@@ -3,6 +3,7 @@ using ServerCenter.Controller.Grpc;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
 using ServerCenter.Core.Connection;
+using ServerCenter.Core.Identity;
 using ServerCenter.Core.Jobs;
 
 // The controller: source of truth and root of trust. Hosts the AgentLink gRPC endpoint agents
@@ -22,16 +23,23 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(new ServerCenterDatabase(databasePath));
 builder.Services.AddSingleton<JobRepository>();
 builder.Services.AddSingleton<AgentNodeRepository>();
+builder.Services.AddSingleton<TrustRepository>();
 
 // Precious state: SQLite-backed. Live presence: in-memory (transient, not precious).
 builder.Services.AddSingleton<IControllerJobView, SqliteControllerJobView>();
 builder.Services.AddSingleton<AgentPresenceStore>();
 builder.Services.AddSingleton<IControllerSessionSink>(sp => sp.GetRequiredService<AgentPresenceStore>());
 
+// Controller-owned identity (private CA). The mTLS transport enforcement that presents/pins
+// these certs on the wire is the next ship; the dial stays plaintext h2c until then.
+builder.Services.AddSingleton<ControllerOwnedTrustProvider>();
+builder.Services.AddSingleton<IAgentTrustProvider>(sp => sp.GetRequiredService<ControllerOwnedTrustProvider>());
+
 var app = builder.Build();
 
-// Apply the schema (WAL + migrations) before serving.
+// Apply the schema (WAL + migrations) and ensure the CA exists before serving.
 await app.Services.GetRequiredService<ServerCenterDatabase>().InitializeAsync(CancellationToken.None);
+await app.Services.GetRequiredService<ControllerOwnedTrustProvider>().EnsureCaAsync(CancellationToken.None);
 
 app.MapGrpcService<AgentLinkService>();
 app.MapGet("/", () => "ServerCenter Controller. AgentLink gRPC endpoint is mapped.");
