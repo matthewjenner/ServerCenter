@@ -37,6 +37,20 @@ public sealed class HandshakeEndToEndTests
     }
 
     [Fact]
+    public async Task Node_kind_host_flows_from_the_agent_to_the_controller()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var link = new InMemoryDuplexLink();
+        var hostIdentity = new AgentIdentity("host-agent", "0.1.0", "linux", "x64", NodeKind: "host");
+
+        var controllerTask = ControllerHandshake.PerformAsync(link.ControllerSide, new FakeControllerJobView(), () => "s", ct);
+        var agentTask = AgentHandshake.PerformAsync(link.AgentSide, hostIdentity, new FakeAgentJobStateSource(), ct);
+        await Task.WhenAll(controllerTask, agentTask);
+
+        (await controllerTask).NodeKind.Should().Be("host");
+    }
+
+    [Fact]
     public async Task Resync_after_reconnect_reconciles_an_in_flight_job()
     {
         var ct = TestContext.Current.CancellationToken;

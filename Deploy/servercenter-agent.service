@@ -1,0 +1,26 @@
+[Unit]
+Description=ServerCenter Agent
+Documentation=https://github.com/matthewjenner/ServerCenter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=servercenter
+Group=servercenter
+WorkingDirectory=/opt/servercenter-agent
+ExecStart=/opt/servercenter-agent/ServerCenter.Agent
+EnvironmentFile=/etc/servercenter-agent/agent.env
+Restart=on-failure
+RestartSec=5
+
+# Hardening: the agent needs to reach the controller and write only its identity dir.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+StateDirectory=servercenter-agent
+# The enrolled cert + key live under the state dir (SERVERCENTER_CERT_DIR points here).
+
+[Install]
+WantedBy=multi-user.target

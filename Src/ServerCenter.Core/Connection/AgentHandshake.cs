@@ -25,7 +25,8 @@ public static class AgentHandshake
             AgentId = identity.AgentId,
             AgentVersion = identity.AgentVersion,
             OsFamily = identity.OsFamily,
-            Arch = identity.Arch
+            Arch = identity.Arch,
+            NodeKind = identity.NodeKind
         };
         var local = await jobs.GetLocalJobStateAsync(ct);
         hello.InFlightJobIds.AddRange(local.Select(e => e.JobId));

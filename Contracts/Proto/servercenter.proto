@@ -52,6 +52,7 @@ message Hello {
   string os_family         = 3; // linux | windows
   string arch              = 4;
   repeated string in_flight_job_ids = 5; // cheap first hint before full resync
+  string node_kind         = 6; // guest | host (host = node zero, brief 3.4); default guest
 }
 
 message HelloAck {

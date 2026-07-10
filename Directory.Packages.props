@@ -21,6 +21,7 @@
   <ItemGroup Label="Controller persistence / hosting / S3">
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.9" />
     <PackageVersion Include="AWSSDK.S3" Version="4.0.100.3" />
     <!-- Security override (transitive-pinned). Microsoft.Data.Sqlite 10.0.9 drags in the
          native lib SQLitePCLRaw.lib.e_sqlite3 2.1.11, which carries a high-severity SQLite

@@ -9,15 +9,16 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 1 (Controller + Ubuntu agent, bidi stream, read-only) - COMPLETE. Protocol brain,
-  pump+reconnect, real gRPC transport, SQLite persistence, identity core, and mTLS transport
-  enforcement all landed and tested (incl. a real-socket end-to-end mTLS test). Next: Phase
-  1.5 (host as node zero) or Phase 2 (dashboard).
+- Phase: 1.5 (host as node zero) - IN PROGRESS. Phase 1 COMPLETE (protocol brain,
+  pump+reconnect, real gRPC transport, SQLite persistence, identity core, mTLS enforcement,
+  real-socket mTLS test). Phase 1.5a done: agent is a systemd service + generic Linux install
+  package (cross-compiled + packaged here). Remaining 1.5b: release-agent.yml GitHub workflow.
+- Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
+  just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (56 Core + 25 Controller + 5 integration = 86, stable across
-  repeated runs incl. the fake-clock reconnect test, real-SQLite persistence, real-crypto CA
-  chain + trust provider + authorizer, the in-process real-gRPC test, and a REAL-SOCKET mTLS
-  end-to-end test (enroll over HTTPS + mTLS connect + no-cert rejection)).
+  on); `dotnet test` green (57 Core + 25 Controller + 5 integration = 87). Plus
+  `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
+  tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
   - [x] Protocol brain, transport-agnostic + Tier 1 tested: Hello/HelloAck handshake with
     version negotiation and clean Goodbye(VERSION_MISMATCH) rejection; the resync
@@ -82,10 +83,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: Phase 1 is complete. Choose Phase 1.5 (host as node zero - deploy the same agent on
-  the hypervisor host via systemd; nearly free) or Phase 2 (Avalonia dashboard - the headline
-  pain point, reads AgentPresenceStore for dual-truth). Phase 1.5 is the cheaper early win;
-  Phase 2 is the more visible one.
+- Next: Phase 1.5b - the `release-agent.yml` GitHub workflow so the agent tarball installs
+  straight from a GitHub release (linux-x64, version-gated; un-defers the agent publish track).
+  Then the user can smoke-test installing node zero on the real hypervisor. After that: Phase 2
+  (Avalonia dashboard).
 
 ## Standing conventions (decided)
 
@@ -142,13 +143,27 @@ Windows, reuse before bespoke.
   envelope version-skew.
 
 ### Phase 1.5 - Host as node zero
-- Contracts touched: none new; the host is a normal `node` row (kind `host`).
+- Contracts touched: added `node_kind` (guest|host) to Hello (additive) so the controller
+  records which node is the host. It is only a LABEL the agent reports (env
+  SERVERCENTER_NODE_KIND); the SAME binary runs on host and guests. Host-specific behavior is
+  controller-side policy (later), not agent code.
 - Primitives: reuse everything from Phase 1.
-- Test tiers: Tier 2 primary - real host agent over real systemd/DBus; Tier 1 for host
-  facts parsing. (The host-reboot behavior itself is Tier 3, exercised in the reboot drills
-  alongside Phase 9/10, not here.)
-- DoD: the same agent runs natively on the hypervisor host via systemd, enrolls, and
-  reports host facts/health through the identical interfaces. No special host subsystem.
+- Test tiers: Tier 1 - node_kind flows agent->controller (added). Tier 2/3 (real host agent
+  over real systemd, host facts) is the user's own smoke on the real Linux hypervisor - I
+  develop on Windows and cross-compile.
+- Sub-steps:
+  - [x] 1.5a - agent as a Linux systemd service + generic install package. Agent refactored
+    to Generic Host + BackgroundService + UseSystemd (Type=notify, graceful SIGTERM, journald);
+    AgentOptions/AgentBootstrap/AgentWorker. Deploy assets (`Deploy/`: unit, env template,
+    install.sh, README) + `Scripts/publish-agent.sh` producing a self-contained single-file
+    linux-x64 tarball (verified: cross-compiles to a Linux ELF + packages here; ~73MB). node_kind
+    threaded (AgentIdentity/Hello/ControllerHandshakeResult -> EnsureNode). The package is
+    GENERIC (every Linux node uses it); node zero just sets NODE_KIND=host.
+  - [ ] 1.5b - `release-agent.yml` GitHub workflow so the tarball installs straight from a
+    GitHub release (the user wants this; un-defers the agent publish track from build-and-update.md).
+- DoD: the same agent runs natively on the hypervisor host via systemd (installed from the
+  package), enrolls, and reports host facts/health through the identical interfaces, recorded
+  as a `host` node. No special host subsystem.
 
 ### Phase 2 - Avalonia live dashboard
 - Contracts touched: read-only consumption of NodeStatus + libvirt truth (libvirt itself
@@ -301,6 +316,12 @@ Windows, reuse before bespoke.
   SQLitePCLRaw.lib.e_sqlite3 2.1.11 (NU1903, GHSA-2m69-gcr7-jv3q). The 2.x line has no fix,
   so transitive-pinned the native lib to 3.53.3 (patched SQLite, ABI-compatible). Revisit
   when Microsoft.Data.Sqlite adopts SQLitePCLRaw 3.x. Documented in Directory.Packages.props.
+- 2026-07-10: Phase 1.5a - agent runs as a Linux systemd service and ships as a GENERIC
+  self-contained install package (same package for host + guests). Refactored to Generic Host +
+  UseSystemd. Added node_kind (guest|host) as a reported LABEL only - NOT a special agent; host
+  behavior is controller policy. Dev is on Windows, so the agent is cross-compiled to linux-x64
+  and the real install/run is the user's smoke on the hypervisor. publish-agent.sh builds the
+  tarball; artifacts/ is gitignored.
 - 2026-07-10: mTLS transport enforcement landed (closes Phase 1). Controller runs HTTPS with a
   CA-signed server cert (regenerated at startup, agents trust via the CA) + AllowCertificate;
   per-connection authorization (CN-bound + fingerprint pin) in AgentLinkService, not TLS-layer,

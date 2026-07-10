@@ -56,14 +56,14 @@ public sealed class AgentLinkService(
                 return;
             }
 
-            // Identity already exists from enrollment; just ensure the node.
-            await agents.EnsureNodeAsync(handshake.AgentId, handshake.AgentId, "guest", "managed", now, ct);
+            // Identity already exists from enrollment; just ensure the node with its kind.
+            await agents.EnsureNodeAsync(handshake.AgentId, handshake.AgentId, handshake.NodeKind, "managed", now, ct);
         }
         else
         {
             // Dev / no-mTLS: register with an unpinned identity so the flow works over plaintext.
             await agents.EnsureAgentAsync(handshake.AgentId, handshake.AgentId, "unpinned", now, ct);
-            await agents.EnsureNodeAsync(handshake.AgentId, handshake.AgentId, "guest", "managed", now, ct);
+            await agents.EnsureNodeAsync(handshake.AgentId, handshake.AgentId, handshake.NodeKind, "managed", now, ct);
         }
 
         logger.LogInformation(
