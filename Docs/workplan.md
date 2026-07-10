@@ -9,9 +9,9 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a done (RCON primitive); 5b done
-  (the declarative surface: GameDescriptor + ServerInstance models, schema V4, instance-param token
-  resolution). 5c+ pending (SteamCMD, capabilities, wiring). See the Phase 5 tracker.
+- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a done (RCON); 5b done (the
+  declarative surface: GameDescriptor + ServerInstance + schema V4 + instance-param resolution); 5c
+  done (the SteamCMD primitive). 5d+ pending (capabilities, wiring). See the Phase 5 tracker.
 - Phase: 4 (Ubuntu updates as policy-driven jobs) - COMPLETE (4a+4b+4c+4d). Updates run as
   policy-driven jobs end to end: store a policy -> controller resolves it -> dispatches update.apply
   -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists; the dashboard has an
@@ -27,7 +27,7 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (90 Core + 30 Agent + 45 Controller + 7 integration + 6 UI = 178).
+  on); `dotnet test` green (90 Core + 37 Agent + 45 Controller + 7 integration + 6 UI = 185).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -314,8 +314,15 @@ Windows, reuse before bespoke.
     ({"ports":{"game":27015}} -> "ports.game"="27015") that ConfigTemplateRenderer resolves - the
     class-vs-instance seam. Tier 1 (+10: Core 6, Controller 4). NOTE: the plugin escape-hatch
     representation (primitive -> plugin swap) is deferred to when the first plugin lands.
-  - [ ] 5c - the SteamCMD primitive (anonymous +app_update validate; buildid compare for
-    update-detect) behind a seam via IProcessRunner. Tier 1 command/parse; Tier 2 real install.
+  - [x] 5c - the SteamCMD primitive. `ISteamCmd` seam (Core.Primitives) + `SteamCmd` (Agent.Linux,
+    over IProcessRunner like apt/Plex): anonymous `+force_install_dir +login anonymous +app_update
+    <id> [-beta <branch>] [validate] +quit`; success parsed from the "fully installed" marker;
+    convergent (ensure-installed = install = repair = update). Update-detect via installed buildid:
+    pure `SteamAppManifest.ParseBuildId` (KeyValues .acf) + a thin File.ReadAllText of
+    steamapps/appmanifest_<id>.acf (best-effort, absent -> null). FakeSteamCmd in TestFakes. Tier 1
+    (+7: command construction/beta/validate/failure + manifest parse). Real multi-GB install is the
+    Tier 2 smoke. NOTE: querying Steam's LATEST available buildid (true "update available?" without
+    downloading) is deferred - needs app_info_print parsing; buildid compare is pre/post-update for now.
   - [ ] 5d - capabilities implementing ICapability, composing the primitives: ConfigGen (template ->
     write), SaveBackup (file-set -> IObjectStore, optional RCON quiesce), Readiness (port-probe/
     query/log-scrape - game-level, NOT process-alive), Stats + Shutdown (RCON).
@@ -406,6 +413,18 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 5c - the SteamCMD primitive. Placed in Agent.Linux over IProcessRunner (not
+  ServerCenter.Primitives), consistent with the apt/Plex "what" providers which also shell out and
+  need the runner seam; the ISteamCmd SEAM lives in Core.Primitives so FakeSteamCmd (TestFakes) needs
+  no Agent dependency and the capability layer depends only on Core. One convergent operation
+  (EnsureApp = ensure-installed = install = repair = update) per the idempotency invariant. Success
+  is parsed from steamcmd's "fully installed" marker AND a zero exit (steamcmd's exit codes are
+  unreliable alone). Update-detect is buildid-based and split like RCON: the pure KeyValues parse
+  (SteamAppManifest.ParseBuildId) is Tier 1, the appmanifest_<id>.acf file read is thin real I/O
+  (Tier 2). DEFERRED: querying Steam's latest-available buildid without downloading (true "is an
+  update available?") - needs app_info_print parsing; today's compare is installed-buildid pre/post
+  an EnsureApp. Tier 1 only (+7).
 
 - 2026-07-10: Phase 5b - the game-server declarative surface. GameDescriptor models capabilities as
   OPTIONAL strongly-typed specs (configGen/saveBackup/stats/shutdown/readiness) each carrying a
