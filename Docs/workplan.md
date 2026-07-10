@@ -10,7 +10,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 ## Current State
 
 - Phase: 4 (Ubuntu updates as policy-driven jobs) - IN PROGRESS. 4a done (the declarative
-  UpdatePolicy surface + its resolver + persistence); 4b/4c/4d pending (see the Phase 4 tracker).
+  UpdatePolicy surface + its resolver + persistence); 4b done (real apt + Plex "what" providers +
+  neuter-unattended-upgrades); 4c/4d pending (see the Phase 4 tracker).
   Phases 0-3 + 1.5 complete. Full job spine works: dispatch on the controller -> execute on the
   agent -> stream progress -> persist result; live jobs + a trigger in the dashboard; real Linux
   service control (systemctl). The dashboard smoke works via `Scripts/dev-stack.sh`.
@@ -19,7 +20,7 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (77 Core + 10 Agent + 37 Controller + 6 integration + 3 UI = 133).
+  on); `dotnet test` green (77 Core + 23 Agent + 37 Controller + 6 integration + 3 UI = 146).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -242,9 +243,16 @@ Windows, reuse before bespoke.
     added to CPM (pure cron eval, no infra). Tier 1: resolver + serializer (Core.Tests) + repository
     (Controller.Tests, real SQLite). No autonomous scheduler yet - window is an eligibility gate;
     the firing background service is a later enhancement.
-  - [ ] 4b - the "what" providers. Real apt `IUpdateProvider` (behind IProcessRunner) AND a Plex
-    app-channel provider (behind an HTTP/download seam) so the abstraction is proven non-apt from
-    day one; plus the neuter-unattended-upgrades onboarding step. Tier 1 with fakes.
+  - [x] 4b - the "what" providers. `AptUpdateProvider` (behind IProcessRunner: apt-get update +
+    apt list --upgradable parse, targeted --only-upgrade vs full upgrade, DEBIAN_FRONTEND
+    noninteractive, /var/run/reboot-required probe) AND `PlexUpdateProvider` (the non-apt backend:
+    HTTP manifest -> version compare vs dpkg-query -> arch/distro release select -> download + dpkg
+    -i; app updates never reboot) prove the abstraction is not apt-only. New `IHttpFetcher` seam
+    (+HttpFetcher over HttpClient) so Plex is testable without network. `UnattendedUpgradesNeutralizer`
+    masks apt-daily{,-upgrade}.timer + unattended-upgrades.service (idempotent). IProcessRunner
+    gained an env overload (apt/dpkg need DEBIAN_FRONTEND; systemctl uses the plain one).
+    RecordingJobSink added to TestFakes. Tier 1 (+13 tests, Agent.Tests). Real apt/Plex is the
+    user's Tier 2 smoke on a Linux node.
   - [ ] 4c - execution + dispatch. `update.apply` IJobExecutor composing provider + resolver into
     the job spine (preflight -> apply -> reboot decision); controller dispatch from a stored policy
     + a dev trigger; end-to-end integration test (fake provider). Wire into AgentWorker.
@@ -347,6 +355,21 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 4b - the two "what" providers landed, proving IUpdateProvider is a real
+  abstraction, not apt-with-extra-steps. apt shells apt-get/apt/dpkg-query behind IProcessRunner
+  (same testable pattern as LinuxServiceController); Plex is a genuinely non-apt app channel - it
+  reads a downloads manifest over a new `IHttpFetcher` seam, compares the manifest version to the
+  installed dpkg version, selects the arch/distro-matched .deb, and applies via download + dpkg -i.
+  Key semantic split: apt reboot-required comes from the /var/run/reboot-required flag; a Plex app
+  update NEVER reboots (RebootRequired always false). All apt/dpkg runs set DEBIAN_FRONTEND=
+  noninteractive - added an env overload to IProcessRunner rather than shell tricks, so it is
+  explicit and assertable (systemctl calls use the plain overload). Neuter-unattended-upgrades is
+  `systemctl mask --now` of apt-daily{,-upgrade}.timer + unattended-upgrades.service (mask is
+  idempotent = convergent). Tests run on Windows / providers on Linux, so Path.Combine yields
+  backslashes in tests - assert path RELATIONSHIPS (dpkg installs exactly what was downloaded) not
+  literal slashes; and BeEquivalentTo(WithStrictOrdering), not Equal(), for collections-of-
+  collections (Equal compares inner lists by reference). Tier 1 only (+13); real apt/Plex is Tier 2.
 
 - 2026-07-10: Phase 4a - the declarative UpdatePolicy surface + brain landed first (contracts
   before providers). Policy is pure data (Core/Updates/UpdatePolicy) stored as versioned JSON keyed

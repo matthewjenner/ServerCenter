@@ -18,7 +18,7 @@ public sealed class LinuxServiceControllerTests
     [InlineData("something-else", ServiceState.Unknown)]
     public async Task GetState_uses_a_structured_property_query_and_maps_it(string activeState, ServiceState expected)
     {
-        var runner = new FakeProcessRunner { Respond = _ => new ProcessResult(0, activeState, string.Empty) };
+        var runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(0, activeState, string.Empty) };
         var sut = new LinuxServiceController(runner);
 
         var state = await sut.GetStateAsync("plex.service", TestContext.Current.CancellationToken);
@@ -40,24 +40,11 @@ public sealed class LinuxServiceControllerTests
     [Fact]
     public async Task Restart_throws_on_a_nonzero_exit()
     {
-        var runner = new FakeProcessRunner { Respond = _ => new ProcessResult(1, string.Empty, "Unit not found.") };
+        var runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(1, string.Empty, "Unit not found.") };
         var sut = new LinuxServiceController(runner);
 
         var act = async () => await sut.RestartAsync("nope.service", TestContext.Current.CancellationToken);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
-    }
-}
-
-internal sealed class FakeProcessRunner : IProcessRunner
-{
-    public List<IReadOnlyList<string>> Calls { get; } = [];
-
-    public Func<IReadOnlyList<string>, ProcessResult> Respond { get; set; } = _ => new ProcessResult(0, string.Empty, string.Empty);
-
-    public Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, CancellationToken ct)
-    {
-        Calls.Add(arguments);
-        return Task.FromResult(Respond(arguments));
     }
 }
