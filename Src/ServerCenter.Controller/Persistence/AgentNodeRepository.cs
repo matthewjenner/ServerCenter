@@ -1,7 +1,9 @@
 namespace ServerCenter.Controller.Persistence;
 
-// A managed node joined with its agent's display name, for the fleet view.
-public sealed record NodeRow(string NodeId, string AgentId, string Kind, string DisplayName, string Lifecycle);
+// A managed node joined with its agent's display name, for the fleet view. LibvirtDomain links the
+// node to its VM (null for the host / non-VM nodes); it drives the VM-running half of dual-truth.
+public sealed record NodeRow(
+    string NodeId, string AgentId, string Kind, string DisplayName, string Lifecycle, string? LibvirtDomain);
 
 // Minimal agent/node persistence. The full identity lifecycle (mint/pin/rotate/revoke) lands
 // in the mTLS ship; for now this is enough to register a connecting agent and its node so jobs
@@ -14,7 +16,7 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
         await using var cmd = connection.CreateCommand();
         cmd.CommandText =
             "SELECT node.id, node.agent_id, node.kind, node.lifecycle, " +
-            "COALESCE(agent_identity.display_name, node.id) AS display_name " +
+            "COALESCE(agent_identity.display_name, node.id) AS display_name, node.libvirt_domain " +
             "FROM node LEFT JOIN agent_identity ON agent_identity.id = node.agent_id " +
             "ORDER BY display_name;";
 
@@ -27,10 +29,23 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
                 AgentId: reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
                 Kind: reader.GetString(2),
                 Lifecycle: reader.GetString(3),
-                DisplayName: reader.GetString(4)));
+                DisplayName: reader.GetString(4),
+                LibvirtDomain: reader.IsDBNull(5) ? null : reader.GetString(5)));
         }
 
         return rows;
+    }
+
+    // Links a node to its libvirt domain (or clears it with null). Drives the VM-running truth in the
+    // fleet view; set at provisioning time (Phase 7) or by an operator.
+    public async Task SetLibvirtDomainAsync(string nodeId, string? libvirtDomain, CancellationToken ct)
+    {
+        await using var connection = await database.OpenConnectionAsync(ct);
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE node SET libvirt_domain = @domain WHERE id = @id;";
+        cmd.Parameters.AddWithValue("@id", nodeId);
+        cmd.Parameters.AddWithValue("@domain", (object?)libvirtDomain ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task EnsureAgentAsync(

@@ -1,5 +1,6 @@
 using ServerCenter.Contracts.V1;
 using ServerCenter.Controller.Persistence;
+using ServerCenter.Core.Primitives;
 
 namespace ServerCenter.Controller.Services;
 
@@ -7,12 +8,14 @@ namespace ServerCenter.Controller.Services;
 // (ServerCenter.Core.Connection.AgentLiveness) to avoid the name clash.
 
 // Builds the operator fleet view by joining the persisted nodes with live presence and deriving
-// dual-truth (brief 3.7): agent-online comes from the heartbeat gap via LivenessTracker;
-// VM-running is Unknown until libvirt lands (Phase 6). Testable: nodes + presence + now in,
-// snapshot out.
+// dual-truth (brief 3.7): agent-online comes from the heartbeat gap via LivenessTracker; VM-running
+// comes from the node's libvirt domain state (LibvirtDomainStates). The two are INDEPENDENT facts
+// that can disagree; a node with no linked domain, or a domain libvirt hasn't reported, stays
+// Unknown. Testable: nodes + presence + domain states + now in, snapshot out.
 public sealed class FleetSnapshotBuilder(
     AgentNodeRepository nodes,
     AgentPresenceStore presence,
+    LibvirtDomainStates domainStates,
     Core.Connection.LivenessTracker liveness,
     TimeProvider clock)
 {
@@ -29,7 +32,7 @@ public sealed class FleetSnapshotBuilder(
                 NodeId = row.NodeId,
                 DisplayName = row.DisplayName,
                 Kind = row.Kind,
-                VmState = VmState.Unknown
+                VmState = DeriveVmState(row.LibvirtDomain)
             };
 
             if (presence.TryGet(row.AgentId, out var entry) && entry is not null)
@@ -55,6 +58,20 @@ public sealed class FleetSnapshotBuilder(
 
         return snapshot;
     }
+
+    // A node with no linked domain, or one libvirt has not reported, is Unknown - not "Stopped".
+    // Unknown is a first-class dual-truth state, never a lying green/red dot (brief 3.7).
+    private VmState DeriveVmState(string? libvirtDomain) =>
+        !string.IsNullOrEmpty(libvirtDomain) && domainStates.TryGet(libvirtDomain, out var domainState)
+            ? MapVm(domainState)
+            : VmState.Unknown;
+
+    private static VmState MapVm(DomainState state) => state switch
+    {
+        DomainState.Running => VmState.Running,
+        DomainState.ShutOff or DomainState.Shutdown or DomainState.Crashed or DomainState.Paused => VmState.Stopped,
+        _ => VmState.Unknown
+    };
 
     private static AgentLiveness Map(Core.Connection.AgentLiveness liveness) => liveness switch
     {

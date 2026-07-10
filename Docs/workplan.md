@@ -9,10 +9,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 6 (libvirt: read + VM lifecycle) - IN PROGRESS. 6a done (ILibvirtHost realized: pure
-  VirshOutputParser + the VirshLibvirtHost virsh adapter + FakeLibvirtHost). 6b (VM-running truth
-  into the fleet = dual-truth real) + 6c (VM lifecycle as controller-driven jobs + UI) pending.
-  libvirt is CONTROLLER-driven (the controller has the mounted socket; the agent is uninvolved).
+- Phase: 6 (libvirt: read + VM lifecycle) - IN PROGRESS. 6a ILibvirtHost (parser + virsh adapter +
+  fake); 6b VM-running truth into the fleet (dual-truth is now REAL: a node's libvirt_domain ->
+  DomainState -> NodeState.vm_state, fed by a background poller, gated on Libvirt:Enabled). 6c (VM
+  lifecycle as controller-driven jobs + UI) pending. libvirt is CONTROLLER-driven.
 - Phase: 5 (SteamCMD game-server capability layer) - DoD MET (5a-5f). Descriptor-driven server jobs
   work end to end: store descriptor + instance -> controller resolves -> dispatches server.install
   (anonymous SteamCMD) / server.config-apply (templates shipped inline, rendered on the agent) ->
@@ -35,8 +35,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (99 Core + 41 Agent + 49 Controller + 8 integration + 6 UI +
-  13 Capabilities = 216).
+  on); `dotnet test` green (99 Core + 41 Agent + 54 Controller + 8 integration + 6 UI +
+  13 Capabilities = 221).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -381,9 +381,15 @@ Windows, reuse before bespoke.
     non-default libvirt). `FakeLibvirtHost` in TestFakes (seeded domains, start/shutdown/reboot
     transition state + record calls). Tier 1 (+9, parser). Chose Process-direct + pure-parser over
     promoting IProcessRunner to Core (avoids a wide refactor; parser is what needs testing).
-  - [ ] 6b - VM-running truth into the fleet (dual-truth becomes REAL). Controller polls ILibvirtHost,
-    maps a node's libvirt_domain -> DomainState -> NodeState.vm_state (was always Unknown); FleetSnapshotBuilder
-    joins libvirt truth. Tier 1 against FakeLibvirtHost.
+  - [x] 6b - VM-running truth into the fleet (dual-truth becomes REAL). `LibvirtDomainStates` (in-memory
+    live cache, like AgentPresenceStore) fed by `LibvirtStatePoller` (BackgroundService: seed via
+    ListDomains, then follow WatchEvents); FleetSnapshotBuilder maps a node's libvirt_domain ->
+    DomainState -> NodeState.vm_state (Running->Running, ShutOff/Shutdown/Crashed/Paused->Stopped,
+    else->Unknown). Unknown stays FIRST-CLASS: a node with no linked domain, or one libvirt hasn't
+    reported, is Unknown, never a lying Stopped (brief 3.7). Gated on Libvirt:Enabled - a NullLibvirtHost
+    keeps dev/test at Unknown + fails lifecycle loudly; real VirshLibvirtHost + the poller only when
+    configured. node.libvirt_domain now read (NodeRow) + settable (AgentNodeRepository.SetLibvirtDomainAsync
+    + POST /nodes/{id}/libvirt-domain; provisioning will set it in Phase 7). Tier 1 (+5).
   - [ ] 6c - VM lifecycle as CONTROLLER-driven jobs (start/stop/restart a domain) - a controller-local
     executor (not pushed to an agent) + dispatch + a UI trigger. Tier 1 + integration.
 - DoD: list / dominfo / dumpxml via the local socket feed VM-running truth; start / stop /
@@ -459,6 +465,17 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 6b - dual-truth becomes REAL. VM-running truth lives in an in-memory cache
+  (LibvirtDomainStates, mirroring AgentPresenceStore - transient live truth, NOT persisted) fed by a
+  BackgroundService poller, so the fleet snapshot build stays fast (reads the cache, does not shell
+  virsh on the 2s hot path). Dual-truth is two INDEPENDENT facts that can disagree; the mapping keeps
+  Unknown first-class (no linked domain, or a domain libvirt hasn't reported yet -> Unknown, never a
+  lying Stopped - brief 3.7). The whole libvirt stack is GATED on Libvirt:Enabled: off (dev/test
+  default) registers a NullLibvirtHost (VM state stays Unknown, lifecycle throws loudly so a
+  misconfig surfaces) and no poller; on registers VirshLibvirtHost + the poller. node.libvirt_domain
+  (already in schema V1) is now read into NodeRow and set via SetLibvirtDomainAsync + a dev endpoint;
+  Phase 7 provisioning will set it automatically. Tier 1 (+5, FakeLibvirtHost).
 
 - 2026-07-10: Phase 6a - the ILibvirtHost primitive. libvirt is CONTROLLER-driven (the controller
   container has the socket mounted; the agent is uninvolved - VM-lifecycle vs in-guest are the two

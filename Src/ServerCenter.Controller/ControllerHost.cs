@@ -7,6 +7,8 @@ using ServerCenter.Core.Capabilities;
 using ServerCenter.Core.Connection;
 using ServerCenter.Core.Identity;
 using ServerCenter.Core.Jobs;
+using ServerCenter.Core.Primitives;
+using ServerCenter.Primitives.Libvirt;
 
 namespace ServerCenter.Controller;
 
@@ -18,7 +20,9 @@ public static class ControllerHost
         this IServiceCollection services,
         ServerCenterDatabase database,
         bool requireClientCertificate,
-        string templatesRoot = "templates")
+        string templatesRoot = "templates",
+        bool libvirtEnabled = false,
+        string? libvirtConnectUri = null)
     {
         services.AddGrpc();
         services.AddSingleton(TimeProvider.System);
@@ -56,6 +60,21 @@ public static class ControllerHost
         // Operator fleet view (dashboard). Liveness thresholds: Stale after 30s, Offline after 90s.
         services.AddSingleton(new LivenessTracker(staleAfterMs: 30_000, offlineAfterMs: 90_000));
         services.AddSingleton<FleetSnapshotBuilder>();
+
+        // VM-lifecycle plane (Phase 6, controller-driven). libvirt is real virsh only where the
+        // controller has the socket; elsewhere a null host keeps VM state Unknown and fails lifecycle
+        // loudly. The state poller runs only when libvirt is configured.
+        services.AddSingleton<LibvirtDomainStates>();
+        if (libvirtEnabled)
+        {
+            services.AddSingleton<ILibvirtHost>(sp =>
+                new VirshLibvirtHost(sp.GetRequiredService<TimeProvider>(), "virsh", libvirtConnectUri));
+            services.AddHostedService<LibvirtStatePoller>();
+        }
+        else
+        {
+            services.AddSingleton<ILibvirtHost, NullLibvirtHost>();
+        }
     }
 
     public static void MapControllerEndpoints(this WebApplication app)
@@ -67,6 +86,7 @@ public static class ControllerHost
         app.MapJobs();
         app.MapUpdatePolicies();
         app.MapServerJobs();
+        app.MapNodes();
         app.MapGet("/", () => "ServerCenter Controller. AgentLink + FleetView gRPC + enrollment + jobs endpoints are mapped.");
     }
 }

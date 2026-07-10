@@ -3,6 +3,7 @@ using Microsoft.Extensions.Time.Testing;
 using ServerCenter.Contracts.V1;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
+using ServerCenter.Core.Primitives;
 using Xunit;
 
 namespace ServerCenter.Controller.Tests;
@@ -10,6 +11,7 @@ namespace ServerCenter.Controller.Tests;
 public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
 {
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 7, 10, 0, 0, 0, TimeSpan.Zero));
+    private readonly LibvirtDomainStates _domains = new();
     private TempDatabase _db = null!;
     private AgentNodeRepository _nodes = null!;
     private AgentPresenceStore _presence = null!;
@@ -22,7 +24,7 @@ public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
         _nodes = new AgentNodeRepository(_db.Database);
         _presence = new AgentPresenceStore();
         _builder = new FleetSnapshotBuilder(
-            _nodes, _presence,
+            _nodes, _presence, _domains,
             new ServerCenter.Core.Connection.LivenessTracker(staleAfterMs: 30_000, offlineAfterMs: 90_000),
             _clock);
     }
@@ -60,6 +62,34 @@ public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
 
         snapshot.Nodes.Should().ContainSingle()
             .Which.AgentLiveness.Should().Be(AgentLiveness.Offline);
+    }
+
+    [Theory]
+    [InlineData(DomainState.Running, VmState.Running)]
+    [InlineData(DomainState.ShutOff, VmState.Stopped)]
+    [InlineData(DomainState.Crashed, VmState.Stopped)]
+    public async Task Vm_state_reflects_the_linked_domain(DomainState domainState, VmState expected)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await SeedNodeAsync("a3", "n3", "guest", ct);
+        await _nodes.SetLibvirtDomainAsync("n3", "cs2-ffa", ct);
+        _domains.Set("cs2-ffa", domainState);
+
+        var snapshot = await _builder.BuildAsync(ct);
+
+        snapshot.Nodes.Should().ContainSingle().Which.VmState.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task A_linked_domain_libvirt_has_not_reported_is_unknown()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await SeedNodeAsync("a4", "n4", "guest", ct);
+        await _nodes.SetLibvirtDomainAsync("n4", "unseen-vm", ct); // linked, but no state in the cache
+
+        var snapshot = await _builder.BuildAsync(ct);
+
+        snapshot.Nodes.Should().ContainSingle().Which.VmState.Should().Be(VmState.Unknown);
     }
 
     private async Task SeedNodeAsync(string agentId, string nodeId, string kind, CancellationToken ct)

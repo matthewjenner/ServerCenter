@@ -11,6 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 var databasePath = builder.Configuration["Database:Path"] ?? "servercenter.db";
 var requireClientCertificate = builder.Configuration.GetValue("Security:RequireClientCertificate", true);
 var templatesRoot = builder.Configuration["Templates:Root"] ?? "templates";
+var libvirtEnabled = builder.Configuration.GetValue("Libvirt:Enabled", false);
+var libvirtConnectUri = builder.Configuration["Libvirt:ConnectUri"];
 
 // The CA must exist before Kestrel binds so we can mint the server TLS cert. Initialize the DB
 // and CA up front (idempotent), reusing the same database instance in DI.
@@ -38,7 +40,8 @@ else
         options.ListenLocalhost(5080, listen => listen.Protocols = HttpProtocols.Http2));
 }
 
-builder.Services.AddControllerServices(database, requireClientCertificate, templatesRoot);
+builder.Services.AddControllerServices(
+    database, requireClientCertificate, templatesRoot, libvirtEnabled, libvirtConnectUri);
 
 var app = builder.Build();
 
