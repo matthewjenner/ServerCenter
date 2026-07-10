@@ -27,7 +27,8 @@ public sealed class ServerCenterDatabase(string dataSource)
     private static readonly (long Version, string Ddl)[] Migrations =
     [
         (1, SchemaV1.Ddl),
-        (2, SchemaV2.Ddl)
+        (2, SchemaV2.Ddl),
+        (3, SchemaV3.Ddl)
     ];
 
     public async Task InitializeAsync(CancellationToken ct)

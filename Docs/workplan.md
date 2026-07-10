@@ -9,16 +9,17 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 3 (first jobs) - COMPLETE. Phases 0-3 + 1.5 all done. Full job spine works: dispatch on
-  the controller -> execute on the agent -> stream progress -> persist result; live jobs + a
-  trigger in the dashboard; real Linux service control (systemctl). Next: Phase 4 (updates) or 6
-  (libvirt / real VM column). The dashboard smoke works via `Scripts/dev-stack.sh`.
+- Phase: 4 (Ubuntu updates as policy-driven jobs) - IN PROGRESS. 4a done (the declarative
+  UpdatePolicy surface + its resolver + persistence); 4b/4c/4d pending (see the Phase 4 tracker).
+  Phases 0-3 + 1.5 complete. Full job spine works: dispatch on the controller -> execute on the
+  agent -> stream progress -> persist result; live jobs + a trigger in the dashboard; real Linux
+  service control (systemctl). The dashboard smoke works via `Scripts/dev-stack.sh`.
 - Dev convenience: `Scripts/dev-stack.sh` (bash) launches controller + agent + dashboard for
   smoke-testing. Scripts are always bash per the house rule.
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (57 Core + 10 Agent + 34 Controller + 6 integration + 3 UI = 110).
+  on); `dotnet test` green (77 Core + 10 Agent + 37 Controller + 6 integration + 3 UI = 133).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -230,6 +231,24 @@ Windows, reuse before bespoke.
   abstraction is not apt-only). Reuse: service control (stop-update-start), job spine.
 - Test tiers: Tier 1 - policy resolution (how/when/reboot/preflight/approval) over fake
   providers; Tier 2 - real apt AND real Plex updates plus network-chaos on the job stream.
+- Sub-steps:
+  - [x] 4a - the declarative surface + its brain. `UpdatePolicy` model (Core/Updates: what/how/
+    when/reboot/preflight/approval as pure data) + `UpdatePolicySerializer` (kebab-case enum tokens
+    matching the brief, camelCase props, canonical body_json) + pure `UpdatePolicyResolver`
+    (DecideStart: window-eligibility via Cronos, manual-override, approval gate, preflight
+    dedupe/order; ResolveReboot: the Never/IfRequired/AlwaysAfter/Prompt x reboot-required matrix).
+    Persistence: schema V3 `update_policy` table (versioned JSON keyed by id+version, like
+    descriptors/recipes) + `UpdatePolicyRepository` (immutable revisions, GetLatest). Cronos 0.13.0
+    added to CPM (pure cron eval, no infra). Tier 1: resolver + serializer (Core.Tests) + repository
+    (Controller.Tests, real SQLite). No autonomous scheduler yet - window is an eligibility gate;
+    the firing background service is a later enhancement.
+  - [ ] 4b - the "what" providers. Real apt `IUpdateProvider` (behind IProcessRunner) AND a Plex
+    app-channel provider (behind an HTTP/download seam) so the abstraction is proven non-apt from
+    day one; plus the neuter-unattended-upgrades onboarding step. Tier 1 with fakes.
+  - [ ] 4c - execution + dispatch. `update.apply` IJobExecutor composing provider + resolver into
+    the job spine (preflight -> apply -> reboot decision); controller dispatch from a stored policy
+    + a dev trigger; end-to-end integration test (fake provider). Wire into AgentWorker.
+  - [ ] 4d - thin UI surface (trigger an update / show reboot-pending). May fold into 4c.
 - DoD: neuter unattended-upgrades on onboarding; run an apt update and a Plex update as
   policy-driven jobs, each expressing how/when/reboot/preflight/approval as pure data.
 
@@ -328,6 +347,20 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 4a - the declarative UpdatePolicy surface + brain landed first (contracts
+  before providers). Policy is pure data (Core/Updates/UpdatePolicy) stored as versioned JSON keyed
+  by (id, version) - immutable revisions, like descriptors/recipes - so a run's exact governing
+  policy is always reconstructable. The resolver is pure and shared by controller dispatch and
+  tests: DecideStart handles window-eligibility (an operator/manual trigger overrides the window
+  AND counts as its own confirmation; a scheduler tick respects window + approval), preflight is
+  deduped preserving order; ResolveReboot maps policy x reboot-required to None/Reboot/
+  PromptOperator. `when` windows use Cronos 0.13.0 (pure cron eval, no infra): a window is open if a
+  cron occurrence fell within the last WindowMinutes; a malformed cron fails CLOSED (never fires
+  autonomously). Cron is UTC for now (per-node tz deferred). Enum tokens serialize kebab-case
+  ("stop-update-start", "if-required") so the body is hand-authorable and decoupled from C# casing
+  (same discipline as the job-state text). NO autonomous scheduler yet - the window is an
+  eligibility gate; the background firing service is a later enhancement. Tier 1 only (+23 tests).
 
 - 2026-07-09: Contract-first `.proto` (not code-first) for the versioned wire.
 - 2026-07-09: mTLS with controller-as-private-CA for agent identity; seam

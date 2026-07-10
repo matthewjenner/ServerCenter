@@ -4,4 +4,8 @@
     <ProjectReference Include="../../Contracts/ServerCenter.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Cronos" />
+  </ItemGroup>
+
 </Project>
