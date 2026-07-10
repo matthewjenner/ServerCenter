@@ -9,6 +9,9 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
+- Phase: 7 (provisioning + build recipes) - IN PROGRESS. 7a done (the BuildRecipe declarative surface:
+  model reusing SteamAppSpec/ConfigFileSpec + serializer + schema V5 + repository). 7b (idempotent
+  script runner primitive) + 7c (recipe.apply engine) + 7d (provisioning->managed handoff) pending.
 - Phase: 6 (libvirt: read + VM lifecycle) - DoD MET (6a+6b+6c). ILibvirtHost realized; dual-truth is
   REAL (VM-running from libvirt alongside agent-online); VM start/stop/restart run as CONTROLLER-driven
   jobs (execute on the controller via local libvirt, not pushed to an agent) with a dashboard control.
@@ -37,8 +40,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (99 Core + 41 Agent + 58 Controller + 8 integration + 8 UI +
-  13 Capabilities = 227).
+  on); `dotnet test` green (102 Core + 41 Agent + 60 Controller + 8 integration + 8 UI +
+  13 Capabilities = 232).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -410,6 +413,24 @@ Windows, reuse before bespoke.
 - Test tiers: Tier 1 - recipe planning and convergence logic against fakes; Tier 2 -
   idempotency against deliberately-dirtied containers (recipe repairs/converges); Tier 3 -
   cloud-init first boot and the provisioning->managed handoff on a real VM.
+- Sub-steps:
+  - [x] 7a - the BuildRecipe declarative surface. `BuildRecipe` model (Core/Recipes: baseRequirements +
+    steamApp + configFiles + scripts + serviceDefinition + descriptorRef, REUSING SteamAppSpec +
+    ConfigFileSpec from Core.Games so recipe and descriptor share types) + `BuildRecipeSerializer`
+    (reuses GameDescriptorSerializer.Options - same game dialect: camelCase, lowercase enum tokens,
+    null-omit, tokens preserved). Schema V5 build_recipe (versioned JSON keyed by id+version, like
+    update_policy/game_descriptor) + `BuildRecipeRepository` (immutable revisions, GetLatest). Every
+    step is convergent by design (RecipeScript carries alreadyDone + onSuccess). Tier 1 (+5).
+  - [ ] 7b - the idempotent ordered script runner (the one genuinely new primitive). Each step: run
+    UNLESS alreadyDone passes; on success run onSuccess (sentinel). Behind IProcessRunner (Agent.Linux).
+    Tier 1 convergence logic (skip-when-done); Tier 2 real.
+  - [ ] 7c - the recipe.apply execution engine composing the primitives: baseRequirements (apt) ->
+    steamApp (SteamCMD ensure) -> configFiles (ConfigGen) -> scripts (runner) -> serviceDefinition
+    (write unit + ensure-enabled). Convergent throughout (build=repair=rebuild). Agent executor +
+    controller dispatch + integration.
+  - [ ] 7d - provisioning -> managed handoff (node.lifecycle: provisioning until first agent Hello,
+    then managed) + set node.libvirt_domain at provision time (closes the Phase 6 loop). Handoff logic
+    Tier 1; libvirt define + cloud-init first boot is Tier 3 (real VM).
 - DoD: base image + cloud-init + libvirt define/start brings up a generic managed-but-empty
   node; applying recipe vN with instance params yields a running server; re-applying to a
   half-built/drifted box converges (build = repair = rebuild). Full rebuild-from-nothing
@@ -472,6 +493,16 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 7a - the BuildRecipe declarative surface (the third and last class catalog).
+  Deliberately REUSES the descriptor's SteamAppSpec + ConfigFileSpec rather than defining recipe-
+  specific twins - recipe and descriptor speak the same primitive vocabulary (a recipe's steamApp IS
+  a SteamCMD app; its configFiles ARE config-template files), so they share types and the game
+  dialect (GameDescriptorSerializer.Options). Convergence is baked into the DATA: RecipeScript carries
+  alreadyDone (skip-if) + onSuccess (mark-done), so the engine (7b/7c) is convergent by construction,
+  not by special-case code - build = repair = rebuild. Schema V5 = the last of the three class tables
+  (update_policy/game_descriptor/build_recipe); server_instance already pins recipe_id/version (V4).
+  Tier 1 only (+5).
 
 - 2026-07-10: Phase 6c - VM lifecycle as CONTROLLER-driven jobs closes Phase 6. Unlike every prior
   job (controller -> agent), these execute ON the controller against local libvirt (brief 3.2/3.3:
