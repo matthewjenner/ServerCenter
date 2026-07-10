@@ -9,6 +9,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
+- Phase: 6 (libvirt: read + VM lifecycle) - IN PROGRESS. 6a done (ILibvirtHost realized: pure
+  VirshOutputParser + the VirshLibvirtHost virsh adapter + FakeLibvirtHost). 6b (VM-running truth
+  into the fleet = dual-truth real) + 6c (VM lifecycle as controller-driven jobs + UI) pending.
+  libvirt is CONTROLLER-driven (the controller has the mounted socket; the agent is uninvolved).
 - Phase: 5 (SteamCMD game-server capability layer) - DoD MET (5a-5f). Descriptor-driven server jobs
   work end to end: store descriptor + instance -> controller resolves -> dispatches server.install
   (anonymous SteamCMD) / server.config-apply (templates shipped inline, rendered on the agent) ->
@@ -31,8 +35,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (90 Core + 41 Agent + 49 Controller + 8 integration + 6 UI +
-  13 Capabilities = 207).
+  on); `dotnet test` green (99 Core + 41 Agent + 49 Controller + 8 integration + 6 UI +
+  13 Capabilities = 216).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -369,6 +373,19 @@ Windows, reuse before bespoke.
 - Test tiers: Tier 1 - libvirt XML/command generation against a fake `ILibvirtHost`; Tier 3
   - real define/start/stop against a nested-virt libvirt sandbox. NO Tier 2: libvirt is
   invisible to containers by definition (fidelity boundary in `testing.md`).
+- Sub-steps:
+  - [x] 6a - the ILibvirtHost primitive. `VirshOutputParser` (PURE: parse `virsh list --all` table
+    incl. multi-word states + `virsh dominfo` Name/UUID/State + the state-text -> DomainState map) +
+    `VirshLibvirtHost` (a thin leaf adapter over System.Diagnostics.Process running virsh, Tier 3
+    only - same pattern as TcpRconChannel; WatchEvents polls ListDomains for now; connectUri for a
+    non-default libvirt). `FakeLibvirtHost` in TestFakes (seeded domains, start/shutdown/reboot
+    transition state + record calls). Tier 1 (+9, parser). Chose Process-direct + pure-parser over
+    promoting IProcessRunner to Core (avoids a wide refactor; parser is what needs testing).
+  - [ ] 6b - VM-running truth into the fleet (dual-truth becomes REAL). Controller polls ILibvirtHost,
+    maps a node's libvirt_domain -> DomainState -> NodeState.vm_state (was always Unknown); FleetSnapshotBuilder
+    joins libvirt truth. Tier 1 against FakeLibvirtHost.
+  - [ ] 6c - VM lifecycle as CONTROLLER-driven jobs (start/stop/restart a domain) - a controller-local
+    executor (not pushed to an agent) + dispatch + a UI trigger. Tier 1 + integration.
 - DoD: list / dominfo / dumpxml via the local socket feed VM-running truth; start / stop /
   restart the domain as controller-driven jobs. Cheap because local.
 
@@ -442,6 +459,19 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 6a - the ILibvirtHost primitive. libvirt is CONTROLLER-driven (the controller
+  container has the socket mounted; the agent is uninvolved - VM-lifecycle vs in-guest are the two
+  never-conflated planes, brief 3.2/3.3). Design choice: split the PURE parser (VirshOutputParser:
+  virsh list/dominfo text -> DomainInfo/DomainState) from a thin virsh process adapter
+  (VirshLibvirtHost), so the fiddly parsing is Tier 1 and the adapter is Tier 3 only (libvirt is
+  invisible to containers - no Tier 2, a fidelity boundary). Deliberately did NOT promote
+  IProcessRunner (Agent.Linux) to Core to feed the adapter - instead VirshLibvirtHost uses
+  System.Diagnostics.Process DIRECTLY, exactly the TcpRconChannel/HttpFetcher leaf-adapter pattern:
+  the thing worth testing (parsing) is extracted and pure, the leaf I/O is Tier 3. This avoided a
+  ~10-file refactor for zero test-coverage gain. WatchEvents polls ListDomains (a `virsh event`
+  stream is the future push upgrade). FakeLibvirtHost (TestFakes) transitions domain state on
+  start/shutdown/reboot so the 6b fleet view + 6c jobs are Tier 1 testable. Tier 1 only (+9).
 
 - 2026-07-10: Phase 5f - descriptor-driven server jobs close the Phase 5 DoD end to end. Same
   controller-resolves / agent-executes split as the update plane: ServerJobDispatcher loads the
