@@ -9,10 +9,9 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a done (the RCON primitive -
-  Source RCON client, built early per the brief; also back-fills Phase 4's deferred drain/quiesce
-  preflights). 5b+ pending (descriptor/instance model, SteamCMD, capabilities, wiring). See the
-  Phase 5 tracker.
+- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a done (RCON primitive); 5b done
+  (the declarative surface: GameDescriptor + ServerInstance models, schema V4, instance-param token
+  resolution). 5c+ pending (SteamCMD, capabilities, wiring). See the Phase 5 tracker.
 - Phase: 4 (Ubuntu updates as policy-driven jobs) - COMPLETE (4a+4b+4c+4d). Updates run as
   policy-driven jobs end to end: store a policy -> controller resolves it -> dispatches update.apply
   -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists; the dashboard has an
@@ -28,7 +27,7 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (84 Core + 30 Agent + 41 Controller + 7 integration + 6 UI = 168).
+  on); `dotnet test` green (90 Core + 30 Agent + 45 Controller + 7 integration + 6 UI = 178).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -304,9 +303,17 @@ Windows, reuse before bespoke.
     adapter (Tier 2 smoke). Constants/packet/seam live in Core so `FakeRconChannel` (TestFakes,
     scripted server incl. multi-part responses + bad-password reject) needs no Primitives dep. Tier
     1 (+7, Core.Tests). RconAuthenticationException on bad password.
-  - [ ] 5b - the declarative surface: `GameDescriptor` C# model (steamApp + capabilities, matching
-    phase-0-contracts.md 4) + `server_instance` persistence (schema V4) + instance-param token
-    resolution reusing ConfigTemplateRenderer (class-vs-instance).
+  - [x] 5b - the declarative surface. `GameDescriptor` model (Core/Games: steamApp + optional
+    strongly-typed capability specs configGen/saveBackup/stats/shutdown/readiness, each carrying a
+    `primitive` name; matches phase-0-contracts.md 4) + `GameDescriptorSerializer` (camelCase,
+    null-omit, lowercase enum tokens "kv"/"a2s", tokens preserved verbatim). `ServerInstance` model
+    (instance side: pins descriptor/recipe/policy versions + opaque instance_params_json holding
+    secrets). Schema V4 (game_descriptor + server_instance, node-indexed) + GameDescriptorRepository
+    + ServerInstanceRepository (immutable descriptor revisions; instance round-trip + list-by-node).
+    `InstanceParamsResolver` (ServerCenter.Primitives) flattens instance params JSON to dotted tokens
+    ({"ports":{"game":27015}} -> "ports.game"="27015") that ConfigTemplateRenderer resolves - the
+    class-vs-instance seam. Tier 1 (+10: Core 6, Controller 4). NOTE: the plugin escape-hatch
+    representation (primitive -> plugin swap) is deferred to when the first plugin lands.
   - [ ] 5c - the SteamCMD primitive (anonymous +app_update validate; buildid compare for
     update-detect) behind a seam via IProcessRunner. Tier 1 command/parse; Tier 2 real install.
   - [ ] 5d - capabilities implementing ICapability, composing the primitives: ConfigGen (template ->
@@ -399,6 +406,22 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 5b - the game-server declarative surface. GameDescriptor models capabilities as
+  OPTIONAL strongly-typed specs (configGen/saveBackup/stats/shutdown/readiness) each carrying a
+  `primitive` name string, rather than a loose dictionary - the shape is known and the per-game
+  difference is DATA (paths, commands, ports, the primitive selector), honoring data-over-code. The
+  plugin escape hatch (swap "primitive" for "plugin") is NOT modeled yet - deferred until the first
+  bespoke plugin actually exists, to avoid a validation seam with nothing behind it. Descriptor JSON
+  uses its own dialect (GameDescriptorSerializer: camelCase, lowercase enum tokens like "kv"/"a2s")
+  distinct from UpdateJson's kebab, because the brief's descriptor tokens are single lowercase words,
+  not kebab. ServerInstance is the instance side: it pins exact descriptor/recipe/policy VERSIONS
+  (history reconstructs) and stores instance_params_json opaquely (it holds secrets - precious
+  controller state, never on the agent of record, brief 8.4). Schema V4 adds both tables; recipe/
+  policy columns exist for shape but are populated by Phases 4/7. InstanceParamsResolver (a pure
+  Primitives helper, pairs with ConfigTemplateRenderer) flattens nested params to dotted tokens
+  (objects dot, arrays index, scalars stringify) - the concrete class-vs-instance binding. Tier 1
+  only (+10).
 
 - 2026-07-10: Phase 5a - the RCON primitive, built first (brief: highest leverage, build early and
   solid) and it back-fills Phase 4's deferred drain/quiesce preflights. Seam choice: a packet-level

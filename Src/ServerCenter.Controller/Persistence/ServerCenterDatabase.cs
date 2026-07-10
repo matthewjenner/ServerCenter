@@ -28,7 +28,8 @@ public sealed class ServerCenterDatabase(string dataSource)
     [
         (1, SchemaV1.Ddl),
         (2, SchemaV2.Ddl),
-        (3, SchemaV3.Ddl)
+        (3, SchemaV3.Ddl),
+        (4, SchemaV4.Ddl)
     ];
 
     public async Task InitializeAsync(CancellationToken ct)
