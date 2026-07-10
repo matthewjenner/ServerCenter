@@ -12,8 +12,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Phase: 1 (Controller + Ubuntu agent, bidi stream, read-only) - IN PROGRESS. Phase 0
   contracts + scaffold done and committed. First Phase 1 slice landed: the protocol brain.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (56 tests, stable across repeated runs incl. the fake-clock
-  reconnect test).
+  on); `dotnet test` green (56 Core + 1 integration, stable across repeated runs incl. the
+  fake-clock reconnect test and the in-process real-gRPC integration test).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
   - [x] Protocol brain, transport-agnostic + Tier 1 tested: Hello/HelloAck handshake with
     version negotiation and clean Goodbye(VERSION_MISMATCH) rejection; the resync
@@ -24,11 +24,19 @@ Decisions Log / Known Edges before starting the next phase (house rule:
     progress/result to a sink), BackoffPolicy (full-jitter exponential), AgentConnection
     (dial -> handshake -> pump -> reconnect-with-backoff, stops on terminal Goodbye). Tier 1
     tested with FakeTimeProvider; AgentHandshakeResult gained a Terminal flag.
-  - [ ] Real transport: GrpcAgentTransport (agent) + wire AgentLinkService.Connect to
-    IControllerStream; actual networking + network-chaos Tier 2 smoke.
+  - [x] Real transport: GrpcAgentTransport (agent, owns the channel, serialized writes) +
+    GrpcTransportConnector dial factory; AgentLinkService.Connect adapts the server streams to
+    IControllerStream via GrpcControllerStream and drives handshake + ControllerSessionPump.
+    Controller wires in-memory AgentPresenceStore (IControllerSessionSink) + InMemory
+    ControllerJobView + h2c Kestrel on :5080; agent Program runs the dial loop. New
+    ServerCenter.Integration.Tests project: real gRPC bidi over an in-process TestServer
+    (handshake + heartbeat/status reach the controller). AgentConnection now disposes the
+    transport per session. Live two-process run left to the user's own smoke (per working
+    style); in-process real-gRPC path is covered by the integration test.
   - [ ] SQLite-backed IControllerJobView + agent/node/job persistence (schema from
-    phase-0-contracts.md 2.4).
-  - [ ] Controller-owned identity + mTLS enrollment (IAgentTrustProvider real impl).
+    phase-0-contracts.md 2.4), replacing the in-memory placeholder.
+  - [ ] Controller-owned identity + mTLS enrollment (IAgentTrustProvider real impl),
+    replacing the plaintext h2c dial.
 - Solution (`ServerCenter.slnx`, Title Case folders, Central Package Management, .NET 10):
   Contracts (the .proto wire), Core (job model + state machine + all seam interfaces +
   IAgentTransport + ProtocolVersion), Primitives (ConfigTemplateRenderer), Capabilities,
@@ -48,9 +56,9 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: the real transport - GrpcAgentTransport (agent) adapting the gRPC client stream to
-  IAgentTransport, and AgentLinkService.Connect adapting the server streams to IControllerStream
-  + driving the handshake/pump. First time it talks over a socket. Then SQLite, then mTLS.
+- Next: SQLite-backed persistence - replace InMemoryControllerJobView + AgentPresenceStore
+  with a SQLite store (job/agent/node tables from phase-0-contracts.md 2.4), so jobs and
+  identities survive a controller restart. Then mTLS identity/enrollment.
 
 ## Standing conventions (decided)
 
@@ -266,6 +274,12 @@ Windows, reuse before bespoke.
   SQLitePCLRaw.lib.e_sqlite3 2.1.11 (NU1903, GHSA-2m69-gcr7-jv3q). The 2.x line has no fix,
   so transitive-pinned the native lib to 3.53.3 (patched SQLite, ABI-compatible). Revisit
   when Microsoft.Data.Sqlite adopts SQLitePCLRaw 3.x. Documented in Directory.Packages.props.
+- 2026-07-10: Real gRPC transport wired. Dev uses plaintext HTTP/2 (h2c) on :5080 with the
+  SocketsHttpHandler.Http2UnencryptedSupport switch on the agent; TLS/mTLS replaces it in the
+  identity ship. Transport adapters serialize writes (gRPC forbids concurrent stream writes)
+  ahead of Phase 3's progress+heartbeat concurrency. Verified via an in-process real-gRPC
+  integration test (WebApplicationFactory TestServer); live two-process runs are the user's
+  own smoke per working style.
 - 2026-07-10: Phase 1 approach - build the protocol brain (handshake, version negotiation,
   resync reconciliation, liveness) as pure, transport-agnostic Core logic tested at Tier 1
   over an in-memory duplex link BEFORE wiring real gRPC/SQLite/mTLS. Realizes the fake-per-

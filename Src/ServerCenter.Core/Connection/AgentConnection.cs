@@ -31,22 +31,33 @@ public static class AgentConnection
             try
             {
                 var transport = await connect(ct);
-                var handshake = await AgentHandshake.PerformAsync(transport, identity, jobs, ct);
-
-                if (handshake.Established)
+                try
                 {
-                    attempt = 0; // reset backoff on a good connection
-                    var outcome = await AgentSessionPump.RunAsync(
-                        transport, status, commands, clock, options.HeartbeatInterval, ct);
+                    var handshake = await AgentHandshake.PerformAsync(transport, identity, jobs, ct);
 
-                    if (outcome.Kind == SessionEndKind.ControllerGoodbye && IsTerminal(outcome.GoodbyeReason))
+                    if (handshake.Established)
                     {
-                        return;
+                        attempt = 0; // reset backoff on a good connection
+                        var outcome = await AgentSessionPump.RunAsync(
+                            transport, status, commands, clock, options.HeartbeatInterval, ct);
+
+                        if (outcome.Kind == SessionEndKind.ControllerGoodbye && IsTerminal(outcome.GoodbyeReason))
+                        {
+                            return;
+                        }
+                    }
+                    else if (handshake.Terminal)
+                    {
+                        return; // permanently rejected: do not retry
                     }
                 }
-                else if (handshake.Terminal)
+                finally
                 {
-                    return; // permanently rejected: do not retry
+                    // Release the transport (and the gRPC channel it owns) before reconnecting.
+                    if (transport is IAsyncDisposable disposable)
+                    {
+                        await disposable.DisposeAsync();
+                    }
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

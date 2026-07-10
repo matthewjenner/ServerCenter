@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!-- Tier 2-ish: the real gRPC path exercised in-process over WebApplicationFactory's
+       TestServer (no ports, no external infra). Proves the transport adapters + wiring. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="AwesomeAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Src/ServerCenter.Controller/ServerCenter.Controller.csproj" />
+    <ProjectReference Include="../../Src/ServerCenter.Agent/ServerCenter.Agent.csproj" />
+  </ItemGroup>
+
+</Project>
