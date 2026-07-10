@@ -9,11 +9,22 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 0 (Contracts and foundations) - design docs drafted; solution SCAFFOLDED and
-  building green. Phase 1 not started.
+- Phase: 1 (Controller + Ubuntu agent, bidi stream, read-only) - IN PROGRESS. Phase 0
+  contracts + scaffold done and committed. First Phase 1 slice landed: the protocol brain.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (23 tests). Scaffold is contracts + seam interfaces + stubs +
-  in-memory fakes only - no real behavior yet (correct per the brief's Phase 0 gate).
+  on); `dotnet test` green (45 tests).
+- Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
+  - [x] Protocol brain, transport-agnostic + Tier 1 tested: Hello/HelloAck handshake with
+    version negotiation and clean Goodbye(VERSION_MISMATCH) rejection; the resync
+    reconciler (the top refactor trap, every rule pinned); LivenessTracker (Online/Stale/
+    Offline from heartbeat gaps); driven end-to-end over a new InMemoryDuplexLink.
+  - [ ] Steady-state connection pump: heartbeat loop, status push, command dispatch,
+    reconnect-with-backoff (agent) and per-session lifecycle (controller).
+  - [ ] Real transport: GrpcAgentTransport (agent) + wire AgentLinkService.Connect to
+    IControllerStream; actual networking + network-chaos Tier 2 smoke.
+  - [ ] SQLite-backed IControllerJobView + agent/node/job persistence (schema from
+    phase-0-contracts.md 2.4).
+  - [ ] Controller-owned identity + mTLS enrollment (IAgentTrustProvider real impl).
 - Solution (`ServerCenter.slnx`, Title Case folders, Central Package Management, .NET 10):
   Contracts (the .proto wire), Core (job model + state machine + all seam interfaces +
   IAgentTransport + ProtocolVersion), Primitives (ConfigTemplateRenderer), Capabilities,
@@ -33,9 +44,9 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: review the Phase 0 contracts + scaffold. On approval, begin Phase 1 (real
-  AgentLink.Connect handshake, heartbeat, and the resync scaffolding) - the first real
-  behavior fills in `AgentLinkService.Connect` and a `GrpcAgentTransport`.
+- Next: the steady-state connection pump (heartbeat loop + reconnect-with-backoff) over the
+  now-proven handshake, then GrpcAgentTransport + AgentLinkService wiring, then SQLite, then
+  mTLS. Each is its own ship.
 
 ## Standing conventions (decided)
 
@@ -251,6 +262,12 @@ Windows, reuse before bespoke.
   SQLitePCLRaw.lib.e_sqlite3 2.1.11 (NU1903, GHSA-2m69-gcr7-jv3q). The 2.x line has no fix,
   so transitive-pinned the native lib to 3.53.3 (patched SQLite, ABI-compatible). Revisit
   when Microsoft.Data.Sqlite adopts SQLitePCLRaw 3.x. Documented in Directory.Packages.props.
+- 2026-07-10: Phase 1 approach - build the protocol brain (handshake, version negotiation,
+  resync reconciliation, liveness) as pure, transport-agnostic Core logic tested at Tier 1
+  over an in-memory duplex link BEFORE wiring real gRPC/SQLite/mTLS. Realizes the fake-per-
+  seam + injectable-transport constraints and de-risks the top refactor trap first. Handshake
+  is split from the steady-state pump (separate ships). Added IControllerStream (controller
+  end of the stream) mirroring IAgentTransport.
 - 2026-07-10: Versioning + update model (`build-and-update.md`). Single lockstep VersionPrefix
   (decoupled from the wire protocol version). THREE distinct update models, not one: UI =
   Velopack (mirrors the sibling Avalonia apps); Agent = blue-green self-update + watchdog
