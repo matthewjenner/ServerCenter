@@ -40,6 +40,40 @@ public static class CertificateAuthority
         return new IssuedCert(issued.ExportCertificatePem(), rsa.ExportPkcs8PrivateKeyPem(), Fingerprint(issued));
     }
 
+    // The controller's own TLS server cert, signed by the CA. Agents validate the controller by
+    // chaining this to the CA they received at enrollment. Regenerated at startup is fine (any
+    // cert the CA signs is trusted), so it need not be persisted.
+    public static IssuedCert IssueServerCert(CaMaterial ca, string dnsName, DateTimeOffset now)
+    {
+        using var caCert = X509Certificate2.CreateFromPem(ca.CertPem, ca.KeyPem);
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            $"CN={dnsName}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(
+            X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+            new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, false)); // server auth
+
+        var san = new SubjectAlternativeNameBuilder();
+        san.AddDnsName(dnsName);
+        san.AddIpAddress(System.Net.IPAddress.Loopback);
+        request.CertificateExtensions.Add(san.Build());
+
+        var serial = RandomNumberGenerator.GetBytes(16);
+        using var issued = request.Create(caCert, now.AddMinutes(-5), now.AddYears(1), serial);
+        return new IssuedCert(issued.ExportCertificatePem(), rsa.ExportPkcs8PrivateKeyPem(), Fingerprint(issued));
+    }
+
+    // A cert loaded from PEM has an ephemeral key SChannel/Kestrel cannot use directly on
+    // Windows; round-trip through PKCS#12 to get a usable private key.
+    public static X509Certificate2 ToUsableCertificate(string certPem, string keyPem)
+    {
+        using var fromPem = X509Certificate2.CreateFromPem(certPem, keyPem);
+        var pkcs12 = fromPem.Export(X509ContentType.Pkcs12);
+        return X509CertificateLoader.LoadPkcs12(pkcs12, null);
+    }
+
     public static string Fingerprint(X509Certificate2 cert) => Convert.ToHexString(SHA256.HashData(cert.RawData));
 
     public static string FingerprintFromPem(string certPem)

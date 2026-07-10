@@ -32,6 +32,9 @@ secrets.json
 *.db-shm
 *.sqlite
 
+# Agent local identity (enrolled cert + key); disposable, re-enroll rebuilds it
+agent-identity/
+
 # OS cruft
 .DS_Store
 Thumbs.db

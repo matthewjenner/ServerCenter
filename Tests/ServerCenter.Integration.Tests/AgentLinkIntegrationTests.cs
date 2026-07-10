@@ -25,7 +25,12 @@ public sealed class AgentLinkIntegrationTests : IAsyncLifetime
     {
         _dbPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"sc-it-{Guid.NewGuid():N}.db");
         _factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.UseSetting("Database:Path", _dbPath));
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("Database:Path", _dbPath);
+                // TestServer has no TLS, so exercise the plaintext path with enforcement off.
+                builder.UseSetting("Security:RequireClientCertificate", "false");
+            });
         return ValueTask.CompletedTask;
     }
 

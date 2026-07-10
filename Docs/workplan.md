@@ -9,13 +9,15 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 1 (Controller + Ubuntu agent, bidi stream, read-only) - IN PROGRESS, nearly done.
-  Protocol brain, pump+reconnect, real gRPC transport, SQLite persistence, and the identity
-  core all landed. One piece remains to close Phase 1: mTLS transport enforcement (below).
+- Phase: 1 (Controller + Ubuntu agent, bidi stream, read-only) - COMPLETE. Protocol brain,
+  pump+reconnect, real gRPC transport, SQLite persistence, identity core, and mTLS transport
+  enforcement all landed and tested (incl. a real-socket end-to-end mTLS test). Next: Phase
+  1.5 (host as node zero) or Phase 2 (dashboard).
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (56 Core + 20 Controller + 1 integration = 77, stable across
+  on); `dotnet test` green (56 Core + 25 Controller + 5 integration = 86, stable across
   repeated runs incl. the fake-clock reconnect test, real-SQLite persistence, real-crypto CA
-  chain validation + trust provider, and the in-process real-gRPC integration test).
+  chain + trust provider + authorizer, the in-process real-gRPC test, and a REAL-SOCKET mTLS
+  end-to-end test (enroll over HTTPS + mTLS connect + no-cert rejection)).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
   - [x] Protocol brain, transport-agnostic + Tier 1 tested: Hello/HelloAck handshake with
     version negotiation and clean Goodbye(VERSION_MISMATCH) rejection; the resync
@@ -52,11 +54,15 @@ Decisions Log / Known Edges before starting the next phase (house rule:
     pending->active. Persisted via TrustRepository + schema V2 (controller_ca, bootstrap_token);
     CA ensured at controller startup. Tested with real crypto (X509Chain custom-root validation)
     + real SQLite. EnrollmentResult enriched to carry the agent key + CA cert.
-  - [ ] mTLS transport ENFORCEMENT (the wire half): Kestrel client-cert config + the agent
-    presenting its cert + connect-time VerifyAsync pinning + an unauthenticated,
-    token-gated enrollment endpoint + the agent bootstrap flow. Needs a real-socket
-    integration test. Until then the dial stays plaintext h2c and AgentLinkService keeps the
-    "unpinned" dev registration. THIS is what remains to close Phase 1.
+  - [x] mTLS transport ENFORCEMENT (the wire half): Kestrel HTTPS with a CA-signed server cert
+    + ClientCertificateMode.AllowCertificate; AgentAuthorizer (CN-bound + fingerprint-pinned,
+    flips pending->active) enforced in AgentLinkService; token-gated `/enroll` endpoint (no
+    client cert); agent EnrollmentClient + AgentCertStore + Program bootstrap (enroll once,
+    persist, dial mTLS) with GrpcTransportConnector TLS. Gated by Security:RequireClientCertificate
+    (true by default; tests over TestServer set it false). ControllerHost extracts the shared
+    wiring. Proven by a real-socket mTLS integration test (real Kestrel, ephemeral port):
+    enrolled agent connects + heartbeat lands; a no-client-cert connection is kicked with
+    Goodbye(Revoked). Phase 1 DONE.
 - Solution (`ServerCenter.slnx`, Title Case folders, Central Package Management, .NET 10):
   Contracts (the .proto wire), Core (job model + state machine + all seam interfaces +
   IAgentTransport + ProtocolVersion), Primitives (ConfigTemplateRenderer), Capabilities,
@@ -76,12 +82,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next (closes Phase 1): mTLS transport enforcement - wire the now-tested trust core onto the
-  wire. Kestrel `ClientCertificateMode` + validation callback calling VerifyAsync (fingerprint
-  pin), agent presents its enrolled cert via SslClientAuthenticationOptions, a token-gated
-  enrollment endpoint (no client cert required), and the agent bootstrap flow. Real-socket
-  integration test (real Kestrel + real client cert), not TestServer. Then Phase 1.5 (host as
-  node zero) / Phase 2 (dashboard) open up.
+- Next: Phase 1 is complete. Choose Phase 1.5 (host as node zero - deploy the same agent on
+  the hypervisor host via systemd; nearly free) or Phase 2 (Avalonia dashboard - the headline
+  pain point, reads AgentPresenceStore for dual-truth). Phase 1.5 is the cheaper early win;
+  Phase 2 is the more visible one.
 
 ## Standing conventions (decided)
 
@@ -297,6 +301,15 @@ Windows, reuse before bespoke.
   SQLitePCLRaw.lib.e_sqlite3 2.1.11 (NU1903, GHSA-2m69-gcr7-jv3q). The 2.x line has no fix,
   so transitive-pinned the native lib to 3.53.3 (patched SQLite, ABI-compatible). Revisit
   when Microsoft.Data.Sqlite adopts SQLitePCLRaw 3.x. Documented in Directory.Packages.props.
+- 2026-07-10: mTLS transport enforcement landed (closes Phase 1). Controller runs HTTPS with a
+  CA-signed server cert (regenerated at startup, agents trust via the CA) + AllowCertificate;
+  per-connection authorization (CN-bound + fingerprint pin) in AgentLinkService, not TLS-layer,
+  so the token-gated /enroll endpoint can share the port certless. Enforcement is gated by
+  Security:RequireClientCertificate (default true; TestServer-based tests set false since
+  TestServer has no TLS). The real-socket test builds real Kestrel on an ephemeral port via the
+  extracted ControllerHost. Agent auto-enrolls once, persists to a local cert dir (gitignored),
+  and dials mTLS. Enrollment server-trust is TOFU for now (CA fingerprint should be pinned
+  out-of-band in production).
 - 2026-07-10: Identity core / mTLS split into two ships - the security-critical trust logic
   (CA, mint, fingerprint pin, enroll, rotate, revoke) landed and fully tested with real crypto;
   the wire-level TLS enforcement is a separate follow-up needing real-socket tests. Controller

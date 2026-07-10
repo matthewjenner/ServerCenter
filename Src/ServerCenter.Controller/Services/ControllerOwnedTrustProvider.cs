@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using ServerCenter.Controller.Crypto;
 using ServerCenter.Controller.Persistence;
@@ -81,6 +82,15 @@ public sealed class ControllerOwnedTrustProvider(TrustRepository trust, TimeProv
 
     public async Task RevokeAsync(string agentId, CancellationToken ct) =>
         await trust.SetStatusAsync(agentId, "revoked", clock.GetUtcNow().ToUnixTimeMilliseconds(), ct);
+
+    // The controller's own TLS server cert, signed by the CA, ready for Kestrel. Regenerated at
+    // startup; agents trust it by chaining to the CA they hold.
+    public async Task<X509Certificate2> CreateServerCertificateAsync(string dnsName, CancellationToken ct)
+    {
+        var ca = await RequireCaAsync(ct);
+        var issued = CertificateAuthority.IssueServerCert(ca, dnsName, clock.GetUtcNow());
+        return CertificateAuthority.ToUsableCertificate(issued.CertPem, issued.PrivateKeyPem);
+    }
 
     private async Task<CaMaterial> RequireCaAsync(CancellationToken ct) =>
         await trust.GetCaAsync(ct) ?? throw new InvalidOperationException("Controller CA is not initialized.");

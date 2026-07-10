@@ -1,8 +1,10 @@
 using Grpc.Core;
 using ServerCenter.Contracts.V1;
 using ServerCenter.Controller.Persistence;
+using ServerCenter.Controller.Services;
 using ServerCenter.Core.Connection;
 using ServerCenter.Core.Jobs;
+using ServerCenter.Core.Transport;
 
 namespace ServerCenter.Controller.Grpc;
 
@@ -15,6 +17,8 @@ public sealed class AgentLinkService(
     IControllerJobView jobs,
     IControllerSessionSink sink,
     AgentNodeRepository agents,
+    AgentAuthorizer authorizer,
+    AgentSecurityOptions security,
     TimeProvider clock,
     ILogger<AgentLinkService> logger) : AgentLink.AgentLinkBase
 {
@@ -33,11 +37,34 @@ public sealed class AgentLinkService(
             return;
         }
 
-        // Register the agent and its node (idempotent). The real mTLS fingerprint replaces
-        // "unpinned" in the identity ship; kind/host detection lands with node-zero work.
         var now = clock.GetUtcNow().ToUnixTimeMilliseconds();
-        await agents.EnsureAgentAsync(handshake.AgentId, handshake.AgentId, "unpinned", now, ct);
-        await agents.EnsureNodeAsync(handshake.AgentId, handshake.AgentId, "guest", "managed", now, ct);
+
+        if (security.RequireClientCertificate)
+        {
+            // mTLS enforced: the presented client cert must authenticate the claimed agent id.
+            var clientCertificate = context.GetHttpContext()?.Connection.ClientCertificate;
+            if (!await authorizer.AuthorizeAsync(clientCertificate, handshake.AgentId, ct))
+            {
+                logger.LogWarning("Agent {AgentId} failed client-certificate authorization", handshake.AgentId);
+                await stream.SendAsync(
+                    new ControllerMessage
+                    {
+                        Envelope = Envelopes.New(),
+                        Goodbye = new Goodbye { Reason = GoodbyeReason.Revoked, Message = "client certificate not authorized" }
+                    },
+                    ct);
+                return;
+            }
+
+            // Identity already exists from enrollment; just ensure the node.
+            await agents.EnsureNodeAsync(handshake.AgentId, handshake.AgentId, "guest", "managed", now, ct);
+        }
+        else
+        {
+            // Dev / no-mTLS: register with an unpinned identity so the flow works over plaintext.
+            await agents.EnsureAgentAsync(handshake.AgentId, handshake.AgentId, "unpinned", now, ct);
+            await agents.EnsureNodeAsync(handshake.AgentId, handshake.AgentId, "guest", "managed", now, ct);
+        }
 
         logger.LogInformation(
             "Agent {AgentId} connected (session {SessionId}, {ReconcileCount} jobs reconciled)",
