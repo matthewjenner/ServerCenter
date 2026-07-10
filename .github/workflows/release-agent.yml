@@ -27,10 +27,6 @@ jobs:
       # Action versions verified against latest per the global rule (Node 24 runners).
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-
       - name: Read version from Directory.Build.props
         id: version
         run: |
@@ -57,6 +53,12 @@ jobs:
           else
               echo "SKIP=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Only install the SDK if we are actually going to build/publish this version.
+      - uses: actions/setup-dotnet@v5
+        if: steps.tag-check.outputs.SKIP == 'false'
+        with:
+          dotnet-version: '10.0.x'
 
       - name: Test (agent-relevant projects)
         if: steps.tag-check.outputs.SKIP == 'false'
