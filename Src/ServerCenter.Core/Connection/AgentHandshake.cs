@@ -44,7 +44,9 @@ public static class AgentHandshake
         var reply = incoming.Current;
         if (reply.PayloadCase == ControllerMessage.PayloadOneofCase.Goodbye)
         {
-            return AgentHandshakeResult.Rejected($"{reply.Goodbye.Reason}: {reply.Goodbye.Message}");
+            var reason = reply.Goodbye.Reason;
+            var terminal = reason is GoodbyeReason.VersionMismatch or GoodbyeReason.Revoked;
+            return AgentHandshakeResult.Rejected($"{reason}: {reply.Goodbye.Message}", terminal);
         }
 
         if (reply.PayloadCase != ControllerMessage.PayloadOneofCase.HelloAck)
@@ -96,6 +98,10 @@ public sealed record AgentHandshakeResult
     public string SessionId { get; init; } = string.Empty;
     public string RejectReason { get; init; } = string.Empty;
 
-    public static AgentHandshakeResult Rejected(string reason) =>
-        new() { Established = false, RejectReason = reason };
+    // True when the controller rejected us permanently (version mismatch / revoked): the dial
+    // loop must stop rather than reconnect.
+    public bool Terminal { get; init; }
+
+    public static AgentHandshakeResult Rejected(string reason, bool terminal = false) =>
+        new() { Established = false, RejectReason = reason, Terminal = terminal };
 }

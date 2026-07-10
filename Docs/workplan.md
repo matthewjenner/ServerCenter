@@ -12,14 +12,18 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Phase: 1 (Controller + Ubuntu agent, bidi stream, read-only) - IN PROGRESS. Phase 0
   contracts + scaffold done and committed. First Phase 1 slice landed: the protocol brain.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (45 tests).
+  on); `dotnet test` green (56 tests, stable across repeated runs incl. the fake-clock
+  reconnect test).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
   - [x] Protocol brain, transport-agnostic + Tier 1 tested: Hello/HelloAck handshake with
     version negotiation and clean Goodbye(VERSION_MISMATCH) rejection; the resync
     reconciler (the top refactor trap, every rule pinned); LivenessTracker (Online/Stale/
     Offline from heartbeat gaps); driven end-to-end over a new InMemoryDuplexLink.
-  - [ ] Steady-state connection pump: heartbeat loop, status push, command dispatch,
-    reconnect-with-backoff (agent) and per-session lifecycle (controller).
+  - [x] Steady-state connection pump + reconnect: AgentSessionPump (heartbeat + status on a
+    TimeProvider cadence, command dispatch), ControllerSessionPump (ingest heartbeat/status/
+    progress/result to a sink), BackoffPolicy (full-jitter exponential), AgentConnection
+    (dial -> handshake -> pump -> reconnect-with-backoff, stops on terminal Goodbye). Tier 1
+    tested with FakeTimeProvider; AgentHandshakeResult gained a Terminal flag.
   - [ ] Real transport: GrpcAgentTransport (agent) + wire AgentLinkService.Connect to
     IControllerStream; actual networking + network-chaos Tier 2 smoke.
   - [ ] SQLite-backed IControllerJobView + agent/node/job persistence (schema from
@@ -44,9 +48,9 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: the steady-state connection pump (heartbeat loop + reconnect-with-backoff) over the
-  now-proven handshake, then GrpcAgentTransport + AgentLinkService wiring, then SQLite, then
-  mTLS. Each is its own ship.
+- Next: the real transport - GrpcAgentTransport (agent) adapting the gRPC client stream to
+  IAgentTransport, and AgentLinkService.Connect adapting the server streams to IControllerStream
+  + driving the handshake/pump. First time it talks over a socket. Then SQLite, then mTLS.
 
 ## Standing conventions (decided)
 
