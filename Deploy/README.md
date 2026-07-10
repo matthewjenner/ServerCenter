@@ -52,12 +52,13 @@ controller as policy, not by different agent code.
 
 `install.sh` sets up **automatic updates**, so you normally never touch a node again:
 
-- **Agents** run `servercenter-agent-update.timer` (daily). It asks the controller what agent version
-  it serves and, if newer, pulls that bundle **from the controller** (never GitHub - the controller is
-  the distribution root), swaps the binary, and restarts. The persisted identity under
-  `/var/lib/servercenter-agent` is kept. No rollback yet (blue-green + watchdog is Phase 10).
-- **The controller** (node zero) runs `servercenter-controller-update.timer` (daily): `docker compose
-  pull && up -d`. State lives in the `controller-data` volume, so a recreate is safe.
+- **Agents** run `servercenter-agent-update.timer` (dev cadence ~5 min; eventual default daily). It
+  asks the controller what agent version it serves and, if newer, pulls that bundle **from the
+  controller** (never GitHub - the controller is the distribution root), swaps the binary, and
+  restarts. The persisted identity under `/var/lib/servercenter-agent` is kept. No rollback yet
+  (blue-green + watchdog is Phase 10).
+- **The controller** (node zero) runs `servercenter-controller-update.timer` (same cadence): `docker
+  compose pull && up -d`. State lives in the `controller-data` volume, so a recreate is safe.
 
 Because all three tiers share one version, bumping the controller to a new image automatically rolls
 the agents forward on their next timer tick (the new agent bundles are baked into the controller
@@ -74,9 +75,25 @@ sudo systemctl stop servercenter-agent && sudo cp bin/* /opt/servercenter-agent/
 
 ## Uninstall
 
+Agent (on any node):
 ```
-sudo systemctl disable --now servercenter-agent
+sudo systemctl disable --now servercenter-agent.service
+sudo systemctl disable --now servercenter-agent-update.timer 2>/dev/null || true
+sudo rm -f /etc/systemd/system/servercenter-agent.service \
+           /etc/systemd/system/servercenter-agent-update.service \
+           /etc/systemd/system/servercenter-agent-update.timer
+sudo systemctl daemon-reload
 sudo rm -rf /opt/servercenter-agent /etc/servercenter-agent /var/lib/servercenter-agent
-sudo rm /etc/systemd/system/servercenter-agent.service && sudo systemctl daemon-reload
-sudo userdel servercenter
+sudo userdel servercenter 2>/dev/null || true
+```
+
+Controller (node zero) - `down -v` also wipes the `controller-data` volume (the SQLite precious
+state); drop `-v` to keep it:
+```
+sudo docker compose -f /opt/servercenter-controller/docker-compose.yml down -v
+sudo systemctl disable --now servercenter-controller-update.timer 2>/dev/null || true
+sudo rm -f /etc/systemd/system/servercenter-controller-update.service \
+           /etc/systemd/system/servercenter-controller-update.timer
+sudo systemctl daemon-reload
+sudo rm -rf /opt/servercenter-controller
 ```

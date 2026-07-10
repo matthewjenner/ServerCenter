@@ -55,6 +55,18 @@ guarantee).
   controller. Agents never pull from GitHub directly - only trust and distribution are
   centralized (brief 3.8).
 
+**Implemented interim (2026-07-10), pre-Phase-10 - no rollback yet.** A controller-distributed
+updater is live: the controller image bakes the per-RID agent bundles in (its Dockerfile runs
+`Scripts/publish-agent.sh` for x64+arm64) and serves `GET /agent/version` + `GET /agent/bundle/{rid}`
+(`AgentUpdateEndpoint`). Each node runs `servercenter-agent-update.timer` -> `servercenter-agent-
+update.sh`, which compares `/opt/servercenter-agent/VERSION` to the controller's version and, if
+newer, pulls the bundle **from the controller** over http/h2c, swaps the binary in place, and
+restarts. This satisfies "distribution is controller-mediated, agents never touch GitHub" but is a
+simple swap - the two-slot flip + phone-home watchdog is still the Phase 10 upgrade. Gaps: http only
+(https/mTLS needs the client cert in the updater's curl), and it serves any caller (approved-only is
+a retrofit once the pending->approve trust model lands). Cadence is a systemd timer, currently a dev
+value (~5 min), earmarked to become a controller-managed setting.
+
 ### 2.3 Controller (`ServerCenter.Controller`) - container image, NOT Velopack
 
 Containerized on the hypervisor host with the libvirt socket mounted (brief 3.3). Its update
@@ -64,6 +76,11 @@ update briefly drops the control plane; agents' jobs outlive the connection and 
 reconnect (phase-0-contracts.md 2.3), and the UI expects to lose and reconnect - the same
 posture as the host-reboot case (brief 3.4). Recommend a controller-DB snapshot (backup
 runbook) immediately before recreate.
+
+**Implemented (2026-07-10):** node zero's `install.sh --with-controller` also installs
+`servercenter-controller-update.timer` -> `docker compose pull && up -d` (same dev cadence ~5 min,
+earmarked as a setting). The controller is the only tier that reaches the internet (the GHCR pull);
+agents update from it.
 
 ## 3. CI mapping
 

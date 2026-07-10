@@ -107,6 +107,9 @@ public static class ControllerHandshake
             SessionId = decision.SessionId,
             AgentId = agentId,
             NodeKind = string.IsNullOrEmpty(first.Hello.NodeKind) ? "guest" : first.Hello.NodeKind,
+            AgentVersion = first.Hello.AgentVersion,
+            OsFamily = first.Hello.OsFamily,
+            Arch = first.Hello.Arch,
             ReconcileActions = actions
         };
     }
@@ -126,6 +129,9 @@ public sealed record ControllerHandshakeResult
     public string SessionId { get; init; } = string.Empty;
     public string AgentId { get; init; } = string.Empty;
     public string NodeKind { get; init; } = "guest";
+    public string AgentVersion { get; init; } = string.Empty;
+    public string OsFamily { get; init; } = string.Empty;
+    public string Arch { get; init; } = string.Empty;
     public string RejectReason { get; init; } = string.Empty;
     public IReadOnlyList<ReconcileAction> ReconcileActions { get; init; } = Array.Empty<ReconcileAction>();
 

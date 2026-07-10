@@ -162,6 +162,68 @@ docker exec servercenter-controller sh -c 'sqlite3 /data/servercenter.db "VACUUM
 
 Copy `/data/backup.db` off-box. Test the restore into a scratch controller before trusting it.
 
+## 10. Auto-update (controller-distributed)  [works today]
+
+Both tiers self-update on a timer. The controller is the only tier that reaches the internet (it
+pulls its image from GHCR); agents pull their bundle FROM the controller, never GitHub.
+
+- The controller advertises the target version + serves the bundles (baked into its image):
+  ```bash
+  curl --http2-prior-knowledge -s http://<host>:5080/agent/version                                  # {"version":"<x.y.z>"}
+  curl --http2-prior-knowledge -s -o /tmp/a.tgz http://<host>:5080/agent/bundle/linux-x64 && ls -l /tmp/a.tgz
+  ```
+- `install.sh` set up the timers on every node (dev cadence ~5 min; eventual default daily):
+  ```bash
+  systemctl list-timers 'servercenter-*'
+  ```
+- Force a cycle now instead of waiting for the timer:
+  ```bash
+  sudo systemctl start servercenter-controller-update.service   # node zero: docker compose pull && up -d
+  sudo systemctl start servercenter-agent-update.service        # any node: pull a newer bundle from the controller
+  journalctl -u servercenter-agent-update.service --no-pager | tail
+  ```
+
+Verify: `cat /opt/servercenter-agent/VERSION` matches `/agent/version`. After you publish a newer
+version, the controller's timer pulls the new image (with new baked bundles) and each agent's next
+tick rolls forward (binary swapped + service restarted) - no per-node action.
+
+---
+
+## Updating an existing deployment (teardown + reinstall)
+
+Once nodes carry the update timers, `0.1.x -> 0.1.y` is automatic (step 10). This section is only for
+the ONE-TIME jump from a pre-auto-update build, or a clean reset - and only after the target
+`agent-v<version>` + `controller-v<version>` releases exist (push -> CI green), or you will reinstall
+the old version.
+
+Controller (on the HV):
+```bash
+sudo docker compose -f /opt/servercenter-controller/docker-compose.yml down -v   # -v WIPES controller-data (SQLite)!
+sudo systemctl disable --now servercenter-controller-update.timer 2>/dev/null || true
+sudo rm -f /etc/systemd/system/servercenter-controller-update.service /etc/systemd/system/servercenter-controller-update.timer
+sudo systemctl daemon-reload
+sudo rm -rf /opt/servercenter-controller
+sudo docker image rm ghcr.io/matthewjenner/servercenter-controller:latest 2>/dev/null || true
+```
+`down -v` deletes the `controller-data` volume (CA + node registry) - fine for a dev reset, but in
+real operation that volume is your one-backup surface: keep it (`down` without `-v`) or back it up
+first (step 9). Fallback if the compose file is already gone:
+`sudo docker rm -f servercenter-controller && sudo docker volume rm servercenter-controller_controller-data`.
+
+Agent (on the HV, and each guest):
+```bash
+sudo systemctl disable --now servercenter-agent.service
+sudo systemctl disable --now servercenter-agent-update.timer 2>/dev/null || true
+sudo rm -f /etc/systemd/system/servercenter-agent.service \
+           /etc/systemd/system/servercenter-agent-update.service \
+           /etc/systemd/system/servercenter-agent-update.timer
+sudo systemctl daemon-reload
+sudo rm -rf /opt/servercenter-agent /etc/servercenter-agent /var/lib/servercenter-agent
+sudo userdel servercenter 2>/dev/null || true
+```
+The `2>/dev/null || true` bits keep it clean on a pre-auto-update node (no update timers to remove).
+Then reinstall from the new release (steps 1-2).
+
 ---
 
 ## Known gaps / recommended follow-ups (surfaced by this runbook)

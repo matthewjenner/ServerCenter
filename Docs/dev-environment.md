@@ -76,7 +76,13 @@ then treat it as real.
 `sudo ./install.sh --with-controller` stands up the controller container (pulling the published
 image), wires this host's agent to it (`http://127.0.0.1:5080`, `NODE_KIND=host`), and starts -
 one command, nothing copied from a workstation. If a controller is already running it is left as-is
-and only the agent installs. Guests use plain `sudo ./install.sh` + a UNIQUE `SERVERCENTER_AGENT_ID`.
+and only the agent installs. Guests use `sudo ./install.sh --controller <host-or-url>` (bare IP ->
+`http://<ip>:5080`; prompts if omitted); the node id defaults to the hostname.
+
+**Auto-update:** `install.sh` also installs update timers - agents pull newer bundles from the
+controller (`/agent/version` + `/agent/bundle/{rid}`, baked into the controller image), and node
+zero's controller does `docker compose pull && up -d`. So after the first install, `0.1.x -> 0.1.y`
+is hands-off. Cadence is a dev value (~5 min) today. See `Docs/build-and-update.md` 2.2/2.3.
 
 So for end-to-end testing: on the hypervisor run `install.sh --with-controller` (controller + host
 agent in one shot); on each guest install the AGENT from its release; run the UI from source. See

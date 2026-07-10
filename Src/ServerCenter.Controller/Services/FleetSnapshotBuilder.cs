@@ -41,10 +41,14 @@ public sealed class FleetSnapshotBuilder(
                 state.AgentLiveness = entry.LastHeartbeatUnixMs > 0
                     ? Map(liveness.Evaluate(entry.LastHeartbeatUnixMs, now))
                     : AgentLiveness.Offline;
+                state.AgentVersion = entry.AgentVersion;
+                state.OsFamily = entry.OsFamily;
+                state.Arch = entry.Arch;
                 if (entry.LastStatus is not null)
                 {
                     state.AgentHealth = entry.LastStatus.AgentHealth;
                     state.Resources = entry.LastStatus.Resources;
+                    state.RebootPending = entry.LastStatus.RebootPending;
                 }
             }
             else

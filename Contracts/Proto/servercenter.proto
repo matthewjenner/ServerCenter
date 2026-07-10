@@ -199,6 +199,12 @@ message NodeState {
   VmState vm_state              = 6; // VM-running truth; Unknown until libvirt (Phase 6)
   ServiceHealth agent_health    = 7;
   ResourceSample resources      = 8;
+  // Diagnostics reported by the agent (version/os/arch from the Hello, reboot from status). Additive;
+  // empty from an older agent/controller during a mixed-version rollout.
+  string agent_version          = 9;
+  string os_family              = 10;
+  string arch                   = 11;
+  bool reboot_pending           = 12;
 }
 
 enum AgentLiveness {

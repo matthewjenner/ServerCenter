@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using ServerCenter.Core.Connection;
@@ -9,6 +10,9 @@ namespace ServerCenter.Agent;
 // plaintext dev path. Identical for host and guests - only NodeKind differs.
 public static class AgentBootstrap
 {
+    // The agent's real build version (from VersionPrefix), reported in the Hello - not a hardcode.
+    private static readonly string AgentVersion = ResolveAgentVersion();
+
     public static async Task<(GrpcTransportConnector Connector, AgentIdentity Identity)> PrepareAsync(
         AgentOptions options, ILogger logger, CancellationToken ct)
     {
@@ -34,7 +38,7 @@ public static class AgentBootstrap
                 logger.LogInformation("Enrolled as agent {AgentId}", bundle.AgentId);
             }
 
-            AgentIdentity identity = new AgentIdentity(store.AgentId, "0.1.0", osFamily, arch, options.NodeKind);
+            AgentIdentity identity = new AgentIdentity(store.AgentId, AgentVersion, osFamily, arch, options.NodeKind);
             return (new GrpcTransportConnector(options.ControllerAddress, store.LoadTls()), identity);
         }
 
@@ -42,6 +46,15 @@ public static class AgentBootstrap
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
         string devId = options.DevAgentId ?? "dev-agent";
         return (new GrpcTransportConnector(options.ControllerAddress),
-            new AgentIdentity(devId, "0.1.0", osFamily, arch, options.NodeKind));
+            new AgentIdentity(devId, AgentVersion, osFamily, arch, options.NodeKind));
+    }
+
+    // Clean semver from the assembly's informational version (set from VersionPrefix; strip "+build").
+    private static string ResolveAgentVersion()
+    {
+        string informational = typeof(AgentBootstrap).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
+        int plus = informational.IndexOf('+');
+        return plus >= 0 ? informational[..plus] : informational;
     }
 }

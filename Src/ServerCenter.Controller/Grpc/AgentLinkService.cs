@@ -21,6 +21,7 @@ public sealed class AgentLinkService(
     ConnectedAgents connected,
     AgentAuthorizer authorizer,
     AgentSecurityOptions security,
+    AgentPresenceStore presence,
     TimeProvider clock,
     ILogger<AgentLinkService> logger) : AgentLink.AgentLinkBase
 {
@@ -40,6 +41,9 @@ public sealed class AgentLinkService(
         }
 
         long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+
+        // Live diagnostics from the Hello, refreshed on every (re)connect (surfaced in the fleet view).
+        presence.RecordConnect(handshake.AgentId, handshake.AgentVersion, handshake.OsFamily, handshake.Arch);
 
         if (security.RequireClientCertificate)
         {

@@ -18,10 +18,13 @@
       <DataGrid.Columns>
         <DataGridTextColumn Header="Node" Binding="{Binding DisplayName}" Width="2*" />
         <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="Auto" />
+        <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="Auto" />
+        <DataGridTextColumn Header="OS" Binding="{Binding Os}" Width="Auto" />
         <DataGridTextColumn Header="Agent" Binding="{Binding AgentLivenessText}" Width="Auto" />
         <DataGridTextColumn Header="VM" Binding="{Binding VmStateText}" Width="Auto" />
+        <DataGridTextColumn Header="Reboot" Binding="{Binding RebootPending}" Width="Auto" />
         <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="Auto" />
-        <DataGridTextColumn Header="Resources" Binding="{Binding Resources}" Width="3*" />
+        <DataGridTextColumn Header="Resources" Binding="{Binding Resources}" Width="2*" />
       </DataGrid.Columns>
     </DataGrid>
 

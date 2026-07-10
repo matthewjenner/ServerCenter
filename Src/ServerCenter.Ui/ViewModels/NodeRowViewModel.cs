@@ -16,6 +16,9 @@ public sealed partial class NodeRowViewModel : ObservableObject
     [ObservableProperty] private string _vmStateText = string.Empty;
     [ObservableProperty] private string _lastSeen = string.Empty;
     [ObservableProperty] private string _resources = string.Empty;
+    [ObservableProperty] private string _version = string.Empty;
+    [ObservableProperty] private string _os = string.Empty;
+    [ObservableProperty] private string _rebootPending = string.Empty;
 
     public NodeRowViewModel(NodeState node, long generatedUnixMs)
     {
@@ -35,6 +38,11 @@ public sealed partial class NodeRowViewModel : ObservableObject
         Resources = node.Resources is null
             ? "-"
             : $"cpu {node.Resources.CpuPct:0}% / mem {node.Resources.MemUsedPct:0}% / disk {node.Resources.DiskUsedPct:0}%";
+        Version = string.IsNullOrEmpty(node.AgentVersion) ? "-" : node.AgentVersion;
+        Os = string.IsNullOrEmpty(node.OsFamily)
+            ? "-"
+            : string.IsNullOrEmpty(node.Arch) ? node.OsFamily : $"{node.OsFamily} {node.Arch}";
+        RebootPending = node.RebootPending ? "reboot" : string.Empty;
     }
 
     private static string Format(AgentLiveness liveness) => liveness switch

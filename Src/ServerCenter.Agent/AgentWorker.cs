@@ -64,11 +64,16 @@ public sealed class AgentWorker(
                 options.HeartbeatInterval,
                 new BackoffPolicy(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30)));
 
+            // Real telemetry on Linux (CPU/mem/disk/uptime/reboot); the zero-valued fallback elsewhere.
+            IAgentStatusSource statusSource = OperatingSystem.IsLinux()
+                ? new SystemInfoStatusSource(new ServerCenter.Agent.Linux.LinuxSystemInfo())
+                : new BasicAgentStatusSource();
+
             await AgentConnection.RunAsync(
                 connector.ConnectAsync,
                 identity,
                 jobStore,
-                new BasicAgentStatusSource(),
+                statusSource,
                 commandHandler,
                 TimeProvider.System,
                 connectionOptions,

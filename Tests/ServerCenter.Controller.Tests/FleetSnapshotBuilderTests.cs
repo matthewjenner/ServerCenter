@@ -92,6 +92,33 @@ public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
         snapshot.Nodes.Should().ContainSingle().Which.VmState.Should().Be(VmState.Unknown);
     }
 
+    [Fact]
+    public async Task Diagnostics_from_connect_and_status_flow_into_the_node_state()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        long now = _clock.GetUtcNow().ToUnixTimeMilliseconds();
+        await SeedNodeAsync("a5", "n5", "guest", ct);
+
+        // Connect-time diagnostics (Hello) + live status (heartbeat).
+        _presence.RecordConnect("a5", "0.1.4", "linux", "x64");
+        await _presence.OnHeartbeatAsync("a5", new Heartbeat { AgentUnixMs = now }, ct);
+        await _presence.OnStatusAsync("a5", new NodeStatus
+        {
+            AgentHealth = ServiceHealth.Active,
+            RebootPending = true,
+            Resources = new ResourceSample { CpuPct = 12, MemUsedPct = 34, DiskUsedPct = 56 }
+        }, ct);
+
+        FleetSnapshot snapshot = await _builder.BuildAsync(ct);
+
+        NodeState node = snapshot.Nodes.Should().ContainSingle().Subject;
+        node.AgentVersion.Should().Be("0.1.4");
+        node.OsFamily.Should().Be("linux");
+        node.Arch.Should().Be("x64");
+        node.RebootPending.Should().BeTrue();
+        node.Resources.CpuPct.Should().Be(12);
+    }
+
     private async Task SeedNodeAsync(string agentId, string nodeId, string kind, CancellationToken ct)
     {
         await _nodes.EnsureAgentAsync(agentId, $"name-{nodeId}", "fpr", 1, ct);

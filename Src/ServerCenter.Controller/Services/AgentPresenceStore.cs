@@ -20,6 +20,16 @@ public sealed class AgentPresenceStore : IControllerSessionSink
 
     public IReadOnlyCollection<KeyValuePair<string, AgentPresence>> Snapshot() => _byAgent.ToArray();
 
+    // Connect-time diagnostics from the Hello (version/os/arch): live, keyed by agent, refreshed on
+    // every (re)connect - so a version bump shows up after the agent's next reconnect.
+    public void RecordConnect(string agentId, string agentVersion, string osFamily, string arch)
+    {
+        AgentPresence entry = Entry(agentId);
+        entry.AgentVersion = agentVersion;
+        entry.OsFamily = osFamily;
+        entry.Arch = arch;
+    }
+
     public Task OnHeartbeatAsync(string agentId, Heartbeat heartbeat, CancellationToken ct)
     {
         Entry(agentId).LastHeartbeatUnixMs = heartbeat.AgentUnixMs;
@@ -45,4 +55,11 @@ public sealed class AgentPresence
     public long LastHeartbeatUnixMs { get; set; }
 
     public NodeStatus? LastStatus { get; set; }
+
+    // Connect-time diagnostics from the Hello.
+    public string AgentVersion { get; set; } = string.Empty;
+
+    public string OsFamily { get; set; } = string.Empty;
+
+    public string Arch { get; set; } = string.Empty;
 }
