@@ -86,6 +86,12 @@ public sealed class AgentLinkIntegrationTests : IAsyncLifetime
         presence.TryGet("it-agent", out var recorded).Should().BeTrue();
         recorded!.LastStatus!.AgentHealth.Should().Be(ServiceHealth.Active);
 
+        // The dashboard's data source: FleetView reports the connected agent as online.
+        var fleet = await new FleetView.FleetViewClient(channel)
+            .GetFleetAsync(new GetFleetRequest(), cancellationToken: ct);
+        fleet.Nodes.Should().ContainSingle(n => n.NodeId == "it-agent")
+            .Which.AgentLiveness.Should().Be(ServerCenter.Contracts.V1.AgentLiveness.Online);
+
         await pumpCts.CancelAsync();
         try
         {

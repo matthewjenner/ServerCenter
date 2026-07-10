@@ -14,6 +14,8 @@
     <ProjectReference Include="../ServerCenter.Core/ServerCenter.Core.csproj" />
     <ProjectReference Include="../ServerCenter.Primitives/ServerCenter.Primitives.csproj" />
     <ProjectReference Include="../ServerCenter.Capabilities/ServerCenter.Capabilities.csproj" />
+    <ProjectReference Include="../ServerCenter.Agent.Linux/ServerCenter.Agent.Linux.csproj" />
+    <ProjectReference Include="../ServerCenter.Agent.Windows/ServerCenter.Agent.Windows.csproj" />
   </ItemGroup>
 
 </Project>

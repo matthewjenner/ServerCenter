@@ -172,3 +172,44 @@ enum GoodbyeReason {
   GOODBYE_REASON_REVOKED         = 2;
   GOODBYE_REASON_SHUTTING_DOWN   = 3;
 }
+
+// -------- Operator-facing fleet view (the dashboard reads this) --------
+// The UI talks only to the controller (brief). This is a separate operator API from the agent
+// link; it does not require a client cert. Dual-truth (brief 3.7): agent-online and VM-running
+// are independent, both surfaced, with Stale/Unknown first-class.
+service FleetView {
+  rpc GetFleet(GetFleetRequest) returns (FleetSnapshot);
+  rpc WatchFleet(WatchFleetRequest) returns (stream FleetSnapshot); // server pushes on a cadence
+}
+
+message GetFleetRequest {}
+message WatchFleetRequest {}
+
+message FleetSnapshot {
+  repeated NodeState nodes = 1;
+  int64 generated_unix_ms  = 2;
+}
+
+message NodeState {
+  string node_id                = 1;
+  string display_name           = 2;
+  string kind                   = 3; // guest | host
+  AgentLiveness agent_liveness  = 4; // agent-online truth (derived from heartbeat gap)
+  int64 last_heartbeat_unix_ms  = 5;
+  VmState vm_state              = 6; // VM-running truth; Unknown until libvirt (Phase 6)
+  ServiceHealth agent_health    = 7;
+  ResourceSample resources      = 8;
+}
+
+enum AgentLiveness {
+  AGENT_LIVENESS_UNSPECIFIED = 0;
+  AGENT_LIVENESS_ONLINE      = 1;
+  AGENT_LIVENESS_STALE       = 2;
+  AGENT_LIVENESS_OFFLINE     = 3;
+}
+
+enum VmState {
+  VM_STATE_UNKNOWN = 0; // no libvirt truth yet
+  VM_STATE_RUNNING = 1;
+  VM_STATE_STOPPED = 2;
+}

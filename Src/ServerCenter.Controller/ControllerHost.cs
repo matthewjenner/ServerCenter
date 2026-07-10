@@ -32,12 +32,17 @@ public static class ControllerHost
         services.AddSingleton<IAgentTrustProvider>(sp => sp.GetRequiredService<ControllerOwnedTrustProvider>());
         services.AddSingleton<AgentAuthorizer>();
         services.AddSingleton(new AgentSecurityOptions(requireClientCertificate));
+
+        // Operator fleet view (dashboard). Liveness thresholds: Stale after 30s, Offline after 90s.
+        services.AddSingleton(new LivenessTracker(staleAfterMs: 30_000, offlineAfterMs: 90_000));
+        services.AddSingleton<FleetSnapshotBuilder>();
     }
 
     public static void MapControllerEndpoints(this WebApplication app)
     {
         app.MapGrpcService<AgentLinkService>();
+        app.MapGrpcService<FleetService>();
         app.MapEnrollment();
-        app.MapGet("/", () => "ServerCenter Controller. AgentLink gRPC + enrollment endpoints are mapped.");
+        app.MapGet("/", () => "ServerCenter Controller. AgentLink + FleetView gRPC + enrollment endpoints are mapped.");
     }
 }

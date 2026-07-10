@@ -1,6 +1,7 @@
 using ServerCenter.Contracts.V1;
 using ServerCenter.Core.Connection;
 using ServerCenter.Core.Jobs;
+using ServerCenter.Core.Transport;
 
 namespace ServerCenter.Agent;
 
@@ -26,7 +27,7 @@ public sealed class EmptyAgentJobStateSource : IAgentJobStateSource
 
 public sealed class NoopCommandHandler : IAgentCommandHandler
 {
-    public Task OnCommandAsync(Command command, CancellationToken ct) => Task.CompletedTask;
+    public Task OnCommandAsync(Command command, IAgentTransport transport, CancellationToken ct) => Task.CompletedTask;
 
     public Task OnCancelAsync(CancelJob cancel, CancellationToken ct) => Task.CompletedTask;
 }

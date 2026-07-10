@@ -2,8 +2,25 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ServerCenter.Ui.MainWindow"
         Title="ServerCenter"
-        Width="960" Height="640">
-  <TextBlock Margin="24"
-             FontSize="16"
-             Text="ServerCenter - live dual-truth dashboard scaffold (Phase 2)." />
+        Width="1000" Height="640">
+  <DockPanel Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Margin="4,4,4,10"
+               FontSize="14"
+               Text="{Binding ConnectionStatus}" />
+    <DataGrid ItemsSource="{Binding Nodes}"
+              IsReadOnly="True"
+              AutoGenerateColumns="False"
+              GridLinesVisibility="Horizontal"
+              CanUserResizeColumns="True">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Node" Binding="{Binding DisplayName}" Width="2*" />
+        <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="Auto" />
+        <DataGridTextColumn Header="Agent" Binding="{Binding AgentLivenessText}" Width="Auto" />
+        <DataGridTextColumn Header="VM" Binding="{Binding VmStateText}" Width="Auto" />
+        <DataGridTextColumn Header="Last seen" Binding="{Binding LastSeen}" Width="Auto" />
+        <DataGridTextColumn Header="Resources" Binding="{Binding Resources}" Width="3*" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
 </Window>

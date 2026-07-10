@@ -66,7 +66,7 @@ public static class AgentSessionPump
             switch (msg.PayloadCase)
             {
                 case ControllerMessage.PayloadOneofCase.Command:
-                    await commands.OnCommandAsync(msg.Command, ct);
+                    await commands.OnCommandAsync(msg.Command, transport, ct);
                     break;
                 case ControllerMessage.PayloadOneofCase.CancelJob:
                     await commands.OnCancelAsync(msg.CancelJob, ct);

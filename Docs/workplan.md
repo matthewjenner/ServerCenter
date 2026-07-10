@@ -9,15 +9,16 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 1.5 (host as node zero) - COMPLETE (pending the user's smoke-test of installing node
-  zero on the real hypervisor). Agent is a systemd service + generic Linux install package;
-  `release-agent.yml` publishes the tarball to a GitHub release (linux-x64 + arm64, version-
-  gated). Phase 1 also complete. Next: Phase 2 (Avalonia dashboard).
+- Phase: 3 (first jobs) - IN PROGRESS. Phases 1, 1.5, 2 complete (dashboard visually smoked by
+  the user). Slice 3a done: the agent job execution engine. Remaining: controller dispatch (3b),
+  real Linux IServiceController (3c), UI job view (3d).
+- Dev convenience: `Scripts/dev-stack.sh` (bash) launches controller + agent + dashboard for
+  smoke-testing. Scripts are always bash per the house rule.
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (57 Core + 25 Controller + 5 integration = 87). Plus
-  `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
+  on); `dotnet test` green (57 Core + 2 Agent + 29 Controller + 5 integration + 2 UI = 95).
+  Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
   - [x] Protocol brain, transport-agnostic + Tier 1 tested: Hello/HelloAck handshake with
@@ -83,12 +84,12 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: Phase 2 (Avalonia live dashboard) - the headline pain point. Reads the controller's
-  AgentPresenceStore for the dual-truth view (agent-online now; VM-running shows Unknown until
-  libvirt in Phase 6). The controller needs a read API for the UI (presence snapshot). First
-  real UI work, so the Avalonia 12 shell fills in.
-  (Also open, when the user is ready: smoke-test installing node zero on the real hypervisor
-  from the first agent release.)
+- Next: Phase 3b - controller-side job dispatch (connected-agent registry + JobDispatcher +
+  progress persistence), which makes a job triggerable end to end. Then 3c (real Linux service
+  control) and 3d (UI job view). After 3b there'll be something to smoke: trigger a job, watch
+  it run.
+  (Also open when the user is ready: installing node zero on the real hypervisor from the first
+  agent release.)
 
 ## Standing conventions (decided)
 
@@ -176,9 +177,17 @@ Windows, reuse before bespoke.
 - Primitives: none new. UI is a thin view onto the controller.
 - Test tiers: Tier 1 - dual-truth state reconciliation as view-model tests over fake
   status/libvirt feeds (Stale/Unknown transitions, disagreement cases).
+- DONE: controller `FleetView` gRPC (GetFleet + WatchFleet streaming) + testable
+  `FleetSnapshotBuilder` (joins nodes with presence, derives agent-online via LivenessTracker,
+  VM=Unknown). Avalonia dashboard: `DashboardViewModel` (reconciles snapshots into a DataGrid,
+  resilient watch loop), `GrpcFleetClient`, `NodeRowViewModel`. Tier 1 tests: FleetSnapshotBuilder
+  (Online/Stale/Offline + Unknown) + DashboardViewModel.Apply (add/update/remove). Real-gRPC
+  integration test: a connected agent appears in FleetView.GetFleet as Online. UI uses reflection
+  bindings (compiled-binding x:DataType is fiddly with DataGrid); operator auth + UI TLS server-
+  cert validation deferred (TOFU for now).
 - DoD: dashboard shows guest + host state with dual-truth (agent-online AND VM-running
-  shown separately; `Stale`/`Unknown` first-class). Solves the headline pain point.
-- Package note: Avalonia 12.1.0 (see Standing conventions).
+  shown separately; `Stale`/`Unknown` first-class). Solves the headline pain point. MET.
+- Package note: Avalonia 12.1.0 + Avalonia.Controls.DataGrid 12.1.0 + CommunityToolkit.Mvvm 8.4.2.
 
 ### Phase 3 - First jobs (simplest first)
 - Contracts touched: `Command` / `JobProgress` / `CommandResult` / `CancelJob`; the full
@@ -187,6 +196,21 @@ Windows, reuse before bespoke.
 - Test tiers: Tier 1 primary - full job lifecycle including mid-run disconnect and resync
   against a fake `IServiceController`; Tier 2 - real systemd service restart in an
   init-capable container.
+- Sub-steps:
+  - [x] 3a - agent execution engine: `IJobExecutor` contract, `AgentJobStore` (tracks in-flight
+    jobs for resync, replaces EmptyAgentJobStateSource), `TransportJobSink` (streams JobProgress
+    with per-job seq), `JobExecutingCommandHandler` (dispatches Command -> executor in the
+    background, sends terminal CommandResult), `ServiceRestartExecutor` (via IServiceController).
+    `IAgentCommandHandler.OnCommandAsync` now gets the transport (to stream up). Wired into
+    AgentWorker (picks WindowsServiceController/LinuxServiceController by OS). Tier 1 tested
+    (ServerCenter.Agent.Tests): service.restart succeeds; unknown type fails.
+  - [ ] 3b - controller dispatch: a connected-agent registry (agent id -> outbound sender,
+    registered in AgentLinkService), a JobDispatcher (create job at Queued in SQLite -> push
+    Command down the agent stream), and the controller sink persisting JobProgress/CommandResult
+    into job state + job_log. Then a job can be TRIGGERED end to end.
+  - [ ] 3c - real Linux `IServiceController` (DBus/busctl or systemctl) - Tier 2, user smokes
+    on the Linux host.
+  - [ ] 3d - UI job view: jobs list + live progress/log in the dashboard.
 - DoD: restart a systemd service as a persisted job; progress + log stream to the UI; the
   job survives a mid-run disconnect and resyncs correctly (exercises the whole spine).
 
@@ -321,6 +345,22 @@ Windows, reuse before bespoke.
   SQLitePCLRaw.lib.e_sqlite3 2.1.11 (NU1903, GHSA-2m69-gcr7-jv3q). The 2.x line has no fix,
   so transitive-pinned the native lib to 3.53.3 (patched SQLite, ABI-compatible). Revisit
   when Microsoft.Data.Sqlite adopts SQLitePCLRaw 3.x. Documented in Directory.Packages.props.
+- 2026-07-10: Dev launcher + scripts policy. `Scripts/dev-stack.sh` (bash) runs the plaintext
+  dev stack. House rule reaffirmed: ALL scripts are bash run from Git Bash, never PowerShell
+  (recorded in memory). Removed the initial .ps1.
+- 2026-07-10: Phase 3a - agent job execution. IAgentCommandHandler.OnCommandAsync now receives
+  the transport so a job can stream JobProgress/CommandResult up while running. Execution is
+  fire-and-forget from the read loop (does not block the pump); progress carries per-job seq for
+  ordering/ack. AgentJobStore replaces EmptyAgentJobStateSource so in-flight jobs are reported on
+  resync. Agent now references Agent.Linux + Agent.Windows and picks IServiceController by OS
+  (real impls are stubs until 3c/Phase 8).
+- 2026-07-10: Phase 2 dashboard. Operator API is a separate gRPC service (FleetView) on the
+  controller, not client-cert authenticated (operator auth deferred; UI uses TOFU server-cert
+  validation for now). WatchFleet server-streams a snapshot every 2s so the UI reads a stream
+  (honors "UI does not poll"). Dual-truth computed controller-side (LivenessTracker) into the
+  snapshot; UI just renders. UI on reflection bindings (compiled-binding x:DataType is awkward
+  with DataGrid columns). VM proto/UI enum names clashed with domain names - resolved by
+  qualifying and by naming the VM props ...Text.
 - 2026-07-10: Phase 1.5b - agent publish track enabled early (release-agent.yml) so node zero
   installs from a GitHub release; runs on ubuntu (native linux-x64), version-gated, tag
   namespaced `agent-v<version>` so UI/image tracks can coexist under one product version. Builds

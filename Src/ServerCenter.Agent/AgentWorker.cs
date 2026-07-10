@@ -1,6 +1,11 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ServerCenter.Agent.Jobs;
+using ServerCenter.Agent.Linux;
+using ServerCenter.Agent.Windows;
 using ServerCenter.Core.Connection;
+using ServerCenter.Core.Jobs;
+using ServerCenter.Core.Platform;
 
 namespace ServerCenter.Agent;
 
@@ -10,6 +15,7 @@ namespace ServerCenter.Agent;
 public sealed class AgentWorker(
     AgentOptions options,
     ILogger<AgentWorker> logger,
+    ILoggerFactory loggerFactory,
     IHostApplicationLifetime lifetime) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -22,6 +28,16 @@ public sealed class AgentWorker(
                 "Agent {AgentId} (node kind {NodeKind}) dialing {Address}",
                 identity.AgentId, identity.NodeKind, options.ControllerAddress);
 
+            // Same binary, per-OS service control (real impls land in Phase 3b / Phase 8).
+            IServiceController services = OperatingSystem.IsWindows()
+                ? new WindowsServiceController()
+                : new LinuxServiceController();
+            var jobStore = new AgentJobStore();
+            var commandHandler = new JobExecutingCommandHandler(
+                new IJobExecutor[] { new ServiceRestartExecutor(services) },
+                jobStore,
+                loggerFactory.CreateLogger<JobExecutingCommandHandler>());
+
             var connectionOptions = new AgentConnectionOptions(
                 options.HeartbeatInterval,
                 new BackoffPolicy(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30)));
@@ -29,9 +45,9 @@ public sealed class AgentWorker(
             await AgentConnection.RunAsync(
                 connector.ConnectAsync,
                 identity,
-                new EmptyAgentJobStateSource(),
+                jobStore,
                 new BasicAgentStatusSource(),
-                new NoopCommandHandler(),
+                commandHandler,
                 TimeProvider.System,
                 connectionOptions,
                 stoppingToken);
