@@ -27,4 +27,20 @@ public sealed class GrpcJobClient(string address) : IJobClient
             new RestartServiceRequest { AgentId = agentId, Unit = unit }, cancellationToken: ct);
         return response.JobId;
     }
+
+    public async Task<UpdateTriggerResult> TriggerUpdateAsync(
+        string agentId, string policyId, string? serviceUnit, CancellationToken ct)
+    {
+        using var channel = GrpcChannels.Create(address);
+        var client = new JobView.JobViewClient(channel);
+        var request = new TriggerUpdateRequest { AgentId = agentId, PolicyId = policyId };
+        if (!string.IsNullOrWhiteSpace(serviceUnit))
+        {
+            request.ServiceUnit = serviceUnit;
+        }
+
+        var response = await client.TriggerUpdateAsync(request, cancellationToken: ct);
+        return new UpdateTriggerResult(
+            response.Outcome, string.IsNullOrEmpty(response.JobId) ? null : response.JobId, response.Reason);
+    }
 }

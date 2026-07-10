@@ -9,4 +9,10 @@ public interface IJobClient
     IAsyncEnumerable<JobListSnapshot> Watch(CancellationToken ct);
 
     Task<string> RestartServiceAsync(string agentId, string unit, CancellationToken ct);
+
+    Task<UpdateTriggerResult> TriggerUpdateAsync(string agentId, string policyId, string? serviceUnit, CancellationToken ct);
 }
+
+// The controller's response to an update trigger: "Dispatched" carries a job id; the other outcomes
+// (PolicyNotFound / NotEligible / NeedsConfirmation) carry a reason for the operator.
+public sealed record UpdateTriggerResult(string Outcome, string? JobId, string Reason);

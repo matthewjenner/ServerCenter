@@ -9,10 +9,13 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 4 (Ubuntu updates as policy-driven jobs) - DoD MET (4a+4b+4c). Updates now run as
+- Phase: 4 (Ubuntu updates as policy-driven jobs) - COMPLETE (4a+4b+4c+4d). Updates run as
   policy-driven jobs end to end: store a policy -> controller resolves it -> dispatches update.apply
-  -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists. 4d (thin UI surface
-  for updates) is the only optional remainder. See the Phase 4 tracker.
+  -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists; the dashboard has an
+  update trigger (agent id + policy id + optional unit). Next: Phase 5 (SteamCMD + RCON) or 6
+  (libvirt). Still open as later hardening (not blocking): an autonomous scheduler to FIRE
+  window-eligible policies, the reboot follow-on job, reboot-pending in the fleet view, and wiring
+  neuter-unattended-upgrades into onboarding.
   Phases 0-3 + 1.5 complete. Full job spine works: dispatch on the controller -> execute on the
   agent -> stream progress -> persist result; live jobs + a trigger in the dashboard; real Linux
   service control (systemctl). The dashboard smoke works via `Scripts/dev-stack.sh`.
@@ -21,7 +24,7 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (77 Core + 30 Agent + 41 Controller + 7 integration + 3 UI = 158).
+  on); `dotnet test` green (77 Core + 30 Agent + 41 Controller + 7 integration + 6 UI = 161).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -267,8 +270,14 @@ Windows, reuse before bespoke.
     `UpdateJobParams`/`UpdateJson` shared dialect. Wired into AgentWorker (apt+Plex on Linux, none on
     Windows). FakeUpdateProvider + FakeServiceController.Calls added. Tier 1 (executor 7, dispatcher
     4) + a real-gRPC end-to-end integration test (+12). DoD met.
-  - [ ] 4d - OPTIONAL thin UI surface (trigger an update / show reboot-pending). Deferred; the DoD
-    is already met by the dispatch path. Pick up if/when the dashboard should drive updates.
+  - [x] 4d - thin UI update trigger. New JobView.TriggerUpdate gRPC (agent_id + policy_id +
+    optional service_unit + packages -> dispatches via UpdateJobDispatcher as a MANUAL trigger,
+    returns outcome+reason); IJobClient.TriggerUpdateAsync + GrpcJobClient; JobsViewModel gained an
+    update-trigger row (agent id + policy id + optional unit + status showing dispatched/not-
+    eligible/needs-confirmation). Tier 1 (JobsViewModel, +3). NOTE: reboot-pending display was
+    DEFERRED out of 4d - surfacing it properly needs a NodeState proto field + fleet/status plumbing
+    + real agent-side reboot detection, which belongs with the reboot follow-on work, not a thin UI
+    slice.
 - DoD: neuter unattended-upgrades on onboarding; run an apt update and a Plex update as
   policy-driven jobs, each expressing how/when/reboot/preflight/approval as pure data.
 
@@ -367,6 +376,16 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 4d - the dashboard can drive updates. Added JobView.TriggerUpdate (gRPC),
+  symmetric with the existing RestartService trigger: it dispatches through UpdateJobDispatcher as a
+  MANUAL trigger (an operator clicking Run update overrides the schedule window and is its own
+  confirmation), and returns the dispatch outcome + reason so the UI shows dispatched / not-eligible
+  / needs-confirmation rather than silently doing nothing. Reboot-pending display was consciously
+  CUT from this slice: doing it honestly needs a NodeState proto field + threading reboot_pending
+  through the presence store / FleetSnapshotBuilder + the agent actually detecting reboot-required -
+  that is fleet/status + reboot-follow-on work, not a thin UI trigger, so it stays with that future
+  slice. Phase 4 COMPLETE. (+3 UI tests; 161 total.)
 
 - 2026-07-10: Phase 4c - update.apply closes the Phase 4 DoD end to end. Split of labor: the
   controller resolves the policy (UpdateJobDispatcher runs the resolver, agent never sees the

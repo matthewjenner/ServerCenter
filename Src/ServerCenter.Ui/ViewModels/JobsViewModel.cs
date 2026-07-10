@@ -15,6 +15,11 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
     [ObservableProperty] private string _restartUnit = string.Empty;
     [ObservableProperty] private string _triggerStatus = string.Empty;
 
+    [ObservableProperty] private string _updateAgentId = string.Empty;
+    [ObservableProperty] private string _updatePolicyId = string.Empty;
+    [ObservableProperty] private string _updateServiceUnit = string.Empty;
+    [ObservableProperty] private string _updateStatus = string.Empty;
+
     public ObservableCollection<JobRowViewModel> Jobs { get; } = [];
 
     public void Apply(JobListSnapshot snapshot)
@@ -61,6 +66,35 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
         catch (Exception ex)
         {
             TriggerStatus = $"error: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task TriggerUpdateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(UpdateAgentId) || string.IsNullOrWhiteSpace(UpdatePolicyId))
+        {
+            UpdateStatus = "enter an agent id and a policy id";
+            return;
+        }
+
+        try
+        {
+            var result = await client.TriggerUpdateAsync(
+                UpdateAgentId.Trim(),
+                UpdatePolicyId.Trim(),
+                string.IsNullOrWhiteSpace(UpdateServiceUnit) ? null : UpdateServiceUnit.Trim(),
+                CancellationToken.None);
+
+            // Only "Dispatched" makes a job; the others (not-eligible / needs-confirmation / not-found)
+            // carry a reason the operator should see.
+            UpdateStatus = result is { Outcome: "Dispatched", JobId: { } jobId }
+                ? $"dispatched {(jobId.Length > 8 ? jobId[..8] : jobId)}"
+                : $"{result.Outcome}: {result.Reason}";
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = $"error: {ex.Message}";
         }
     }
 

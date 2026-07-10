@@ -3,13 +3,15 @@ using Grpc.Core;
 using ServerCenter.Contracts.V1;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
+using ServerCenter.Core.Updates;
 
 namespace ServerCenter.Controller.Grpc;
 
 // Operator-facing job endpoint for the dashboard: streams recent jobs and triggers a service
-// restart. Not client-cert authenticated (operator auth deferred, like FleetView). JobState here
-// is the proto enum; the domain enum is fully qualified to avoid the name clash.
-public sealed class JobViewService(JobRepository jobs, JobDispatcher dispatcher, TimeProvider clock) : JobView.JobViewBase
+// restart or a policy-driven update. Not client-cert authenticated (operator auth deferred, like
+// FleetView). JobState here is the proto enum; the domain enum is fully qualified to avoid the clash.
+public sealed class JobViewService(
+    JobRepository jobs, JobDispatcher dispatcher, UpdateJobDispatcher updates, TimeProvider clock) : JobView.JobViewBase
 {
     private static readonly TimeSpan PushInterval = TimeSpan.FromSeconds(2);
 
@@ -37,6 +39,25 @@ public sealed class JobViewService(JobRepository jobs, JobDispatcher dispatcher,
         var jobId = await dispatcher.DispatchAsync(
             request.AgentId, "service.restart", paramsJson, cancellable: false, requeueable: false, context.CancellationToken);
         return new RestartServiceResponse { JobId = jobId };
+    }
+
+    // An operator-driven update is a manual trigger (overrides the schedule window and is its own
+    // confirmation). Policy resolution happens controller-side in UpdateJobDispatcher.
+    public override async Task<TriggerUpdateResponse> TriggerUpdate(TriggerUpdateRequest request, ServerCallContext context)
+    {
+        var version = request.PolicyVersion > 0 ? request.PolicyVersion : (int?)null;
+        var serviceUnit = string.IsNullOrWhiteSpace(request.ServiceUnit) ? null : request.ServiceUnit;
+
+        var result = await updates.DispatchAsync(
+            request.AgentId, request.PolicyId, version, UpdatePolicyResolver.Trigger.Manual,
+            request.Packages.ToList(), serviceUnit, context.CancellationToken);
+
+        return new TriggerUpdateResponse
+        {
+            JobId = result.JobId ?? string.Empty,
+            Outcome = result.Outcome.ToString(),
+            Reason = result.Reason ?? string.Empty
+        };
     }
 
     private async Task<JobListSnapshot> BuildAsync(CancellationToken ct)

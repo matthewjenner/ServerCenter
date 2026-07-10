@@ -218,6 +218,7 @@ enum VmState {
 service JobView {
   rpc WatchJobs(WatchJobsRequest) returns (stream JobListSnapshot); // recent jobs, pushed on a cadence
   rpc RestartService(RestartServiceRequest) returns (RestartServiceResponse); // trigger a service.restart job
+  rpc TriggerUpdate(TriggerUpdateRequest) returns (TriggerUpdateResponse); // dispatch update.apply from a stored policy
 }
 
 message WatchJobsRequest {}
@@ -246,4 +247,18 @@ message RestartServiceRequest {
 
 message RestartServiceResponse {
   string job_id = 1;
+}
+
+message TriggerUpdateRequest {
+  string agent_id            = 1;
+  string policy_id           = 2;
+  int32  policy_version      = 3; // 0 = latest
+  repeated string packages   = 4; // empty = everything the provider offers
+  string service_unit        = 5; // optional; the unit to stop/start around the update
+}
+
+message TriggerUpdateResponse {
+  string job_id  = 1; // empty unless dispatched
+  string outcome = 2; // Dispatched | PolicyNotFound | NotEligible | NeedsConfirmation
+  string reason  = 3; // human-readable detail when not dispatched
 }
