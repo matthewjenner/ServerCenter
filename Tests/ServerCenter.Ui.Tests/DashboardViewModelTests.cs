@@ -12,14 +12,14 @@ public sealed class DashboardViewModelTests
     [Fact]
     public void Apply_adds_a_row_per_node_with_dual_truth_text()
     {
-        var vm = new DashboardViewModel();
+        DashboardViewModel vm = new DashboardViewModel();
 
         vm.Apply(Snapshot(
             Node("n1", "host-1", "host", AgentLiveness.Online),
             Node("n2", "guest-1", "guest", AgentLiveness.Offline)));
 
         vm.Nodes.Should().HaveCount(2);
-        var host = vm.Nodes.Single(n => n.NodeId == "n1");
+        NodeRowViewModel host = vm.Nodes.Single(n => n.NodeId == "n1");
         host.DisplayName.Should().Be("host-1");
         host.Kind.Should().Be("host");
         host.AgentLivenessText.Should().Be("Online");
@@ -29,7 +29,7 @@ public sealed class DashboardViewModelTests
     [Fact]
     public void Apply_updates_existing_rows_and_removes_ones_no_longer_present()
     {
-        var vm = new DashboardViewModel();
+        DashboardViewModel vm = new DashboardViewModel();
         vm.Apply(Snapshot(
             Node("n1", "a", "guest", AgentLiveness.Online),
             Node("n2", "b", "guest", AgentLiveness.Online)));
@@ -40,14 +40,14 @@ public sealed class DashboardViewModelTests
             Node("n3", "c", "guest", AgentLiveness.Online)));
 
         vm.Nodes.Select(n => n.NodeId).Should().BeEquivalentTo(["n1", "n3"]);
-        var n1 = vm.Nodes.Single(n => n.NodeId == "n1");
+        NodeRowViewModel n1 = vm.Nodes.Single(n => n.NodeId == "n1");
         n1.DisplayName.Should().Be("a-renamed");
         n1.AgentLivenessText.Should().Be("Stale");
     }
 
     private static FleetSnapshot Snapshot(params NodeState[] nodes)
     {
-        var snapshot = new FleetSnapshot { GeneratedUnixMs = 1000 };
+        FleetSnapshot snapshot = new FleetSnapshot { GeneratedUnixMs = 1000 };
         snapshot.Nodes.AddRange(nodes);
         return snapshot;
     }

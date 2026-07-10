@@ -10,7 +10,7 @@ public sealed class HandshakeNegotiatorTests
     [Fact]
     public void Accepts_matching_major_and_negotiates_minor_down()
     {
-        var decision = HandshakeNegotiator.Decide(
+        HandshakeDecision decision = HandshakeNegotiator.Decide(
             peerMajor: ProtocolVersion.Major,
             peerMinor: ProtocolVersion.Minor + 3,
             sessionIdFactory: () => "sess");
@@ -23,7 +23,7 @@ public sealed class HandshakeNegotiatorTests
     [Fact]
     public void Rejects_mismatched_major()
     {
-        var decision = HandshakeNegotiator.Decide(
+        HandshakeDecision decision = HandshakeNegotiator.Decide(
             peerMajor: ProtocolVersion.Major + 1,
             peerMinor: 0,
             sessionIdFactory: () => "sess");

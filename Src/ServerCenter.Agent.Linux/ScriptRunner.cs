@@ -13,10 +13,10 @@ public sealed class ScriptRunner(IProcessRunner runner)
     public async Task<ScriptRunOutcome> RunAsync(
         IReadOnlyList<RecipeScript> scripts, IJobSink sink, CancellationToken ct)
     {
-        var executed = new List<string>();
-        var skipped = new List<string>();
+        List<string> executed = new List<string>();
+        List<string> skipped = new List<string>();
 
-        foreach (var script in scripts)
+        foreach (RecipeScript script in scripts)
         {
             if (script.AlreadyDone is { } check && await ShellSucceedsAsync(check, ct))
             {
@@ -26,7 +26,7 @@ public sealed class ScriptRunner(IProcessRunner runner)
             }
 
             sink.Log(LogStream.Note, $"run {script.Id}: {script.Run}");
-            var result = await runner.RunAsync("sh", ["-c", script.Run], ct);
+            ProcessResult result = await runner.RunAsync("sh", ["-c", script.Run], ct);
             if (result.ExitCode != 0)
             {
                 return ScriptRunOutcome.Failed(
@@ -37,7 +37,7 @@ public sealed class ScriptRunner(IProcessRunner runner)
 
             if (script.OnSuccess is { } marker)
             {
-                var mark = await runner.RunAsync("sh", ["-c", marker], ct);
+                ProcessResult mark = await runner.RunAsync("sh", ["-c", marker], ct);
                 if (mark.ExitCode != 0)
                 {
                     return ScriptRunOutcome.Failed(

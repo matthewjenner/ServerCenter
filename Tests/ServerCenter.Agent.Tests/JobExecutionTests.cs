@@ -15,12 +15,12 @@ public sealed class JobExecutionTests
     [Fact]
     public async Task Executes_service_restart_and_reports_success()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
-        var services = new FakeServiceController();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
+        FakeServiceController services = new FakeServiceController();
         services.Seed("plex.service", ServiceState.Inactive);
 
-        var handler = new JobExecutingCommandHandler(
+        JobExecutingCommandHandler handler = new JobExecutingCommandHandler(
             new ServerCenter.Core.Jobs.IJobExecutor[] { new ServiceRestartExecutor(services) },
             new AgentJobStore(),
             NullLogger<JobExecutingCommandHandler>.Instance);
@@ -29,7 +29,7 @@ public sealed class JobExecutionTests
             new Command { JobId = "j1", Type = "service.restart", ParamsJson = "{\"unit\":\"plex.service\"}" },
             link.AgentSide, ct);
 
-        var result = await ReadCommandResultAsync(link, ct);
+        CommandResult result = await ReadCommandResultAsync(link, ct);
         result.JobId.Should().Be("j1");
         result.FinalState.Should().Be(JobState.Succeeded);
         (await services.GetStateAsync("plex.service", ct)).Should().Be(ServiceState.Active); // restarted -> Active
@@ -38,10 +38,10 @@ public sealed class JobExecutionTests
     [Fact]
     public async Task Unknown_job_type_fails()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
 
-        var handler = new JobExecutingCommandHandler(
+        JobExecutingCommandHandler handler = new JobExecutingCommandHandler(
             Array.Empty<ServerCenter.Core.Jobs.IJobExecutor>(),
             new AgentJobStore(),
             NullLogger<JobExecutingCommandHandler>.Instance);
@@ -54,7 +54,7 @@ public sealed class JobExecutionTests
 
     private static async Task<CommandResult> ReadCommandResultAsync(InMemoryDuplexLink link, CancellationToken ct)
     {
-        await foreach (var message in link.ControllerSide.Incoming(ct))
+        await foreach (AgentMessage message in link.ControllerSide.Incoming(ct))
         {
             if (message.PayloadCase == AgentMessage.PayloadOneofCase.CommandResult)
             {

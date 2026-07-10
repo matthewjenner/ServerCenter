@@ -14,7 +14,7 @@ public static class EnrollmentEndpoint
         {
             try
             {
-                var result = await trust.EnrollAsync(new EnrollmentRequest(request.DisplayName, request.Token), ct);
+                EnrollmentResult result = await trust.EnrollAsync(new EnrollmentRequest(request.DisplayName, request.Token), ct);
                 return Results.Ok(new EnrollResponse(
                     result.AgentId, result.CertPem, result.PrivateKeyPem, result.CaCertPem, result.CertFingerprint));
             }

@@ -19,7 +19,7 @@ public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         _db = await TempDatabase.CreateAsync(ct);
         _nodes = new AgentNodeRepository(_db.Database);
         _presence = new AgentPresenceStore();
@@ -37,15 +37,15 @@ public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
     [InlineData(120_000, AgentLiveness.Offline)] // 120s ago (>= 90s)
     public async Task Agent_liveness_reflects_the_heartbeat_gap(long gapMs, AgentLiveness expected)
     {
-        var ct = TestContext.Current.CancellationToken;
-        var now = _clock.GetUtcNow().ToUnixTimeMilliseconds();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        long now = _clock.GetUtcNow().ToUnixTimeMilliseconds();
         await SeedNodeAsync("a1", "n1", "host", ct);
         await _presence.OnHeartbeatAsync("a1", new Heartbeat { AgentUnixMs = now - gapMs }, ct);
         await _presence.OnStatusAsync("a1", new NodeStatus { AgentHealth = ServiceHealth.Active }, ct);
 
-        var snapshot = await _builder.BuildAsync(ct);
+        FleetSnapshot snapshot = await _builder.BuildAsync(ct);
 
-        var node = snapshot.Nodes.Should().ContainSingle().Subject;
+        NodeState node = snapshot.Nodes.Should().ContainSingle().Subject;
         node.AgentLiveness.Should().Be(expected);
         node.VmState.Should().Be(VmState.Unknown); // dual-truth: no libvirt yet
         node.Kind.Should().Be("host");
@@ -55,10 +55,10 @@ public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
     [Fact]
     public async Task A_node_with_no_presence_is_offline()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await SeedNodeAsync("a2", "n2", "guest", ct);
 
-        var snapshot = await _builder.BuildAsync(ct);
+        FleetSnapshot snapshot = await _builder.BuildAsync(ct);
 
         snapshot.Nodes.Should().ContainSingle()
             .Which.AgentLiveness.Should().Be(AgentLiveness.Offline);
@@ -70,12 +70,12 @@ public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
     [InlineData(DomainState.Crashed, VmState.Stopped)]
     public async Task Vm_state_reflects_the_linked_domain(DomainState domainState, VmState expected)
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await SeedNodeAsync("a3", "n3", "guest", ct);
         await _nodes.SetLibvirtDomainAsync("n3", "cs2-ffa", ct);
         _domains.Set("cs2-ffa", domainState);
 
-        var snapshot = await _builder.BuildAsync(ct);
+        FleetSnapshot snapshot = await _builder.BuildAsync(ct);
 
         snapshot.Nodes.Should().ContainSingle().Which.VmState.Should().Be(expected);
     }
@@ -83,11 +83,11 @@ public sealed class FleetSnapshotBuilderTests : IAsyncLifetime
     [Fact]
     public async Task A_linked_domain_libvirt_has_not_reported_is_unknown()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await SeedNodeAsync("a4", "n4", "guest", ct);
         await _nodes.SetLibvirtDomainAsync("n4", "unseen-vm", ct); // linked, but no state in the cache
 
-        var snapshot = await _builder.BuildAsync(ct);
+        FleetSnapshot snapshot = await _builder.BuildAsync(ct);
 
         snapshot.Nodes.Should().ContainSingle().Which.VmState.Should().Be(VmState.Unknown);
     }

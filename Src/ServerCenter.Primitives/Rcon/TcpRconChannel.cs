@@ -11,7 +11,7 @@ public sealed class TcpRconChannelFactory : IRconChannelFactory
 {
     public async Task<IRconChannel> OpenAsync(RconEndpoint endpoint, CancellationToken ct)
     {
-        var client = new TcpClient();
+        TcpClient client = new TcpClient();
         try
         {
             await client.ConnectAsync(endpoint.Host, endpoint.Port, ct);
@@ -34,15 +34,15 @@ internal sealed class TcpRconChannel(TcpClient client) : IRconChannel
 
     public async Task<RconPacket> ReceiveAsync(CancellationToken ct)
     {
-        var prefix = new byte[4];
+        byte[] prefix = new byte[4];
         await _stream.ReadExactlyAsync(prefix, ct);
-        var length = BinaryPrimitives.ReadInt32LittleEndian(prefix);
+        int length = BinaryPrimitives.ReadInt32LittleEndian(prefix);
         if (length is < 10 or > RconProtocol.MaxContentBytes)
         {
             throw new InvalidDataException($"RCON frame length {length} out of range");
         }
 
-        var content = new byte[length];
+        byte[] content = new byte[length];
         await _stream.ReadExactlyAsync(content, ct);
         return RconProtocol.Decode(content);
     }

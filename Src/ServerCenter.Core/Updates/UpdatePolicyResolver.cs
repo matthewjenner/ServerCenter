@@ -31,7 +31,7 @@ public static class UpdatePolicyResolver
 
     public static StartDecision DecideStart(UpdatePolicy policy, Trigger trigger, DateTimeOffset now)
     {
-        var preflight = Dedupe(policy.Preflight);
+        IReadOnlyList<PreflightStep> preflight = Dedupe(policy.Preflight);
 
         // An explicit operator trigger overrides the schedule window (the operator is choosing to
         // run now) and itself counts as the confirmation. A scheduler tick must respect both the
@@ -41,7 +41,7 @@ public static class UpdatePolicyResolver
             return new StartDecision(Eligible: true, RequiresConfirmation: false, preflight, IneligibleReason: null);
         }
 
-        var requiresConfirmation = policy.Approval == ApprovalMode.RequireConfirmation;
+        bool requiresConfirmation = policy.Approval == ApprovalMode.RequireConfirmation;
 
         if (policy.When.Mode == ScheduleMode.Manual)
         {
@@ -85,8 +85,8 @@ public static class UpdatePolicyResolver
             return false;
         }
 
-        var nowUtc = now.UtcDateTime;
-        var windowStart = nowUtc.AddMinutes(-when.WindowMinutes.Value);
+        DateTime nowUtc = now.UtcDateTime;
+        DateTime windowStart = nowUtc.AddMinutes(-when.WindowMinutes.Value);
         return expression
             .GetOccurrences(windowStart, nowUtc, fromInclusive: false, toInclusive: true)
             .Any();
@@ -94,9 +94,9 @@ public static class UpdatePolicyResolver
 
     private static IReadOnlyList<PreflightStep> Dedupe(IReadOnlyList<PreflightStep> steps)
     {
-        var seen = new HashSet<PreflightStep>();
-        var ordered = new List<PreflightStep>(steps.Count);
-        foreach (var step in steps)
+        HashSet<PreflightStep> seen = new HashSet<PreflightStep>();
+        List<PreflightStep> ordered = new List<PreflightStep>(steps.Count);
+        foreach (PreflightStep step in steps)
         {
             if (seen.Add(step))
             {

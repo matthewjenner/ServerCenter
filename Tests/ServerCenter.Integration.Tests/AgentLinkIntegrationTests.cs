@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AwesomeAssertions;
+using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -7,6 +8,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using ServerCenter.Agent;
 using ServerCenter.Contracts.V1;
+using ServerCenter.Controller;
 using ServerCenter.Controller.Services;
 using ServerCenter.Core.Connection;
 using Xunit;
@@ -38,7 +40,7 @@ public sealed class AgentLinkIntegrationTests : IAsyncLifetime
     {
         await _factory.DisposeAsync();
         SqliteConnection.ClearAllPools();
-        foreach (var file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
+        foreach (string? file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
         {
             try
             {
@@ -57,37 +59,37 @@ public sealed class AgentLinkIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Agent_connects_handshakes_and_its_heartbeat_reaches_the_controller()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
 
-        var channel = GrpcChannel.ForAddress(
+        GrpcChannel channel = GrpcChannel.ForAddress(
             _factory.Server.BaseAddress,
             new GrpcChannelOptions { HttpHandler = _factory.Server.CreateHandler() });
 
-        var call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
-        await using var transport = new GrpcAgentTransport(channel, call);
+        AsyncDuplexStreamingCall<AgentMessage, ControllerMessage> call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
+        await using GrpcAgentTransport transport = new GrpcAgentTransport(channel, call);
 
-        var identity = new AgentIdentity("it-agent", "0.1.0", "linux", "x64");
-        var handshake = await AgentHandshake.PerformAsync(
+        AgentIdentity identity = new AgentIdentity("it-agent", "0.1.0", "linux", "x64");
+        AgentHandshakeResult handshake = await AgentHandshake.PerformAsync(
             transport, identity, new EmptyAgentJobStateSource(), ct);
 
         handshake.Established.Should().BeTrue();
         handshake.SessionId.Should().NotBeEmpty();
 
-        using var pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var pump = AgentSessionPump.RunAsync(
+        using CancellationTokenSource pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task<AgentSessionOutcome> pump = AgentSessionPump.RunAsync(
             transport, new BasicAgentStatusSource(), new NoopCommandHandler(),
             TimeProvider.System, TimeSpan.FromSeconds(10), pumpCts.Token);
 
-        var presence = _factory.Services.GetRequiredService<AgentPresenceStore>();
+        AgentPresenceStore presence = _factory.Services.GetRequiredService<AgentPresenceStore>();
         await WaitUntilAsync(
-            () => presence.TryGet("it-agent", out var p) && p!.LastStatus is not null,
+            () => presence.TryGet("it-agent", out AgentPresence? p) && p!.LastStatus is not null,
             ct);
 
-        presence.TryGet("it-agent", out var recorded).Should().BeTrue();
+        presence.TryGet("it-agent", out AgentPresence? recorded).Should().BeTrue();
         recorded!.LastStatus!.AgentHealth.Should().Be(ServiceHealth.Active);
 
         // The dashboard's data source: FleetView reports the connected agent as online.
-        var fleet = await new FleetView.FleetViewClient(channel)
+        FleetSnapshot fleet = await new FleetView.FleetViewClient(channel)
             .GetFleetAsync(new GetFleetRequest(), cancellationToken: ct);
         fleet.Nodes.Should().ContainSingle(n => n.NodeId == "it-agent")
             .Which.AgentLiveness.Should().Be(ServerCenter.Contracts.V1.AgentLiveness.Online);
@@ -105,7 +107,7 @@ public sealed class AgentLinkIntegrationTests : IAsyncLifetime
 
     private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken ct, int timeoutMs = 5000)
     {
-        var sw = Stopwatch.StartNew();
+        Stopwatch sw = Stopwatch.StartNew();
         while (!condition())
         {
             if (sw.ElapsedMilliseconds > timeoutMs)

@@ -27,7 +27,7 @@ public sealed class LivenessTracker
 
     public AgentLiveness Evaluate(long lastHeartbeatUnixMs, long nowUnixMs)
     {
-        var gap = nowUnixMs - lastHeartbeatUnixMs;
+        long gap = nowUnixMs - lastHeartbeatUnixMs;
         if (gap >= _offlineAfterMs)
         {
             return AgentLiveness.Offline;

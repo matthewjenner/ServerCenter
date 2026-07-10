@@ -22,7 +22,7 @@ public sealed class InstanceParamsResolverTests
     [Fact]
     public void Flatten_dots_nested_objects_and_stringifies_scalars()
     {
-        var flat = InstanceParamsResolver.Flatten(Params);
+        IReadOnlyDictionary<string, string> flat = InstanceParamsResolver.Flatten(Params);
 
         flat["name"].Should().Be("cs2-ffa");
         flat["slots"].Should().Be("24");
@@ -34,7 +34,7 @@ public sealed class InstanceParamsResolverTests
     [Fact]
     public void Flatten_indexes_arrays()
     {
-        var flat = InstanceParamsResolver.Flatten(Params);
+        IReadOnlyDictionary<string, string> flat = InstanceParamsResolver.Flatten(Params);
 
         flat["tags.0"].Should().Be("ffa");
         flat["tags.1"].Should().Be("hardcore");
@@ -43,7 +43,7 @@ public sealed class InstanceParamsResolverTests
     [Fact]
     public void Flattened_params_render_a_descriptor_template()
     {
-        var flat = InstanceParamsResolver.Flatten(Params);
+        IReadOnlyDictionary<string, string> flat = InstanceParamsResolver.Flatten(Params);
 
         ConfigTemplateRenderer.Render("hostname={{name}}\nport={{ports.game}}", flat)
             .Should().Be("hostname=cs2-ffa\nport=27015");

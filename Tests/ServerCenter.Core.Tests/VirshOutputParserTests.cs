@@ -29,7 +29,7 @@ public sealed class VirshOutputParserTests
             " 1    cs2-ffa    running\n" +
             " -    plex-vm    shut off\n";
 
-        var domains = VirshOutputParser.ParseDomainList(output);
+        IReadOnlyList<DomainInfo> domains = VirshOutputParser.ParseDomainList(output);
 
         domains.Should().HaveCount(2);
         domains[0].Name.Should().Be("cs2-ffa");
@@ -49,7 +49,7 @@ public sealed class VirshOutputParserTests
             "State:          running\n" +
             "CPU(s):         4\n";
 
-        var domain = VirshOutputParser.ParseDomInfo(output);
+        DomainInfo? domain = VirshOutputParser.ParseDomInfo(output);
 
         domain.Should().Be(new DomainInfo("cs2-ffa", "4dea22b3-1d52-d8f3-2516-782e98ab3fa0", DomainState.Running));
     }

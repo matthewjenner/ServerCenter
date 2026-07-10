@@ -8,7 +8,7 @@ public sealed class FileConfigWriter : IConfigWriter
 {
     public async Task WriteAsync(string path, string content, CancellationToken ct)
     {
-        var directory = Path.GetDirectoryName(path);
+        string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);

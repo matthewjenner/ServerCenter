@@ -13,10 +13,10 @@ public sealed class ServerCenterDatabase(string dataSource)
 
     public async Task<SqliteConnection> OpenConnectionAsync(CancellationToken ct)
     {
-        var connection = new SqliteConnection(_connectionString);
+        SqliteConnection connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(ct);
 
-        await using var pragma = connection.CreateCommand();
+        await using SqliteCommand pragma = connection.CreateCommand();
         pragma.CommandText = "PRAGMA foreign_keys = ON;";
         await pragma.ExecuteNonQueryAsync(ct);
 
@@ -35,20 +35,20 @@ public sealed class ServerCenterDatabase(string dataSource)
 
     public async Task InitializeAsync(CancellationToken ct)
     {
-        await using var connection = await OpenConnectionAsync(ct);
+        await using SqliteConnection connection = await OpenConnectionAsync(ct);
 
         // WAL is a durable, DB-level setting and cannot run inside a transaction.
         await ExecuteAsync(connection, null, "PRAGMA journal_mode = WAL;", ct);
 
-        var version = Convert.ToInt64(await ScalarAsync(connection, "PRAGMA user_version;", ct));
-        foreach (var (target, ddl) in Migrations)
+        long version = Convert.ToInt64(await ScalarAsync(connection, "PRAGMA user_version;", ct));
+        foreach ((long target, string? ddl) in Migrations)
         {
             if (version >= target)
             {
                 continue;
             }
 
-            await using var tx = (SqliteTransaction)await connection.BeginTransactionAsync(ct);
+            await using SqliteTransaction tx = (SqliteTransaction)await connection.BeginTransactionAsync(ct);
             await ExecuteAsync(connection, tx, ddl, ct);
             await ExecuteAsync(connection, tx, $"PRAGMA user_version = {target};", ct);
             await tx.CommitAsync(ct);
@@ -57,7 +57,7 @@ public sealed class ServerCenterDatabase(string dataSource)
 
     private static async Task ExecuteAsync(SqliteConnection connection, SqliteTransaction? tx, string sql, CancellationToken ct)
     {
-        await using var cmd = connection.CreateCommand();
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = sql;
         await cmd.ExecuteNonQueryAsync(ct);
@@ -65,7 +65,7 @@ public sealed class ServerCenterDatabase(string dataSource)
 
     private static async Task<object?> ScalarAsync(SqliteConnection connection, string sql, CancellationToken ct)
     {
-        await using var cmd = connection.CreateCommand();
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = sql;
         return await cmd.ExecuteScalarAsync(ct);
     }

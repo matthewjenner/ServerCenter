@@ -13,11 +13,11 @@ public sealed class RconStatsCapability(StatsSpec spec, IRconClient rcon) : ISta
 
     public async Task<ServerStats> ReadAsync(StatsContext ctx, CancellationToken ct)
     {
-        var endpoint = RconEndpoints.From(ctx.InstanceParams);
-        await using var session = await rcon.ConnectAsync(endpoint, ct);
+        RconEndpoint endpoint = RconEndpoints.From(ctx.InstanceParams);
+        await using IRconSession session = await rcon.ConnectAsync(endpoint, ct);
 
-        var raw = new Dictionary<string, string>();
-        foreach (var (name, command) in spec.Commands)
+        Dictionary<string, string> raw = new Dictionary<string, string>();
+        foreach ((string? name, string? command) in spec.Commands)
         {
             raw[name] = await session.ExecuteAsync(command, ct);
         }

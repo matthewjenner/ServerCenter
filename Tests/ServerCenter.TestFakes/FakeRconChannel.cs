@@ -30,14 +30,14 @@ public sealed class FakeRconChannel(string password, IReadOnlyDictionary<string,
         {
             case RconPacketTypes.Auth:
                 _incoming.Enqueue(new RconPacket(packet.Id, RconPacketTypes.ResponseValue, string.Empty)); // pre-auth junk
-                var accepted = packet.Body == password;
+                bool accepted = packet.Body == password;
                 _incoming.Enqueue(new RconPacket(
                     accepted ? packet.Id : RconPacketTypes.AuthFailureId, RconPacketTypes.AuthResponse, string.Empty));
                 break;
 
             case RconPacketTypes.ExecCommand:
-                var parts = responses.TryGetValue(packet.Body, out var mapped) ? mapped : [string.Empty];
-                foreach (var part in parts)
+                string[] parts = responses.TryGetValue(packet.Body, out string[]? mapped) ? mapped : [string.Empty];
+                foreach (string part in parts)
                 {
                     _incoming.Enqueue(new RconPacket(packet.Id, RconPacketTypes.ResponseValue, part));
                 }

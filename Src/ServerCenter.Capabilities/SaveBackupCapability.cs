@@ -21,22 +21,22 @@ public sealed class SaveBackupCapability(
         if (spec.Quiesce is { } quiesce)
         {
             sink.Log(LogStream.Note, $"quiesce ({quiesce.Via}): {quiesce.Command}");
-            await using var session = await rcon.ConnectAsync(RconEndpoints.From(ctx.InstanceParams), ct);
+            await using IRconSession session = await rcon.ConnectAsync(RconEndpoints.From(ctx.InstanceParams), ct);
             await session.ExecuteAsync(quiesce.Command, ct);
         }
 
         sink.Log(LogStream.Note, $"archiving {spec.Paths.Count} path(s)");
-        await using var archive = await archiver.CreateArchiveAsync(spec.Paths, spec.Exclude, ct);
+        await using Stream archive = await archiver.CreateArchiveAsync(spec.Paths, spec.Exclude, ct);
 
-        var result = await store.PutAsync(SaveKey(ctx.InstanceId), archive, ct);
+        PutResult result = await store.PutAsync(SaveKey(ctx.InstanceId), archive, ct);
         sink.Log(LogStream.Note, $"backed up to {result.Key} (version {result.VersionId}, {result.Bytes} bytes)");
     }
 
     public async Task RestoreAsync(SaveRestoreContext ctx, IJobSink sink, CancellationToken ct)
     {
-        var key = SaveKey(ctx.InstanceId);
+        string key = SaveKey(ctx.InstanceId);
         sink.Log(LogStream.Note, $"restoring {key} (version {ctx.SnapshotId})");
-        await using var archive = await store.GetAsync(key, ctx.SnapshotId, ct);
+        await using Stream archive = await store.GetAsync(key, ctx.SnapshotId, ct);
         await archiver.ExtractAsync(archive, ct);
     }
 

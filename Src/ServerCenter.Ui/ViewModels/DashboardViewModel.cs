@@ -17,11 +17,11 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     public void Apply(FleetSnapshot snapshot)
     {
-        var seen = new HashSet<string>(snapshot.Nodes.Count);
-        foreach (var node in snapshot.Nodes)
+        HashSet<string> seen = new HashSet<string>(snapshot.Nodes.Count);
+        foreach (NodeState? node in snapshot.Nodes)
         {
             seen.Add(node.NodeId);
-            var existing = Nodes.FirstOrDefault(n => n.NodeId == node.NodeId);
+            NodeRowViewModel? existing = Nodes.FirstOrDefault(n => n.NodeId == node.NodeId);
             if (existing is null)
             {
                 Nodes.Add(new NodeRowViewModel(node, snapshot.GeneratedUnixMs));
@@ -32,7 +32,7 @@ public sealed partial class DashboardViewModel : ObservableObject
             }
         }
 
-        for (var i = Nodes.Count - 1; i >= 0; i--)
+        for (int i = Nodes.Count - 1; i >= 0; i--)
         {
             if (!seen.Contains(Nodes[i].NodeId))
             {
@@ -48,7 +48,7 @@ public sealed partial class DashboardViewModel : ObservableObject
         {
             try
             {
-                await foreach (var snapshot in client.Watch(ct))
+                await foreach (FleetSnapshot snapshot in client.Watch(ct))
                 {
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {

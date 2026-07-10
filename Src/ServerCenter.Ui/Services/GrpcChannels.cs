@@ -11,7 +11,7 @@ internal static class GrpcChannels
     {
         if (address.StartsWith("https", StringComparison.OrdinalIgnoreCase))
         {
-            var handler = new SocketsHttpHandler
+            SocketsHttpHandler handler = new SocketsHttpHandler
             {
                 SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, _, _, _) => true }
             };

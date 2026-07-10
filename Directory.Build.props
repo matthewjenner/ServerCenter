@@ -9,6 +9,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <!-- Run IDE code-style analyzers at build so the no-var / file-scoped-namespace rules in
+         .editorconfig are enforced (they become errors under TreatWarningsAsErrors). -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 

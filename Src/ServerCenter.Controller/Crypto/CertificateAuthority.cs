@@ -12,31 +12,31 @@ public static class CertificateAuthority
 
     public static CaMaterial CreateCa(DateTimeOffset now)
     {
-        using var rsa = RSA.Create(3072);
-        var request = new CertificateRequest(
+        using RSA rsa = RSA.Create(3072);
+        CertificateRequest request = new CertificateRequest(
             "CN=ServerCenter Controller CA", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
         request.CertificateExtensions.Add(new X509KeyUsageExtension(
             X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign | X509KeyUsageFlags.DigitalSignature, true));
         request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
 
-        using var ca = request.CreateSelfSigned(now.AddMinutes(-5), now.AddYears(10));
+        using X509Certificate2 ca = request.CreateSelfSigned(now.AddMinutes(-5), now.AddYears(10));
         return new CaMaterial(ca.ExportCertificatePem(), rsa.ExportPkcs8PrivateKeyPem());
     }
 
     public static IssuedCert IssueClientCert(CaMaterial ca, string subjectName, DateTimeOffset now)
     {
-        using var caCert = X509Certificate2.CreateFromPem(ca.CertPem, ca.KeyPem);
-        using var rsa = RSA.Create(2048);
-        var request = new CertificateRequest(
+        using X509Certificate2 caCert = X509Certificate2.CreateFromPem(ca.CertPem, ca.KeyPem);
+        using RSA rsa = RSA.Create(2048);
+        CertificateRequest request = new CertificateRequest(
             $"CN={subjectName}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
         request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
             new OidCollection { new Oid(ClientAuthOid) }, false));
 
-        var serial = RandomNumberGenerator.GetBytes(16);
-        using var issued = request.Create(caCert, now.AddMinutes(-5), now.AddYears(1), serial);
+        byte[] serial = RandomNumberGenerator.GetBytes(16);
+        using X509Certificate2 issued = request.Create(caCert, now.AddMinutes(-5), now.AddYears(1), serial);
         return new IssuedCert(issued.ExportCertificatePem(), rsa.ExportPkcs8PrivateKeyPem(), Fingerprint(issued));
     }
 
@@ -45,9 +45,9 @@ public static class CertificateAuthority
     // cert the CA signs is trusted), so it need not be persisted.
     public static IssuedCert IssueServerCert(CaMaterial ca, string dnsName, DateTimeOffset now)
     {
-        using var caCert = X509Certificate2.CreateFromPem(ca.CertPem, ca.KeyPem);
-        using var rsa = RSA.Create(2048);
-        var request = new CertificateRequest(
+        using X509Certificate2 caCert = X509Certificate2.CreateFromPem(ca.CertPem, ca.KeyPem);
+        using RSA rsa = RSA.Create(2048);
+        CertificateRequest request = new CertificateRequest(
             $"CN={dnsName}", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
         request.CertificateExtensions.Add(new X509KeyUsageExtension(
@@ -55,13 +55,13 @@ public static class CertificateAuthority
         request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
             new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, false)); // server auth
 
-        var san = new SubjectAlternativeNameBuilder();
+        SubjectAlternativeNameBuilder san = new SubjectAlternativeNameBuilder();
         san.AddDnsName(dnsName);
         san.AddIpAddress(System.Net.IPAddress.Loopback);
         request.CertificateExtensions.Add(san.Build());
 
-        var serial = RandomNumberGenerator.GetBytes(16);
-        using var issued = request.Create(caCert, now.AddMinutes(-5), now.AddYears(1), serial);
+        byte[] serial = RandomNumberGenerator.GetBytes(16);
+        using X509Certificate2 issued = request.Create(caCert, now.AddMinutes(-5), now.AddYears(1), serial);
         return new IssuedCert(issued.ExportCertificatePem(), rsa.ExportPkcs8PrivateKeyPem(), Fingerprint(issued));
     }
 
@@ -69,8 +69,8 @@ public static class CertificateAuthority
     // Windows; round-trip through PKCS#12 to get a usable private key.
     public static X509Certificate2 ToUsableCertificate(string certPem, string keyPem)
     {
-        using var fromPem = X509Certificate2.CreateFromPem(certPem, keyPem);
-        var pkcs12 = fromPem.Export(X509ContentType.Pkcs12);
+        using X509Certificate2 fromPem = X509Certificate2.CreateFromPem(certPem, keyPem);
+        byte[] pkcs12 = fromPem.Export(X509ContentType.Pkcs12);
         return X509CertificateLoader.LoadPkcs12(pkcs12, null);
     }
 
@@ -78,7 +78,7 @@ public static class CertificateAuthority
 
     public static string FingerprintFromPem(string certPem)
     {
-        using var cert = X509Certificate2.CreateFromPem(certPem);
+        using X509Certificate2 cert = X509Certificate2.CreateFromPem(certPem);
         return Fingerprint(cert);
     }
 }

@@ -21,7 +21,7 @@ public sealed class ControllerOwnedTrustProvider(TrustRepository trust, TimeProv
             return;
         }
 
-        var now = clock.GetUtcNow();
+        DateTimeOffset now = clock.GetUtcNow();
         await trust.SaveCaAsync(CertificateAuthority.CreateCa(now), now.ToUnixTimeMilliseconds(), ct);
     }
 
@@ -29,24 +29,24 @@ public sealed class ControllerOwnedTrustProvider(TrustRepository trust, TimeProv
     // hash is stored; the returned plaintext is delivered out-of-band (cloud-init / the last SSH).
     public async Task<string> CreateBootstrapTokenAsync(string displayName, TimeSpan ttl, CancellationToken ct)
     {
-        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        var expiresAt = clock.GetUtcNow().Add(ttl).ToUnixTimeMilliseconds();
+        string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        long expiresAt = clock.GetUtcNow().Add(ttl).ToUnixTimeMilliseconds();
         await trust.InsertTokenAsync(Sha256Hex(token), displayName, expiresAt, ct);
         return token;
     }
 
     public async Task<EnrollmentResult> EnrollAsync(EnrollmentRequest request, CancellationToken ct)
     {
-        var now = clock.GetUtcNow();
-        var consumed = await trust.ConsumeTokenAsync(Sha256Hex(request.OneTimeToken), now.ToUnixTimeMilliseconds(), ct);
+        DateTimeOffset now = clock.GetUtcNow();
+        string? consumed = await trust.ConsumeTokenAsync(Sha256Hex(request.OneTimeToken), now.ToUnixTimeMilliseconds(), ct);
         if (consumed is null)
         {
             throw new InvalidOperationException("Bootstrap token is invalid, already used, or expired.");
         }
 
-        var ca = await RequireCaAsync(ct);
-        var agentId = Guid.NewGuid().ToString("N"); // controller mints the identity id
-        var issued = CertificateAuthority.IssueClientCert(ca, agentId, now);
+        CaMaterial ca = await RequireCaAsync(ct);
+        string agentId = Guid.NewGuid().ToString("N"); // controller mints the identity id
+        IssuedCert issued = CertificateAuthority.IssueClientCert(ca, agentId, now);
 
         // Pending until the agent's first successful connect flips it to active.
         await trust.InsertIdentityAsync(
@@ -57,7 +57,7 @@ public sealed class ControllerOwnedTrustProvider(TrustRepository trust, TimeProv
 
     public async Task<bool> VerifyAsync(PresentedIdentity presented, CancellationToken ct)
     {
-        var identity = await trust.GetIdentityAsync(presented.AgentId, ct);
+        AgentIdentityRow? identity = await trust.GetIdentityAsync(presented.AgentId, ct);
         return identity is not null
             && identity.Status is "pending" or "active"
             && string.Equals(identity.CertFpr, presented.CertFingerprint, StringComparison.OrdinalIgnoreCase);
@@ -69,12 +69,12 @@ public sealed class ControllerOwnedTrustProvider(TrustRepository trust, TimeProv
 
     public async Task<EnrollmentResult> RotateAsync(string agentId, CancellationToken ct)
     {
-        var identity = await trust.GetIdentityAsync(agentId, ct)
+        AgentIdentityRow identity = await trust.GetIdentityAsync(agentId, ct)
             ?? throw new InvalidOperationException($"Unknown agent '{agentId}'.");
 
-        var now = clock.GetUtcNow();
-        var ca = await RequireCaAsync(ct);
-        var issued = CertificateAuthority.IssueClientCert(ca, agentId, now);
+        DateTimeOffset now = clock.GetUtcNow();
+        CaMaterial ca = await RequireCaAsync(ct);
+        IssuedCert issued = CertificateAuthority.IssueClientCert(ca, agentId, now);
         await trust.SetFingerprintAsync(agentId, issued.Fingerprint, now.ToUnixTimeMilliseconds(), ct);
 
         return new EnrollmentResult(agentId, issued.CertPem, issued.PrivateKeyPem, ca.CertPem, issued.Fingerprint);
@@ -87,8 +87,8 @@ public sealed class ControllerOwnedTrustProvider(TrustRepository trust, TimeProv
     // startup; agents trust it by chaining to the CA they hold.
     public async Task<X509Certificate2> CreateServerCertificateAsync(string dnsName, CancellationToken ct)
     {
-        var ca = await RequireCaAsync(ct);
-        var issued = CertificateAuthority.IssueServerCert(ca, dnsName, clock.GetUtcNow());
+        CaMaterial ca = await RequireCaAsync(ct);
+        IssuedCert issued = CertificateAuthority.IssueServerCert(ca, dnsName, clock.GetUtcNow());
         return CertificateAuthority.ToUsableCertificate(issued.CertPem, issued.PrivateKeyPem);
     }
 

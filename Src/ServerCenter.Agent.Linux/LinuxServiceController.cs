@@ -11,7 +11,7 @@ public sealed class LinuxServiceController(IProcessRunner runner) : IServiceCont
 {
     public async Task<ServiceState> GetStateAsync(string unit, CancellationToken ct)
     {
-        var result = await runner.RunAsync("systemctl", ["show", unit, "--property=ActiveState", "--value"], ct);
+        ProcessResult result = await runner.RunAsync("systemctl", ["show", unit, "--property=ActiveState", "--value"], ct);
         return MapState(result.StandardOutput);
     }
 
@@ -26,7 +26,7 @@ public sealed class LinuxServiceController(IProcessRunner runner) : IServiceCont
 
     public async Task ReloadAsync(CancellationToken ct)
     {
-        var result = await runner.RunAsync("systemctl", ["daemon-reload"], ct);
+        ProcessResult result = await runner.RunAsync("systemctl", ["daemon-reload"], ct);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException($"systemctl daemon-reload failed (exit {result.ExitCode}): {result.StandardError}");
@@ -38,7 +38,7 @@ public sealed class LinuxServiceController(IProcessRunner runner) : IServiceCont
         ServiceState? last = null;
         while (!ct.IsCancellationRequested)
         {
-            var state = await GetStateAsync(unit, ct);
+            ServiceState state = await GetStateAsync(unit, ct);
             if (state != last)
             {
                 last = state;
@@ -58,7 +58,7 @@ public sealed class LinuxServiceController(IProcessRunner runner) : IServiceCont
 
     private async Task RunUnitVerbAsync(string verb, string unit, CancellationToken ct)
     {
-        var result = await runner.RunAsync("systemctl", [verb, unit], ct);
+        ProcessResult result = await runner.RunAsync("systemctl", [verb, unit], ct);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(

@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using Grpc.Core;
 using ServerCenter.Contracts.V1;
 using ServerCenter.Controller.Persistence;
@@ -28,22 +29,22 @@ public sealed class AgentLinkService(
         IServerStreamWriter<ControllerMessage> responseStream,
         ServerCallContext context)
     {
-        var ct = context.CancellationToken;
-        var stream = new GrpcControllerStream(requestStream, responseStream);
+        CancellationToken ct = context.CancellationToken;
+        GrpcControllerStream stream = new GrpcControllerStream(requestStream, responseStream);
 
-        var handshake = await ControllerHandshake.PerformAsync(stream, jobs, ct: ct);
+        ControllerHandshakeResult handshake = await ControllerHandshake.PerformAsync(stream, jobs, ct: ct);
         if (!handshake.Established)
         {
             logger.LogWarning("Agent handshake rejected: {Reason}", handshake.RejectReason);
             return;
         }
 
-        var now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (security.RequireClientCertificate)
         {
             // mTLS enforced: the presented client cert must authenticate the claimed agent id.
-            var clientCertificate = context.GetHttpContext()?.Connection.ClientCertificate;
+            X509Certificate2? clientCertificate = context.GetHttpContext()?.Connection.ClientCertificate;
             if (!await authorizer.AuthorizeAsync(clientCertificate, handshake.AgentId, ct))
             {
                 logger.LogWarning("Agent {AgentId} failed client-certificate authorization", handshake.AgentId);

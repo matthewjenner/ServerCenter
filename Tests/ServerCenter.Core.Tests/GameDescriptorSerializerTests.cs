@@ -28,7 +28,7 @@ public sealed class GameDescriptorSerializerTests
     [Fact]
     public void Serialize_emits_the_brief_schema_tokens()
     {
-        var json = GameDescriptorSerializer.Serialize(Cs2);
+        string json = GameDescriptorSerializer.Serialize(Cs2);
 
         json.Should().Contain("\"appId\":730");
         json.Should().Contain("\"format\":\"kv\"");
@@ -39,7 +39,7 @@ public sealed class GameDescriptorSerializerTests
     [Fact]
     public void Round_trips_losslessly()
     {
-        var restored = GameDescriptorSerializer.Deserialize(GameDescriptorSerializer.Serialize(Cs2));
+        GameDescriptor restored = GameDescriptorSerializer.Deserialize(GameDescriptorSerializer.Serialize(Cs2));
 
         restored.Should().BeEquivalentTo(Cs2);
     }
@@ -47,14 +47,14 @@ public sealed class GameDescriptorSerializerTests
     [Fact]
     public void Undeclared_capabilities_are_omitted_and_stay_null()
     {
-        var minimal = new GameDescriptor
+        GameDescriptor minimal = new GameDescriptor
         {
             Id = "valheim",
             Version = 1,
             SteamApp = new SteamAppSpec(896660, "/opt/valheim")
         };
 
-        var json = GameDescriptorSerializer.Serialize(minimal);
+        string json = GameDescriptorSerializer.Serialize(minimal);
         json.Should().NotContain("saveBackup");
 
         GameDescriptorSerializer.Deserialize(json).Capabilities.SaveBackup.Should().BeNull();

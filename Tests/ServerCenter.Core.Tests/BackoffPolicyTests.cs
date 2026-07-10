@@ -9,7 +9,7 @@ public sealed class BackoffPolicyTests
     [Fact]
     public void Full_jitter_at_max_rng_equals_the_exponential_cap()
     {
-        var policy = new BackoffPolicy(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), () => 1.0);
+        BackoffPolicy policy = new BackoffPolicy(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), () => 1.0);
 
         policy.NextDelay(0).Should().Be(TimeSpan.FromSeconds(1));
         policy.NextDelay(1).Should().Be(TimeSpan.FromSeconds(2));

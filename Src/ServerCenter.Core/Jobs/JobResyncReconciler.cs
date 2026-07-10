@@ -13,22 +13,22 @@ public static class JobResyncReconciler
         ArgumentNullException.ThrowIfNull(open);
         ArgumentNullException.ThrowIfNull(report);
 
-        var reportById = new Dictionary<string, AgentResyncEntry>(report.Count);
-        foreach (var entry in report)
+        Dictionary<string, AgentResyncEntry> reportById = new Dictionary<string, AgentResyncEntry>(report.Count);
+        foreach (AgentResyncEntry entry in report)
         {
             reportById[entry.JobId] = entry; // last write wins on duplicate ids
         }
 
-        var actions = new List<ReconcileAction>(open.Count + report.Count);
-        var openIds = new HashSet<string>(open.Count);
+        List<ReconcileAction> actions = new List<ReconcileAction>(open.Count + report.Count);
+        HashSet<string> openIds = new HashSet<string>(open.Count);
 
-        foreach (var job in open)
+        foreach (ControllerOpenJob job in open)
         {
             openIds.Add(job.JobId);
 
             // Controller has it running, but the agent never mentioned it OR explicitly lost
             // its state: it is lost across the disconnect. Requeue only if the job type is safe.
-            if (!reportById.TryGetValue(job.JobId, out var entry) ||
+            if (!reportById.TryGetValue(job.JobId, out AgentResyncEntry? entry) ||
                 entry.LocalState == AgentJobLocalState.Unknown)
             {
                 actions.Add(new ReconcileAction(
@@ -48,7 +48,7 @@ public static class JobResyncReconciler
 
         // Anything the agent reported that the controller has no record of: instruct the agent
         // to drop it (should be rare; the controller is the id source of record).
-        foreach (var entry in report)
+        foreach (AgentResyncEntry entry in report)
         {
             if (!openIds.Contains(entry.JobId))
             {

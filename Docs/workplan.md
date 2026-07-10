@@ -14,8 +14,26 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   unit, convergent, proven end-to-end); provisioning->managed handoff (a node recorded 'provisioning'
   with its libvirt_domain flips to 'managed' on its agent's first check-in, closing the Phase 6 loop).
   REMAINING as Tier-3 real-VM work: cloud-init first boot + libvirt define/start of a base image (the
-  actual VM bring-up); ILibvirtHost has no Define yet. Next: Phase 8 (Windows agent) or the deferred
-  S3 IObjectStore (backup job + runbook).
+  actual VM bring-up); ILibvirtHost has no Define yet.
+- Deployment packaging landed (2026-07-10): `Deploy/controller/Dockerfile` (multi-stage, .NET 10
+  Ubuntu base + libvirt-clients/virsh, runs as root for socket access) + `docker-compose.yml` (mounts
+  the libvirt socket, volumes for the SQLite DB + templates, defaults to plaintext h2c :5080 for the
+  first bring-up) + `.dockerignore`. Fixed Program.cs to bind `ListenAnyIP` not `ListenLocalhost` (a
+  loopback bind is unreachable in a container / to remote guests; the agent validates the server by
+  CA-chain not hostname, so cert subject stays localhost). Ordered smoke checklist:
+  `Docs/linux-smoke-runbook.md`.
+- END-TO-END GAPS surfaced by the packaging (small, clearly-scoped; blocking a fully-HTTP real run):
+  (1) NO bootstrap-token mint endpoint -> mTLS `/enroll` has no operator step (plaintext for now);
+  (2) NO store endpoints for game descriptors / build recipes / server instances -> P5/P7 setup needs
+  direct sqlite3 seeding. Both are ~1-file raw-body endpoints mirroring POST /update-policies. See the
+  runbook "Known gaps". These, not new phases, are the near-term end-to-end enablers.
+- PRIORITY (decided 2026-07-10, user): get a STABLE LINUX platform working END TO END before any new
+  feature phase. ALL Windows work is DEFERRED - Phase 8 (Windows agent), Phase 9 (Windows updates),
+  and the WindowsServiceController stub stay parked (Windows VMs are for a rare game or two). The S3
+  IObjectStore + the save-backup JOB are DEFERRED to ~1.0. So the near-term work is Linux
+  Tier-2/Tier-3 smokes on the real hypervisor (node-zero install, real apt/Plex update, real systemctl
+  service control, real SteamCMD install, real libvirt + recipe.apply on a real VM) + whatever
+  packaging/wiring those smokes need - NOT Phase 8/9/S3.
 - Phase: 6 (libvirt: read + VM lifecycle) - DoD MET (6a+6b+6c). ILibvirtHost realized; dual-truth is
   REAL (VM-running from libvirt alongside agent-online); VM start/stop/restart run as CONTROLLER-driven
   jobs (execute on the controller via local libvirt, not pushed to an agent) with a dashboard control.
@@ -43,9 +61,12 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   smoke-testing. Scripts are always bash per the house rule.
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
-- Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (102 Core + 51 Agent + 65 Controller + 10 integration + 8 UI +
-  13 Capabilities = 249).
+- Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors +
+  EnforceCodeStyleInBuild on - no-var/file-scoped-namespace rules are build-enforced); `dotnet test`
+  green (102 Core + 51 Agent + 65 Controller + 10 integration + 8 UI + 13 Capabilities = 249).
+- Code style (house rule, enforced): NO var, NO top-level statements - explicit types everywhere,
+  full classes, file-scoped namespaces (.editorconfig + EnforceCodeStyleInBuild). Program is a full
+  Main class.
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -455,7 +476,9 @@ Windows, reuse before bespoke.
   half-built/drifted box converges (build = repair = rebuild). Full rebuild-from-nothing
   drill passes (backup runbook 4.3).
 
-### Phase 8 - Windows agent
+### Phase 8 - Windows agent  [DEFERRED indefinitely - user decision 2026-07-10]
+- DEFERRED until the Linux platform is stable + working end to end. Windows VMs are rare (a game or
+  two). The WindowsServiceController stub stays as-is. Do NOT pick this up without an explicit ask.
 - Contracts touched: none new; implement the Phase 0 interfaces for Windows.
 - Primitives: `IServiceController` via `System.ServiceProcess`/SCM; `IProcessInspector`,
   `ISystemInfo`, config templating for Windows paths/formats.
@@ -467,7 +490,8 @@ Windows, reuse before bespoke.
   and any already-shipped game primitives, against the now-proven interfaces.
 - Note: any new `.ps1` must be PowerShell 5.x compatible (house rule).
 
-### Phase 9 - Windows updates + remaining specifics
+### Phase 9 - Windows updates + remaining specifics  [DEFERRED indefinitely - user decision 2026-07-10]
+- DEFERRED with Phase 8 (all Windows work parked until Linux is stable end to end).
 - Contracts touched: `UpdatePolicy` with a Windows Update "what" provider.
 - Primitives: Windows Update provider (PSWindowsUpdate or WUA COM). Budget disproportionate
   time: session-0 quirks, heavier reboots.
@@ -512,6 +536,46 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: CONTROLLER IMAGE UN-DEFERRED (user: the hypervisor is a separate machine and will NOT
+  pull source). The compose I first wrote used `build: context: ../..` - wrong, it needs the source
+  tree on the hypervisor. Fix: publish the controller as a GHCR image. Added `release-controller.yml`
+  (version-gated on VersionPrefix, tag controller-v<version>; docker login-action@v4 / setup-buildx@v4
+  / build-push@v7 - verified latest) that builds Deploy/controller/Dockerfile and pushes
+  ghcr.io/matthewjenner/servercenter-controller:<version>+:latest. `Deploy/controller/docker-compose.yml`
+  now references `image:` (build block commented for local dev) - the hypervisor copies JUST that file
+  + a templates/ dir and runs `docker compose pull && up -d` (no source, no SDK). One-time: GHCR
+  package -> public (public repo) or `docker login ghcr.io`. This un-defers the image-controller
+  publish track. UI runs from source on the workstation for now; AGREED fast-follow post-compact is a
+  VELOPACK installer for the UI (release-ui.yml, ui-v<version>) - the model in build-and-update.md.
+  See `Docs/dev-environment.md`.
+
+- 2026-07-10: CI/CD FIXED + STYLE ENFORCED + RELEASE VERIFIED (user's 3 asks). (1) CI + Release Agent
+  were failing on `LibvirtStatePollerTests.Seeds_the_cache_from_the_libvirt_domain_list` - a RACE, not
+  transient: it assumed `BackgroundService.StartAsync` runs `ExecuteAsync` to completion, but it runs
+  in the background, so on Linux the cache was empty when asserted. Fixed by waiting for the seed with
+  a timeout (see [[lessons-and-gotchas]]). (2) NEW HOUSE RULE (user): NO var, NO top-level statements -
+  explicit types everywhere, full classes, file-scoped namespaces. Program.cs converted to
+  `public class Program { static async Task Main }` in namespace ServerCenter.Controller (the 8
+  integration tests using WebApplicationFactory<Program> got `using ServerCenter.Controller;`; WAF
+  works with the namespaced explicit-Main Program). `.editorconfig` sets csharp_style_var_* = false +
+  IDE0007/0008 = warning; Directory.Build.props adds EnforceCodeStyleInBuild, so under
+  TreatWarningsAsErrors a stray `var` now FAILS the build. `dotnet format style` (needed a couple of
+  passes) converted all ~280 var -> explicit; 0 remain. See [[code-style-explicit]]. (3) Release flow
+  VERIFIED sound: release-agent.yml (version-gated on VersionPrefix, tag agent-v<v>) builds
+  self-contained SINGLE-FILE tarballs via publish-agent.sh (binary + systemd unit + install.sh - NOT
+  raw bin/) and creates a GitHub release; install.sh does a real systemd install (dedicated user, no
+  runtime needed) on host + guests. It was blocked ONLY by the poller test; no agent release exists
+  yet, so the next push publishes agent-v0.1.0. All 249 tests green under the enforced build.
+
+- 2026-07-10: ROADMAP REPRIORITIZATION (user). Goal before any new feature phase: a STABLE LINUX
+  platform working END TO END. Consequences: (1) ALL Windows work is deferred indefinitely - Phase 8
+  (Windows agent), Phase 9 (Windows updates), the WindowsServiceController stub - because Windows VMs
+  are rare (a game or two). (2) The S3 IObjectStore + the save-backup JOB are deferred to ~1.0. So
+  near-term effort is the Linux real-hardware smokes (Tier 2/3 on the actual hypervisor) that only the
+  user can run, plus any packaging/wiring they need (e.g. the controller container image + libvirt
+  socket mount, node-zero install from the GitHub release) - NOT more feature phases. Do not start
+  Phase 8/9 or the S3 work without an explicit ask.
 
 - 2026-07-10: Phase 7d - the provisioning -> managed handoff closes Phase 7 (at the Tier-1/handoff
   level). A node is recorded 'provisioning' with its libvirt_domain BEFORE its agent exists (agent_id

@@ -34,7 +34,7 @@ public sealed class FakeLibvirtHost : ILibvirtHost
     private Task Transition(string name, string verb, DomainState state)
     {
         Calls.Add((verb, name));
-        var uuid = _domains.TryGetValue(name, out var existing) ? existing.Uuid : string.Empty;
+        string uuid = _domains.TryGetValue(name, out DomainInfo? existing) ? existing.Uuid : string.Empty;
         _domains[name] = new DomainInfo(name, uuid, state);
         return Task.CompletedTask;
     }

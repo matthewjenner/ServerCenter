@@ -19,8 +19,8 @@ internal sealed class TempDatabase : IAsyncDisposable
 
     public static async Task<TempDatabase> CreateAsync(CancellationToken ct)
     {
-        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"sc-test-{Guid.NewGuid():N}.db");
-        var database = new ServerCenterDatabase(path);
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"sc-test-{Guid.NewGuid():N}.db");
+        ServerCenterDatabase database = new ServerCenterDatabase(path);
         await database.InitializeAsync(ct);
         return new TempDatabase(path, database);
     }
@@ -28,7 +28,7 @@ internal sealed class TempDatabase : IAsyncDisposable
     public ValueTask DisposeAsync()
     {
         SqliteConnection.ClearAllPools();
-        foreach (var file in new[] { Path, Path + "-wal", Path + "-shm" })
+        foreach (string? file in new[] { Path, Path + "-wal", Path + "-shm" })
         {
             try
             {

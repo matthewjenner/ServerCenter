@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using AwesomeAssertions;
+using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -18,6 +20,7 @@ using ServerCenter.Controller;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
 using ServerCenter.Core.Connection;
+using ServerCenter.Core.Transport;
 using Xunit;
 
 namespace ServerCenter.Integration.Tests;
@@ -37,13 +40,13 @@ public sealed class MtlsIntegrationTests : IAsyncLifetime
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"sc-mtls-{Guid.NewGuid():N}.db");
 
-        var database = new ServerCenterDatabase(_dbPath);
+        ServerCenterDatabase database = new ServerCenterDatabase(_dbPath);
         await database.InitializeAsync(CancellationToken.None);
-        var bootstrap = new ControllerOwnedTrustProvider(new TrustRepository(database), TimeProvider.System);
+        ControllerOwnedTrustProvider bootstrap = new ControllerOwnedTrustProvider(new TrustRepository(database), TimeProvider.System);
         await bootstrap.EnsureCaAsync(CancellationToken.None);
-        var serverCertificate = await bootstrap.CreateServerCertificateAsync("localhost", CancellationToken.None);
+        X509Certificate2 serverCertificate = await bootstrap.CreateServerCertificateAsync("localhost", CancellationToken.None);
 
-        var builder = WebApplication.CreateBuilder();
+        WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(options =>
             options.Listen(IPAddress.Loopback, 0, listen => listen.UseHttps(serverCertificate, https =>
@@ -68,7 +71,7 @@ public sealed class MtlsIntegrationTests : IAsyncLifetime
         await _app.StopAsync();
         await _app.DisposeAsync();
         SqliteConnection.ClearAllPools();
-        foreach (var file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
+        foreach (string? file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
         {
             try
             {
@@ -87,24 +90,24 @@ public sealed class MtlsIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Enrolled_agent_connects_over_mtls_and_its_heartbeat_reaches_the_controller()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var token = await _trust.CreateBootstrapTokenAsync("mtls-node", TimeSpan.FromMinutes(10), ct);
-        var bundle = await EnrollmentClient.EnrollAsync(_baseAddress, "mtls-node", token, ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string token = await _trust.CreateBootstrapTokenAsync("mtls-node", TimeSpan.FromMinutes(10), ct);
+        EnrollmentBundle bundle = await EnrollmentClient.EnrollAsync(_baseAddress, "mtls-node", token, ct);
 
-        var connector = new GrpcTransportConnector(_baseAddress, AgentTls.ToTlsMaterial(bundle));
-        var agentTransport = await connector.ConnectAsync(ct);
-        await using var _ = (IAsyncDisposable)agentTransport;
+        GrpcTransportConnector connector = new GrpcTransportConnector(_baseAddress, AgentTls.ToTlsMaterial(bundle));
+        IAgentTransport agentTransport = await connector.ConnectAsync(ct);
+        await using IAsyncDisposable _ = (IAsyncDisposable)agentTransport;
 
-        var identity = new AgentIdentity(bundle.AgentId, "0.1.0", "linux", "x64");
-        var handshake = await AgentHandshake.PerformAsync(agentTransport, identity, new EmptyAgentJobStateSource(), ct);
+        AgentIdentity identity = new AgentIdentity(bundle.AgentId, "0.1.0", "linux", "x64");
+        AgentHandshakeResult handshake = await AgentHandshake.PerformAsync(agentTransport, identity, new EmptyAgentJobStateSource(), ct);
         handshake.Established.Should().BeTrue();
 
-        using var pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var pump = AgentSessionPump.RunAsync(
+        using CancellationTokenSource pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task<AgentSessionOutcome> pump = AgentSessionPump.RunAsync(
             agentTransport, new BasicAgentStatusSource(), new NoopCommandHandler(),
             TimeProvider.System, TimeSpan.FromSeconds(10), pumpCts.Token);
 
-        await WaitUntilAsync(() => _presence.TryGet(bundle.AgentId, out var p) && p!.LastStatus is not null, ct);
+        await WaitUntilAsync(() => _presence.TryGet(bundle.AgentId, out AgentPresence? p) && p!.LastStatus is not null, ct);
 
         await pumpCts.CancelAsync();
         try
@@ -120,23 +123,23 @@ public sealed class MtlsIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Connection_without_a_client_certificate_is_rejected()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
 
         // TLS to the controller but presenting NO client cert: the handshake completes, then the
         // controller's authorization kicks the session with a Goodbye.
-        using var handler = new SocketsHttpHandler
+        using SocketsHttpHandler handler = new SocketsHttpHandler
         {
             SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, _, _, _) => true }
         };
-        var channel = GrpcChannel.ForAddress(_baseAddress, new GrpcChannelOptions { HttpHandler = handler });
-        var call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
-        await using var transport = new GrpcAgentTransport(channel, call);
+        GrpcChannel channel = GrpcChannel.ForAddress(_baseAddress, new GrpcChannelOptions { HttpHandler = handler });
+        AsyncDuplexStreamingCall<AgentMessage, ControllerMessage> call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
+        await using GrpcAgentTransport transport = new GrpcAgentTransport(channel, call);
 
-        var handshake = await AgentHandshake.PerformAsync(
+        AgentHandshakeResult handshake = await AgentHandshake.PerformAsync(
             transport, new AgentIdentity("ghost", "0.1.0", "linux", "x64"), new EmptyAgentJobStateSource(), ct);
         handshake.Established.Should().BeTrue(); // handshake precedes authorization
 
-        var outcome = await AgentSessionPump.RunAsync(
+        AgentSessionOutcome outcome = await AgentSessionPump.RunAsync(
             transport, new BasicAgentStatusSource(), new NoopCommandHandler(),
             TimeProvider.System, TimeSpan.FromSeconds(10), ct);
 
@@ -146,7 +149,7 @@ public sealed class MtlsIntegrationTests : IAsyncLifetime
 
     private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken ct, int timeoutMs = 5000)
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
         while (!condition())
         {
             if (sw.ElapsedMilliseconds > timeoutMs)

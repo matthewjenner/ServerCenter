@@ -23,9 +23,9 @@ public static class AgentSessionPump
         ArgumentNullException.ThrowIfNull(commands);
         ArgumentNullException.ThrowIfNull(clock);
 
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var read = ReadLoopAsync(transport, commands, linked.Token);
-        var beat = HeartbeatLoopAsync(transport, statusSource, clock, heartbeatInterval, linked.Token);
+        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task<GoodbyeReason?> read = ReadLoopAsync(transport, commands, linked.Token);
+        Task beat = HeartbeatLoopAsync(transport, statusSource, clock, heartbeatInterval, linked.Token);
 
         await Task.WhenAny(read, beat);
         await linked.CancelAsync();
@@ -61,7 +61,7 @@ public static class AgentSessionPump
         IAgentCommandHandler commands,
         CancellationToken ct)
     {
-        await foreach (var msg in transport.Incoming(ct))
+        await foreach (ControllerMessage msg in transport.Incoming(ct))
         {
             switch (msg.PayloadCase)
             {
@@ -100,7 +100,7 @@ public static class AgentSessionPump
                 },
                 ct);
 
-            var status = await statusSource.GetStatusAsync(ct);
+            NodeStatus status = await statusSource.GetStatusAsync(ct);
             await transport.SendAsync(
                 new AgentMessage { Envelope = Envelopes.New(), Status = status },
                 ct);

@@ -9,9 +9,9 @@ public sealed class SqliteControllerJobView(JobRepository jobs, TimeProvider clo
 {
     public async Task<IReadOnlyList<ControllerOpenJob>> GetOpenJobsAsync(string agentId, CancellationToken ct)
     {
-        var open = await jobs.GetOpenJobsForAgentAsync(agentId, ct);
-        var result = new List<ControllerOpenJob>(open.Count);
-        foreach (var job in open)
+        IReadOnlyList<Job> open = await jobs.GetOpenJobsForAgentAsync(agentId, ct);
+        List<ControllerOpenJob> result = new List<ControllerOpenJob>(open.Count);
+        foreach (Job job in open)
         {
             result.Add(new ControllerOpenJob(job.Id, job.Requeueable));
         }
@@ -21,7 +21,7 @@ public sealed class SqliteControllerJobView(JobRepository jobs, TimeProvider clo
 
     public async Task ApplyAsync(ReconcileAction action, CancellationToken ct)
     {
-        var now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
         switch (action.Outcome)
         {
             case ReconcileOutcome.CloseSucceeded:

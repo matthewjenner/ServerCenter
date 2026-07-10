@@ -23,11 +23,11 @@ public sealed class UpdateApplyExecutorTests
     [Fact]
     public async Task Applies_via_the_channel_provider_and_runs_preflight()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var provider = new FakeUpdateProvider("apt");
-        var sink = new RecordingJobSink();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeUpdateProvider provider = new FakeUpdateProvider("apt");
+        RecordingJobSink sink = new RecordingJobSink();
 
-        var outcome = await Executor(provider, new FakeServiceController()).ExecuteAsync(
+        JobOutcome outcome = await Executor(provider, new FakeServiceController()).ExecuteAsync(
             Context(new UpdateJobParams { Channel = "apt", Preflight = [PreflightStep.Notify] }), sink, ct);
 
         outcome.Succeeded.Should().BeTrue();
@@ -38,10 +38,10 @@ public sealed class UpdateApplyExecutorTests
     [Fact]
     public async Task Fails_when_no_provider_serves_the_channel()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var provider = new FakeUpdateProvider("apt");
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeUpdateProvider provider = new FakeUpdateProvider("apt");
 
-        var outcome = await Executor(provider, new FakeServiceController()).ExecuteAsync(
+        JobOutcome outcome = await Executor(provider, new FakeServiceController()).ExecuteAsync(
             Context(new UpdateJobParams { Channel = "plex" }), new RecordingJobSink(), ct);
 
         outcome.Succeeded.Should().BeFalse();
@@ -52,11 +52,11 @@ public sealed class UpdateApplyExecutorTests
     [Fact]
     public async Task Fails_before_applying_when_a_required_preflight_has_no_handler()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var provider = new FakeUpdateProvider("apt");
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeUpdateProvider provider = new FakeUpdateProvider("apt");
 
         // Only Notify is registered; the policy also asks for a player drain, which no handler serves.
-        var outcome = await Executor(provider, new FakeServiceController()).ExecuteAsync(
+        JobOutcome outcome = await Executor(provider, new FakeServiceController()).ExecuteAsync(
             Context(new UpdateJobParams { Channel = "apt", Preflight = [PreflightStep.DrainPlayersViaRcon] }),
             new RecordingJobSink(), ct);
 
@@ -68,12 +68,12 @@ public sealed class UpdateApplyExecutorTests
     [Fact]
     public async Task Brackets_the_service_with_stop_then_start()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var services = new FakeServiceController();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeServiceController services = new FakeServiceController();
         services.Seed("plex.service", ServiceState.Active);
-        var provider = new FakeUpdateProvider("plex");
+        FakeUpdateProvider provider = new FakeUpdateProvider("plex");
 
-        var outcome = await Executor(provider, services).ExecuteAsync(
+        JobOutcome outcome = await Executor(provider, services).ExecuteAsync(
             Context(new UpdateJobParams
             {
                 Channel = "plex",
@@ -90,14 +90,14 @@ public sealed class UpdateApplyExecutorTests
     [Fact]
     public async Task Restarts_the_service_even_when_the_update_fails()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var services = new FakeServiceController();
-        var provider = new FakeUpdateProvider("plex")
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeServiceController services = new FakeServiceController();
+        FakeUpdateProvider provider = new FakeUpdateProvider("plex")
         {
             Outcome = new UpdateOutcome(Success: false, RebootRequired: false, "dpkg blew up")
         };
 
-        var outcome = await Executor(provider, services).ExecuteAsync(
+        JobOutcome outcome = await Executor(provider, services).ExecuteAsync(
             Context(new UpdateJobParams
             {
                 Channel = "plex",
@@ -113,12 +113,12 @@ public sealed class UpdateApplyExecutorTests
     [Fact]
     public async Task Records_the_reboot_decision_from_the_policy()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var provider = new FakeUpdateProvider("apt")
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeUpdateProvider provider = new FakeUpdateProvider("apt")
         {
             Outcome = new UpdateOutcome(Success: true, RebootRequired: true, null)
         };
-        var sink = new RecordingJobSink();
+        RecordingJobSink sink = new RecordingJobSink();
 
         await Executor(provider, new FakeServiceController()).ExecuteAsync(
             Context(new UpdateJobParams { Channel = "apt", Reboot = RebootPolicy.IfRequired }), sink, ct);
@@ -129,9 +129,9 @@ public sealed class UpdateApplyExecutorTests
     [Fact]
     public async Task Fails_on_unparseable_params()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
 
-        var outcome = await Executor(new FakeUpdateProvider(), new FakeServiceController())
+        JobOutcome outcome = await Executor(new FakeUpdateProvider(), new FakeServiceController())
             .ExecuteAsync(new JobContext("j1", "update.apply", "not json"), new RecordingJobSink(), ct);
 
         outcome.Succeeded.Should().BeFalse();

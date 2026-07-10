@@ -19,12 +19,12 @@ public sealed class AgentConnectionTests
     [Fact]
     public async Task Stops_without_reconnect_on_terminal_goodbye()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var connectCount = 0;
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        int connectCount = 0;
 
         async Task RejectingControllerAsync(InMemoryDuplexLink link)
         {
-            await using var e = link.ControllerSide.Incoming(ct).GetAsyncEnumerator(ct);
+            await using IAsyncEnumerator<AgentMessage> e = link.ControllerSide.Incoming(ct).GetAsyncEnumerator(ct);
             await e.MoveNextAsync(); // the Hello
             await link.ControllerSide.SendAsync(
                 new ControllerMessage { Envelope = Envelopes.New(), Goodbye = new Goodbye { Reason = GoodbyeReason.VersionMismatch } },
@@ -35,7 +35,7 @@ public sealed class AgentConnectionTests
         {
             _ = token;
             connectCount++;
-            var link = new InMemoryDuplexLink();
+            InMemoryDuplexLink link = new InMemoryDuplexLink();
             _ = RejectingControllerAsync(link);
             return Task.FromResult(link.AgentSide);
         }
@@ -50,10 +50,10 @@ public sealed class AgentConnectionTests
     [Fact]
     public async Task Retries_after_a_transient_connect_failure()
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        var clock = new FakeTimeProvider();
-        var connectCount = 0;
-        var secondAttempt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        FakeTimeProvider clock = new FakeTimeProvider();
+        int connectCount = 0;
+        TaskCompletionSource secondAttempt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         Task<IAgentTransport> Connect(CancellationToken _)
         {
@@ -65,12 +65,12 @@ public sealed class AgentConnectionTests
             throw new InvalidOperationException("transient dial failure");
         }
 
-        var run = AgentConnection.RunAsync(
+        Task run = AgentConnection.RunAsync(
             Connect, Identity, new FakeAgentJobStateSource(), new FakeAgentStatusSource(),
             new NoopAgentCommandHandler(), clock, Options(), cts.Token);
 
         // Elapse the backoff on the fake clock so the retry fires.
-        for (var i = 0; i < 200 && !secondAttempt.Task.IsCompleted; i++)
+        for (int i = 0; i < 200 && !secondAttempt.Task.IsCompleted; i++)
         {
             clock.Advance(TimeSpan.FromSeconds(1));
             await Task.Delay(5, cts.Token);

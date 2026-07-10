@@ -24,21 +24,21 @@ public static class AgentConnection
         ArgumentNullException.ThrowIfNull(connect);
         ArgumentNullException.ThrowIfNull(options);
 
-        var attempt = 0;
+        int attempt = 0;
 
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                var transport = await connect(ct);
+                IAgentTransport transport = await connect(ct);
                 try
                 {
-                    var handshake = await AgentHandshake.PerformAsync(transport, identity, jobs, ct);
+                    AgentHandshakeResult handshake = await AgentHandshake.PerformAsync(transport, identity, jobs, ct);
 
                     if (handshake.Established)
                     {
                         attempt = 0; // reset backoff on a good connection
-                        var outcome = await AgentSessionPump.RunAsync(
+                        AgentSessionOutcome outcome = await AgentSessionPump.RunAsync(
                             transport, status, commands, clock, options.HeartbeatInterval, ct);
 
                         if (outcome.Kind == SessionEndKind.ControllerGoodbye && IsTerminal(outcome.GoodbyeReason))

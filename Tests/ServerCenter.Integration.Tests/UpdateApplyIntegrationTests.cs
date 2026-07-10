@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AwesomeAssertions;
+using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ServerCenter.Agent;
 using ServerCenter.Agent.Jobs;
 using ServerCenter.Contracts.V1;
+using ServerCenter.Controller;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
 using ServerCenter.Core.Connection;
@@ -43,7 +45,7 @@ public sealed class UpdateApplyIntegrationTests : IAsyncLifetime
     {
         await _factory.DisposeAsync();
         SqliteConnection.ClearAllPools();
-        foreach (var file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
+        foreach (string? file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
         {
             try { if (File.Exists(file)) File.Delete(file); } catch (IOException) { }
         }
@@ -52,16 +54,16 @@ public sealed class UpdateApplyIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task Dispatched_update_apply_runs_on_the_agent_and_persists_succeeded()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
 
-        var channel = GrpcChannel.ForAddress(
+        GrpcChannel channel = GrpcChannel.ForAddress(
             _factory.Server.BaseAddress,
             new GrpcChannelOptions { HttpHandler = _factory.Server.CreateHandler() });
-        var call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
-        await using var transport = new GrpcAgentTransport(channel, call);
+        AsyncDuplexStreamingCall<AgentMessage, ControllerMessage> call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
+        await using GrpcAgentTransport transport = new GrpcAgentTransport(channel, call);
 
-        var provider = new FakeUpdateProvider("apt");
-        var handler = new JobExecutingCommandHandler(
+        FakeUpdateProvider provider = new FakeUpdateProvider("apt");
+        JobExecutingCommandHandler handler = new JobExecutingCommandHandler(
             new IJobExecutor[]
             {
                 new UpdateApplyExecutor([provider], [new NotifyPreflight()], new FakeServiceController())
@@ -69,16 +71,16 @@ public sealed class UpdateApplyIntegrationTests : IAsyncLifetime
             new AgentJobStore(),
             NullLogger<JobExecutingCommandHandler>.Instance);
 
-        var identity = new AgentIdentity("upd-agent", "0.1.0", "linux", "x64");
+        AgentIdentity identity = new AgentIdentity("upd-agent", "0.1.0", "linux", "x64");
         (await AgentHandshake.PerformAsync(transport, identity, new EmptyAgentJobStateSource(), ct))
             .Established.Should().BeTrue();
 
-        using var pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var pump = AgentSessionPump.RunAsync(
+        using CancellationTokenSource pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task<AgentSessionOutcome> pump = AgentSessionPump.RunAsync(
             transport, new BasicAgentStatusSource(), handler, TimeProvider.System, TimeSpan.FromSeconds(10), pumpCts.Token);
 
         // Store a manual apt policy, wait for the agent to connect, then dispatch from the policy.
-        var policies = _factory.Services.GetRequiredService<UpdatePolicyRepository>();
+        UpdatePolicyRepository policies = _factory.Services.GetRequiredService<UpdatePolicyRepository>();
         await policies.InsertAsync(
             new UpdatePolicy
             {
@@ -90,15 +92,15 @@ public sealed class UpdateApplyIntegrationTests : IAsyncLifetime
             },
             1000, ct);
 
-        var connected = _factory.Services.GetRequiredService<ConnectedAgents>();
+        ConnectedAgents connected = _factory.Services.GetRequiredService<ConnectedAgents>();
         await WaitUntilAsync(() => connected.TryGet("upd-agent", out _), ct);
 
-        var dispatcher = _factory.Services.GetRequiredService<UpdateJobDispatcher>();
-        var result = await dispatcher.DispatchAsync(
+        UpdateJobDispatcher dispatcher = _factory.Services.GetRequiredService<UpdateJobDispatcher>();
+        UpdateDispatchResult result = await dispatcher.DispatchAsync(
             "upd-agent", "apt-manual", null, UpdatePolicyResolver.Trigger.Manual, [], null, ct);
         result.Outcome.Should().Be(UpdateDispatchOutcome.Dispatched);
 
-        var jobs = _factory.Services.GetRequiredService<JobRepository>();
+        JobRepository jobs = _factory.Services.GetRequiredService<JobRepository>();
         await WaitUntilAsync(
             () => jobs.GetAsync(result.JobId!, ct).GetAwaiter().GetResult() is { State: Core.Jobs.JobState.Succeeded },
             ct);
@@ -111,7 +113,7 @@ public sealed class UpdateApplyIntegrationTests : IAsyncLifetime
 
     private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken ct, int timeoutMs = 5000)
     {
-        var sw = Stopwatch.StartNew();
+        Stopwatch sw = Stopwatch.StartNew();
         while (!condition())
         {
             if (sw.ElapsedMilliseconds > timeoutMs)

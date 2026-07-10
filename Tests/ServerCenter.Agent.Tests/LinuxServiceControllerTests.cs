@@ -18,10 +18,10 @@ public sealed class LinuxServiceControllerTests
     [InlineData("something-else", ServiceState.Unknown)]
     public async Task GetState_uses_a_structured_property_query_and_maps_it(string activeState, ServiceState expected)
     {
-        var runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(0, activeState, string.Empty) };
-        var sut = new LinuxServiceController(runner);
+        FakeProcessRunner runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(0, activeState, string.Empty) };
+        LinuxServiceController sut = new LinuxServiceController(runner);
 
-        var state = await sut.GetStateAsync("plex.service", TestContext.Current.CancellationToken);
+        ServiceState state = await sut.GetStateAsync("plex.service", TestContext.Current.CancellationToken);
 
         state.Should().Be(expected);
         runner.Calls.Should().ContainSingle()
@@ -31,7 +31,7 @@ public sealed class LinuxServiceControllerTests
     [Fact]
     public async Task Restart_issues_systemctl_restart()
     {
-        var runner = new FakeProcessRunner();
+        FakeProcessRunner runner = new FakeProcessRunner();
         await new LinuxServiceController(runner).RestartAsync("plex.service", TestContext.Current.CancellationToken);
 
         runner.Calls.Should().ContainSingle().Which.Should().Equal("restart", "plex.service");
@@ -40,10 +40,10 @@ public sealed class LinuxServiceControllerTests
     [Fact]
     public async Task Restart_throws_on_a_nonzero_exit()
     {
-        var runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(1, string.Empty, "Unit not found.") };
-        var sut = new LinuxServiceController(runner);
+        FakeProcessRunner runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(1, string.Empty, "Unit not found.") };
+        LinuxServiceController sut = new LinuxServiceController(runner);
 
-        var act = async () => await sut.RestartAsync("nope.service", TestContext.Current.CancellationToken);
+        Func<Task> act = async () => await sut.RestartAsync("nope.service", TestContext.Current.CancellationToken);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
     }

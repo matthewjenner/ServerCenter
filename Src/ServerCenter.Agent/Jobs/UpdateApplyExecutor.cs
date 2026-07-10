@@ -39,13 +39,13 @@ public sealed class UpdateApplyExecutor : IJobExecutor
             return JobOutcome.Failure($"invalid update.apply params: {ex.Message}");
         }
 
-        if (!_providers.TryGetValue(request.Channel, out var provider))
+        if (!_providers.TryGetValue(request.Channel, out IUpdateProvider? provider))
         {
             return JobOutcome.Failure($"no update provider for channel '{request.Channel}' on this node");
         }
 
         // Fail before touching anything if a required preflight step has no handler here.
-        foreach (var step in request.Preflight)
+        foreach (PreflightStep step in request.Preflight)
         {
             if (!_preflight.ContainsKey(step))
             {
@@ -53,15 +53,15 @@ public sealed class UpdateApplyExecutor : IJobExecutor
             }
         }
 
-        foreach (var step in request.Preflight)
+        foreach (PreflightStep step in request.Preflight)
         {
             await _preflight[step].RunAsync(sink, ct);
         }
 
-        var brackets = request.How is UpdateHow.StopUpdateStart or UpdateHow.DrainThenUpdate
+        bool brackets = request.How is UpdateHow.StopUpdateStart or UpdateHow.DrainThenUpdate
                        && !string.IsNullOrWhiteSpace(request.ServiceUnit);
 
-        var stopped = false;
+        bool stopped = false;
         if (brackets)
         {
             sink.Log(LogStream.Note, $"stopping {request.ServiceUnit}");
@@ -72,7 +72,7 @@ public sealed class UpdateApplyExecutor : IJobExecutor
         UpdateOutcome outcome;
         try
         {
-            var plan = new UpdatePlan(request.Packages, AllowReboot: request.Reboot != RebootPolicy.Never);
+            UpdatePlan plan = new UpdatePlan(request.Packages, AllowReboot: request.Reboot != RebootPolicy.Never);
             outcome = await provider.ApplyAsync(plan, sink, ct);
         }
         finally
@@ -90,7 +90,7 @@ public sealed class UpdateApplyExecutor : IJobExecutor
             return JobOutcome.Failure(outcome.FailReason ?? "update failed");
         }
 
-        var reboot = UpdatePolicyResolver.ResolveReboot(request.Reboot, outcome.RebootRequired);
+        UpdatePolicyResolver.RebootAction reboot = UpdatePolicyResolver.ResolveReboot(request.Reboot, outcome.RebootRequired);
         sink.Log(LogStream.Note, RebootNote(reboot));
         return JobOutcome.Success();
     }

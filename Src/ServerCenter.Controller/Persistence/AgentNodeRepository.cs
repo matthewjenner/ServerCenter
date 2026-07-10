@@ -1,3 +1,5 @@
+using Microsoft.Data.Sqlite;
+
 namespace ServerCenter.Controller.Persistence;
 
 // A managed node joined with its agent's display name, for the fleet view. LibvirtDomain links the
@@ -17,12 +19,12 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
 
     public async Task<IReadOnlyList<NodeRow>> ListNodesAsync(CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT {SelectColumns} ORDER BY display_name;";
 
-        var rows = new List<NodeRow>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        List<NodeRow> rows = new List<NodeRow>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             rows.Add(MapRow(reader));
@@ -33,11 +35,11 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
 
     public async Task<NodeRow?> GetNodeAsync(string nodeId, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT {SelectColumns} WHERE node.id = @id;";
         cmd.Parameters.AddWithValue("@id", nodeId);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? MapRow(reader) : null;
     }
 
@@ -55,8 +57,8 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
     public async Task ProvisionNodeAsync(
         string nodeId, string kind, string? libvirtDomain, string? osFamily, long createdAtUnixMs, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             "INSERT INTO node (id, kind, os_family, lifecycle, libvirt_domain, created_at) " +
             "VALUES (@id, @kind, @os, 'provisioning', @domain, @created) " +
@@ -74,8 +76,8 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
     // (a normal agent's node is created 'managed' directly). COALESCE preserves an existing agent_id.
     public async Task MarkManagedOnCheckInAsync(string nodeId, string agentId, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             "UPDATE node SET lifecycle = 'managed', agent_id = COALESCE(agent_id, @agent) " +
             "WHERE id = @id AND lifecycle = 'provisioning';";
@@ -88,8 +90,8 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
     // fleet view; set at provisioning time (Phase 7) or by an operator.
     public async Task SetLibvirtDomainAsync(string nodeId, string? libvirtDomain, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = "UPDATE node SET libvirt_domain = @domain WHERE id = @id;";
         cmd.Parameters.AddWithValue("@id", nodeId);
         cmd.Parameters.AddWithValue("@domain", (object?)libvirtDomain ?? DBNull.Value);
@@ -99,8 +101,8 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
     public async Task EnsureAgentAsync(
         string agentId, string displayName, string certFingerprint, long enrolledAtUnixMs, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             "INSERT INTO agent_identity (id, display_name, cert_fpr, status, enrolled_at) " +
             "VALUES (@id, @name, @fpr, 'active', @enrolled) " +
@@ -115,8 +117,8 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
     public async Task EnsureNodeAsync(
         string nodeId, string agentId, string kind, string lifecycle, long createdAtUnixMs, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             "INSERT INTO node (id, agent_id, kind, lifecycle, created_at) " +
             "VALUES (@id, @agent, @kind, @lifecycle, @created) " +

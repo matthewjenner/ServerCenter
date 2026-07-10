@@ -24,7 +24,7 @@ public sealed class UpdatePolicySerializerTests
     [Fact]
     public void Serialize_emits_the_brief_tokens()
     {
-        var json = UpdatePolicySerializer.Serialize(Sample);
+        string json = UpdatePolicySerializer.Serialize(Sample);
 
         json.Should().Contain("\"how\":\"stop-update-start\"");
         json.Should().Contain("\"reboot\":\"if-required\"");
@@ -35,7 +35,7 @@ public sealed class UpdatePolicySerializerTests
     [Fact]
     public void Round_trips_losslessly()
     {
-        var restored = UpdatePolicySerializer.Deserialize(UpdatePolicySerializer.Serialize(Sample));
+        UpdatePolicy restored = UpdatePolicySerializer.Deserialize(UpdatePolicySerializer.Serialize(Sample));
 
         // BeEquivalentTo (deep/structural) not Be: the record's IReadOnlyList Preflight compares by
         // reference under record equality, so two equal-but-distinct lists would fail Be().
@@ -45,7 +45,7 @@ public sealed class UpdatePolicySerializerTests
     [Fact]
     public void Manual_schedule_omits_null_cron_and_window()
     {
-        var json = UpdatePolicySerializer.Serialize(Sample with { When = UpdateSchedule.Manual });
+        string json = UpdatePolicySerializer.Serialize(Sample with { When = UpdateSchedule.Manual });
 
         json.Should().Contain("\"mode\":\"manual\"");
         json.Should().NotContain("cron");

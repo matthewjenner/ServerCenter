@@ -29,9 +29,9 @@ public sealed class AgentCertStore(string directory)
 
     public AgentTlsMaterial LoadTls()
     {
-        using var fromPem = X509Certificate2.CreateFromPem(File.ReadAllText(CertFile), File.ReadAllText(KeyFile));
-        var clientCertificate = X509CertificateLoader.LoadPkcs12(fromPem.Export(X509ContentType.Pkcs12), null);
-        var caCertificate = X509Certificate2.CreateFromPem(File.ReadAllText(CaFile));
+        using X509Certificate2 fromPem = X509Certificate2.CreateFromPem(File.ReadAllText(CertFile), File.ReadAllText(KeyFile));
+        X509Certificate2 clientCertificate = X509CertificateLoader.LoadPkcs12(fromPem.Export(X509ContentType.Pkcs12), null);
+        X509Certificate2 caCertificate = X509Certificate2.CreateFromPem(File.ReadAllText(CaFile));
         return new AgentTlsMaterial(clientCertificate, caCertificate);
     }
 }

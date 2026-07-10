@@ -12,8 +12,8 @@ public sealed class UnattendedUpgradesNeutralizerTests
     [Fact]
     public async Task Masks_the_apt_timers_and_the_unattended_upgrades_service()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner();
 
         await new UnattendedUpgradesNeutralizer(runner).EnsureDisabledAsync(new RecordingJobSink(), ct);
 
@@ -33,10 +33,10 @@ public sealed class UnattendedUpgradesNeutralizerTests
     [Fact]
     public async Task Throws_when_a_mask_fails()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(1, string.Empty, "boom") };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(1, string.Empty, "boom") };
 
-        var act = async () =>
+        Func<Task> act = async () =>
             await new UnattendedUpgradesNeutralizer(runner).EnsureDisabledAsync(new RecordingJobSink(), ct);
 
         await act.Should().ThrowAsync<InvalidOperationException>();

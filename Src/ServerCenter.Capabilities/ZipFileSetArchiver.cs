@@ -13,10 +13,10 @@ public sealed class ZipFileSetArchiver : IFileSetArchiver
     public Task<Stream> CreateArchiveAsync(
         IReadOnlyList<string> paths, IReadOnlyList<string> exclude, CancellationToken ct)
     {
-        var buffer = new MemoryStream();
-        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        MemoryStream buffer = new MemoryStream();
+        using (ZipArchive zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
-            foreach (var path in paths)
+            foreach (string path in paths)
             {
                 if (File.Exists(path))
                 {
@@ -24,7 +24,7 @@ public sealed class ZipFileSetArchiver : IFileSetArchiver
                 }
                 else if (Directory.Exists(path))
                 {
-                    foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+                    foreach (string file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
                     {
                         AddFile(zip, file, exclude);
                     }
@@ -38,11 +38,11 @@ public sealed class ZipFileSetArchiver : IFileSetArchiver
 
     public Task ExtractAsync(Stream archive, CancellationToken ct)
     {
-        using var zip = new ZipArchive(archive, ZipArchiveMode.Read, leaveOpen: true);
-        foreach (var entry in zip.Entries)
+        using ZipArchive zip = new ZipArchive(archive, ZipArchiveMode.Read, leaveOpen: true);
+        foreach (ZipArchiveEntry entry in zip.Entries)
         {
-            var target = "/" + entry.FullName;
-            var directory = Path.GetDirectoryName(target);
+            string target = "/" + entry.FullName;
+            string? directory = Path.GetDirectoryName(target);
             if (!string.IsNullOrEmpty(directory))
             {
                 Directory.CreateDirectory(directory);
@@ -56,8 +56,8 @@ public sealed class ZipFileSetArchiver : IFileSetArchiver
 
     private static void AddFile(ZipArchive zip, string file, IReadOnlyList<string> exclude)
     {
-        var name = Path.GetFileName(file);
-        foreach (var glob in exclude)
+        string name = Path.GetFileName(file);
+        foreach (string glob in exclude)
         {
             if (FileSystemName.MatchesSimpleExpression(glob, name))
             {

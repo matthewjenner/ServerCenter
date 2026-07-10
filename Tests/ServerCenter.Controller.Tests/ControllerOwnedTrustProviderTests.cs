@@ -15,7 +15,7 @@ public sealed class ControllerOwnedTrustProviderTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         _db = await TempDatabase.CreateAsync(ct);
         _trust = new ControllerOwnedTrustProvider(new TrustRepository(_db.Database), _clock);
         await _trust.EnsureCaAsync(ct);
@@ -26,8 +26,8 @@ public sealed class ControllerOwnedTrustProviderTests : IAsyncLifetime
     [Fact]
     public async Task Enroll_mints_a_bundle_and_pins_the_fingerprint()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var result = await EnrollAsync(ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        EnrollmentResult result = await EnrollAsync(ct);
 
         result.AgentId.Should().NotBeEmpty();
         result.CertPem.Should().Contain("BEGIN CERTIFICATE");
@@ -41,8 +41,8 @@ public sealed class ControllerOwnedTrustProviderTests : IAsyncLifetime
     [Fact]
     public async Task Verify_rejects_a_wrong_fingerprint()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var result = await EnrollAsync(ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        EnrollmentResult result = await EnrollAsync(ct);
 
         (await _trust.VerifyAsync(new PresentedIdentity(result.AgentId, "DEADBEEF"), ct)).Should().BeFalse();
     }
@@ -50,37 +50,37 @@ public sealed class ControllerOwnedTrustProviderTests : IAsyncLifetime
     [Fact]
     public async Task Verify_rejects_an_unknown_agent()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         (await _trust.VerifyAsync(new PresentedIdentity("nobody", "x"), ct)).Should().BeFalse();
     }
 
     [Fact]
     public async Task Bootstrap_token_is_one_time()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var token = await _trust.CreateBootstrapTokenAsync("agent", TimeSpan.FromMinutes(10), ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string token = await _trust.CreateBootstrapTokenAsync("agent", TimeSpan.FromMinutes(10), ct);
         await _trust.EnrollAsync(new EnrollmentRequest("agent", token), ct);
 
-        var reuse = async () => await _trust.EnrollAsync(new EnrollmentRequest("agent", token), ct);
+        Func<Task<EnrollmentResult>> reuse = async () => await _trust.EnrollAsync(new EnrollmentRequest("agent", token), ct);
         await reuse.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
     public async Task Expired_bootstrap_token_is_rejected()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var token = await _trust.CreateBootstrapTokenAsync("agent", TimeSpan.FromMinutes(1), ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        string token = await _trust.CreateBootstrapTokenAsync("agent", TimeSpan.FromMinutes(1), ct);
         _clock.Advance(TimeSpan.FromMinutes(2));
 
-        var enroll = async () => await _trust.EnrollAsync(new EnrollmentRequest("agent", token), ct);
+        Func<Task<EnrollmentResult>> enroll = async () => await _trust.EnrollAsync(new EnrollmentRequest("agent", token), ct);
         await enroll.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
     public async Task Revoke_stops_verification()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var result = await EnrollAsync(ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        EnrollmentResult result = await EnrollAsync(ct);
 
         await _trust.RevokeAsync(result.AgentId, ct);
 
@@ -91,10 +91,10 @@ public sealed class ControllerOwnedTrustProviderTests : IAsyncLifetime
     [Fact]
     public async Task Rotate_repins_so_the_old_fingerprint_fails_and_the_new_one_verifies()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var original = await EnrollAsync(ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        EnrollmentResult original = await EnrollAsync(ct);
 
-        var rotated = await _trust.RotateAsync(original.AgentId, ct);
+        EnrollmentResult rotated = await _trust.RotateAsync(original.AgentId, ct);
 
         rotated.CertFingerprint.Should().NotBe(original.CertFingerprint);
         (await _trust.VerifyAsync(new PresentedIdentity(original.AgentId, original.CertFingerprint), ct))
@@ -106,8 +106,8 @@ public sealed class ControllerOwnedTrustProviderTests : IAsyncLifetime
     [Fact]
     public async Task MarkActive_keeps_verification_working()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var result = await EnrollAsync(ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        EnrollmentResult result = await EnrollAsync(ct);
 
         await _trust.MarkActiveAsync(result.AgentId, ct);
 
@@ -117,7 +117,7 @@ public sealed class ControllerOwnedTrustProviderTests : IAsyncLifetime
 
     private async Task<EnrollmentResult> EnrollAsync(CancellationToken ct)
     {
-        var token = await _trust.CreateBootstrapTokenAsync("agent", TimeSpan.FromMinutes(10), ct);
+        string token = await _trust.CreateBootstrapTokenAsync("agent", TimeSpan.FromMinutes(10), ct);
         return await _trust.EnrollAsync(new EnrollmentRequest("agent", token), ct);
     }
 }

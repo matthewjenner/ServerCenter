@@ -23,20 +23,20 @@ public static class ControllerHandshake
         ArgumentNullException.ThrowIfNull(jobs);
         sessionIdFactory ??= () => Guid.NewGuid().ToString("N");
 
-        await using var incoming = stream.Incoming(ct).GetAsyncEnumerator(ct);
+        await using IAsyncEnumerator<AgentMessage> incoming = stream.Incoming(ct).GetAsyncEnumerator(ct);
 
         if (!await incoming.MoveNextAsync())
         {
             return ControllerHandshakeResult.NotEstablished("stream closed before Hello");
         }
 
-        var first = incoming.Current;
+        AgentMessage first = incoming.Current;
         if (first.PayloadCase != AgentMessage.PayloadOneofCase.Hello)
         {
             return ControllerHandshakeResult.NotEstablished($"expected Hello, got {first.PayloadCase}");
         }
 
-        var decision = HandshakeNegotiator.Decide(
+        HandshakeDecision decision = HandshakeNegotiator.Decide(
             first.Envelope.ProtocolMajor,
             first.Envelope.ProtocolMinor,
             sessionIdFactory);
@@ -58,8 +58,8 @@ public static class ControllerHandshake
             return ControllerHandshakeResult.NotEstablished(decision.RejectReason);
         }
 
-        var agentId = first.Hello.AgentId;
-        var open = await jobs.GetOpenJobsAsync(agentId, ct);
+        string agentId = first.Hello.AgentId;
+        IReadOnlyList<ControllerOpenJob> open = await jobs.GetOpenJobsAsync(agentId, ct);
 
         await stream.SendAsync(
             new ControllerMessage
@@ -74,7 +74,7 @@ public static class ControllerHandshake
             },
             ct);
 
-        var resyncRequest = new ResyncRequest();
+        ResyncRequest resyncRequest = new ResyncRequest();
         resyncRequest.OpenJobIds.AddRange(open.Select(o => o.JobId));
         await stream.SendAsync(
             new ControllerMessage { Envelope = Envelopes.New(), ResyncRequest = resyncRequest },
@@ -85,18 +85,18 @@ public static class ControllerHandshake
             return ControllerHandshakeResult.NotEstablished("stream closed before JobResyncReport");
         }
 
-        var reportMsg = incoming.Current;
+        AgentMessage reportMsg = incoming.Current;
         if (reportMsg.PayloadCase != AgentMessage.PayloadOneofCase.JobResync)
         {
             return ControllerHandshakeResult.NotEstablished($"expected JobResyncReport, got {reportMsg.PayloadCase}");
         }
 
-        var entries = reportMsg.JobResync.Entries
+        List<AgentResyncEntry> entries = reportMsg.JobResync.Entries
             .Select(e => new AgentResyncEntry(e.JobId, MapLocalState(e.LocalState), e.LastSeq))
             .ToList();
 
-        var actions = JobResyncReconciler.Reconcile(open, entries);
-        foreach (var action in actions)
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile(open, entries);
+        foreach (ReconcileAction action in actions)
         {
             await jobs.ApplyAsync(action, ct);
         }

@@ -15,14 +15,14 @@ public sealed class SteamCmdTests
     [Fact]
     public async Task EnsureApp_builds_the_anonymous_validated_app_update_command()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = SuccessRunner();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = SuccessRunner();
 
-        var result = await new SteamCmd(runner).EnsureAppAsync(
+        SteamAppResult result = await new SteamCmd(runner).EnsureAppAsync(
             new SteamAppRequest(730, "/opt/cs2"), new RecordingJobSink(), ct);
 
         result.Success.Should().BeTrue();
-        var invocation = runner.Invocations.Single();
+        FakeProcessRunner.Invocation invocation = runner.Invocations.Single();
         invocation.File.Should().Be("steamcmd");
         invocation.Args.Should().Equal(
             "+force_install_dir", "/opt/cs2", "+login", "anonymous", "+app_update", "730", "validate", "+quit");
@@ -31,8 +31,8 @@ public sealed class SteamCmdTests
     [Fact]
     public async Task EnsureApp_includes_the_beta_branch_before_validate()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = SuccessRunner();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = SuccessRunner();
 
         await new SteamCmd(runner).EnsureAppAsync(
             new SteamAppRequest(730, "/opt/cs2", BetaBranch: "preview"), new RecordingJobSink(), ct);
@@ -45,8 +45,8 @@ public sealed class SteamCmdTests
     [Fact]
     public async Task EnsureApp_can_skip_validation()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = SuccessRunner();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = SuccessRunner();
 
         await new SteamCmd(runner).EnsureAppAsync(
             new SteamAppRequest(730, "/opt/cs2", Validate: false), new RecordingJobSink(), ct);
@@ -57,13 +57,13 @@ public sealed class SteamCmdTests
     [Fact]
     public async Task EnsureApp_fails_on_a_nonzero_exit()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner
         {
             Respond = (_, _) => new ProcessResult(8, string.Empty, "Error! App '730' state is 0x202")
         };
 
-        var result = await new SteamCmd(runner).EnsureAppAsync(
+        SteamAppResult result = await new SteamCmd(runner).EnsureAppAsync(
             new SteamAppRequest(730, "/opt/cs2"), new RecordingJobSink(), ct);
 
         result.Success.Should().BeFalse();
@@ -73,13 +73,13 @@ public sealed class SteamCmdTests
     [Fact]
     public async Task EnsureApp_fails_when_the_success_marker_is_absent()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner
         {
             Respond = (_, _) => new ProcessResult(0, "Update state (0x61) downloading, progress: 12.34", string.Empty)
         };
 
-        var result = await new SteamCmd(runner).EnsureAppAsync(
+        SteamAppResult result = await new SteamCmd(runner).EnsureAppAsync(
             new SteamAppRequest(730, "/opt/cs2"), new RecordingJobSink(), ct);
 
         result.Success.Should().BeFalse();

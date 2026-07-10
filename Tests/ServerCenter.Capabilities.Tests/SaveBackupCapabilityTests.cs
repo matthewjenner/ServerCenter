@@ -22,11 +22,11 @@ public sealed class SaveBackupCapabilityTests
     [Fact]
     public async Task Backup_quiesces_then_archives_and_puts_to_the_instance_key()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var spec = new SaveBackupSpec("file-set", ["/opt/cs2/saves"], ["*.tmp"], new QuiesceSpec("rcon", "cvarlist_flush"));
-        var rcon = new FakeRconChannelFactory("secret");
-        var archiver = new FakeFileSetArchiver();
-        var store = new FakeObjectStore();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        SaveBackupSpec spec = new SaveBackupSpec("file-set", ["/opt/cs2/saves"], ["*.tmp"], new QuiesceSpec("rcon", "cvarlist_flush"));
+        FakeRconChannelFactory rcon = new FakeRconChannelFactory("secret");
+        FakeFileSetArchiver archiver = new FakeFileSetArchiver();
+        FakeObjectStore store = new FakeObjectStore();
 
         await new SaveBackupCapability(spec, archiver, store, new SourceRconClient(rcon))
             .BackupAsync(new SaveBackupContext("srv-1", Params), new RecordingJobSink(), ct);
@@ -41,10 +41,10 @@ public sealed class SaveBackupCapabilityTests
     [Fact]
     public async Task Backup_without_quiesce_never_touches_rcon()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var spec = new SaveBackupSpec("file-set", ["/opt/cs2/saves"], []);
-        var rcon = new FakeRconChannelFactory("secret");
-        var store = new FakeObjectStore();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        SaveBackupSpec spec = new SaveBackupSpec("file-set", ["/opt/cs2/saves"], []);
+        FakeRconChannelFactory rcon = new FakeRconChannelFactory("secret");
+        FakeObjectStore store = new FakeObjectStore();
 
         await new SaveBackupCapability(spec, new FakeFileSetArchiver(), store, new SourceRconClient(rcon))
             .BackupAsync(new SaveBackupContext("srv-1", Params), new RecordingJobSink(), ct);
@@ -56,11 +56,11 @@ public sealed class SaveBackupCapabilityTests
     [Fact]
     public async Task Restore_fetches_the_snapshot_version_and_extracts()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var spec = new SaveBackupSpec("file-set", ["/opt/cs2/saves"], []);
-        var archiver = new FakeFileSetArchiver();
-        var store = new FakeObjectStore();
-        var capability = new SaveBackupCapability(spec, archiver, store, new SourceRconClient(new FakeRconChannelFactory("secret")));
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        SaveBackupSpec spec = new SaveBackupSpec("file-set", ["/opt/cs2/saves"], []);
+        FakeFileSetArchiver archiver = new FakeFileSetArchiver();
+        FakeObjectStore store = new FakeObjectStore();
+        SaveBackupCapability capability = new SaveBackupCapability(spec, archiver, store, new SourceRconClient(new FakeRconChannelFactory("secret")));
 
         await capability.BackupAsync(new SaveBackupContext("srv-1", Params), new RecordingJobSink(), ct);
         await capability.RestoreAsync(new SaveRestoreContext("srv-1", "v1"), new RecordingJobSink(), ct);

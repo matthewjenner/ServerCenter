@@ -10,13 +10,13 @@ public sealed class CertificateAuthorityTests
     [Fact]
     public void Issued_client_cert_chains_to_the_ca()
     {
-        var now = DateTimeOffset.UtcNow;
-        var ca = CertificateAuthority.CreateCa(now);
-        var issued = CertificateAuthority.IssueClientCert(ca, "agent-1", now);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        CaMaterial ca = CertificateAuthority.CreateCa(now);
+        IssuedCert issued = CertificateAuthority.IssueClientCert(ca, "agent-1", now);
 
-        using var caCert = X509Certificate2.CreateFromPem(ca.CertPem);
-        using var clientCert = X509Certificate2.CreateFromPem(issued.CertPem);
-        using var chain = new X509Chain();
+        using X509Certificate2 caCert = X509Certificate2.CreateFromPem(ca.CertPem);
+        using X509Certificate2 clientCert = X509Certificate2.CreateFromPem(issued.CertPem);
+        using X509Chain chain = new X509Chain();
         chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
         chain.ChainPolicy.CustomTrustStore.Add(caCert);
         chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
@@ -27,9 +27,9 @@ public sealed class CertificateAuthorityTests
     [Fact]
     public void Fingerprint_round_trips_from_the_pem()
     {
-        var now = DateTimeOffset.UtcNow;
-        var ca = CertificateAuthority.CreateCa(now);
-        var issued = CertificateAuthority.IssueClientCert(ca, "agent-1", now);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        CaMaterial ca = CertificateAuthority.CreateCa(now);
+        IssuedCert issued = CertificateAuthority.IssueClientCert(ca, "agent-1", now);
 
         CertificateAuthority.FingerprintFromPem(issued.CertPem).Should().Be(issued.Fingerprint);
     }
@@ -37,11 +37,11 @@ public sealed class CertificateAuthorityTests
     [Fact]
     public void Distinct_issuances_have_distinct_fingerprints()
     {
-        var now = DateTimeOffset.UtcNow;
-        var ca = CertificateAuthority.CreateCa(now);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        CaMaterial ca = CertificateAuthority.CreateCa(now);
 
-        var a = CertificateAuthority.IssueClientCert(ca, "agent-1", now);
-        var b = CertificateAuthority.IssueClientCert(ca, "agent-2", now);
+        IssuedCert a = CertificateAuthority.IssueClientCert(ca, "agent-1", now);
+        IssuedCert b = CertificateAuthority.IssueClientCert(ca, "agent-2", now);
 
         a.Fingerprint.Should().NotBe(b.Fingerprint);
     }

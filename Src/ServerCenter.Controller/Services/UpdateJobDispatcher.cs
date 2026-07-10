@@ -18,7 +18,7 @@ public sealed class UpdateJobDispatcher(UpdatePolicyRepository policies, JobDisp
         string? serviceUnit,
         CancellationToken ct)
     {
-        var policy = policyVersion is int version
+        UpdatePolicy? policy = policyVersion is int version
             ? await policies.GetAsync(policyId, version, ct)
             : await policies.GetLatestAsync(policyId, ct);
         if (policy is null)
@@ -26,7 +26,7 @@ public sealed class UpdateJobDispatcher(UpdatePolicyRepository policies, JobDisp
             return UpdateDispatchResult.PolicyNotFound(policyId);
         }
 
-        var decision = UpdatePolicyResolver.DecideStart(policy, trigger, clock.GetUtcNow());
+        UpdatePolicyResolver.StartDecision decision = UpdatePolicyResolver.DecideStart(policy, trigger, clock.GetUtcNow());
         if (!decision.Eligible)
         {
             return UpdateDispatchResult.NotEligible(decision.IneligibleReason!);
@@ -37,7 +37,7 @@ public sealed class UpdateJobDispatcher(UpdatePolicyRepository policies, JobDisp
             return UpdateDispatchResult.NeedsConfirmation();
         }
 
-        var jobParams = new UpdateJobParams
+        UpdateJobParams jobParams = new UpdateJobParams
         {
             Channel = policy.What.Provider,
             Packages = packages,
@@ -49,7 +49,7 @@ public sealed class UpdateJobDispatcher(UpdatePolicyRepository policies, JobDisp
 
         // A mid-transaction apt is not cancellable, and an interrupted update is not blindly
         // requeueable (re-check first), so both flags are false (brief 2.1).
-        var jobId = await jobs.DispatchAsync(
+        string jobId = await jobs.DispatchAsync(
             agentId, "update.apply", UpdateJobParamsSerializer.Serialize(jobParams),
             cancellable: false, requeueable: false, ct);
         return UpdateDispatchResult.Dispatched(jobId);

@@ -1,5 +1,6 @@
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using Grpc.Core;
 using Grpc.Net.Client;
 using ServerCenter.Contracts.V1;
 using ServerCenter.Core.Transport;
@@ -14,11 +15,11 @@ public sealed class GrpcTransportConnector(string address, AgentTlsMaterial? tls
 {
     public Task<IAgentTransport> ConnectAsync(CancellationToken ct)
     {
-        var channel = tls is null
+        GrpcChannel channel = tls is null
             ? GrpcChannel.ForAddress(address)
             : GrpcChannel.ForAddress(address, new GrpcChannelOptions { HttpHandler = CreateTlsHandler(tls) });
 
-        var call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
+        AsyncDuplexStreamingCall<AgentMessage, ControllerMessage> call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
         return Task.FromResult<IAgentTransport>(new GrpcAgentTransport(channel, call));
     }
 
@@ -34,7 +35,7 @@ public sealed class GrpcTransportConnector(string address, AgentTlsMaterial? tls
 
     private static bool ChainsToCa(X509Certificate2 presented, X509Certificate2 ca)
     {
-        using var chain = new X509Chain();
+        using X509Chain chain = new X509Chain();
         chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
         chain.ChainPolicy.CustomTrustStore.Add(ca);
         chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;

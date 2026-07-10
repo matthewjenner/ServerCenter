@@ -22,8 +22,8 @@ public sealed class PlexUpdateProvider(
 
     public async Task<IReadOnlyList<AvailableUpdate>> CheckAsync(CancellationToken ct)
     {
-        var release = await FetchReleaseAsync(ct);
-        var installed = await InstalledVersionAsync(ct);
+        PlexRelease release = await FetchReleaseAsync(ct);
+        string installed = await InstalledVersionAsync(ct);
         return string.Equals(installed, release.Version, StringComparison.Ordinal)
             ? []
             : [new AvailableUpdate(PackageName, installed.Length == 0 ? "(none)" : installed, release.Version)];
@@ -31,14 +31,14 @@ public sealed class PlexUpdateProvider(
 
     public async Task<UpdateOutcome> ApplyAsync(UpdatePlan plan, IJobSink sink, CancellationToken ct)
     {
-        var release = await FetchReleaseAsync(ct);
+        PlexRelease release = await FetchReleaseAsync(ct);
 
-        var destination = Path.Combine(options.DownloadDirectory, $"plexmediaserver-{release.Version}.deb");
+        string destination = Path.Combine(options.DownloadDirectory, $"plexmediaserver-{release.Version}.deb");
         sink.Log(LogStream.Note, $"downloading Plex {release.Version}");
         await http.DownloadToFileAsync(release.Url, destination, ct);
 
         sink.Log(LogStream.Note, $"dpkg -i {Path.GetFileName(destination)}");
-        var install = await runner.RunAsync("dpkg", ["-i", destination], NonInteractive, ct);
+        ProcessResult install = await runner.RunAsync("dpkg", ["-i", destination], NonInteractive, ct);
         if (install.ExitCode != 0)
         {
             return new UpdateOutcome(Success: false, RebootRequired: false, $"dpkg -i failed: {install.StandardError}");
@@ -53,15 +53,15 @@ public sealed class PlexUpdateProvider(
 
     private async Task<PlexRelease> FetchReleaseAsync(CancellationToken ct)
     {
-        var json = await http.GetStringAsync(options.DownloadsUrl, ct);
-        var manifest = JsonSerializer.Deserialize<PlexDownloads>(json)
+        string json = await http.GetStringAsync(options.DownloadsUrl, ct);
+        PlexDownloads manifest = JsonSerializer.Deserialize<PlexDownloads>(json)
             ?? throw new InvalidOperationException("Plex downloads manifest was empty");
 
-        var platform = manifest.Computer.Linux
+        PlexPlatform platform = manifest.Computer.Linux
             ?? throw new InvalidOperationException("Plex downloads manifest has no Linux platform");
 
         // Match the Debian/Ubuntu build for this node's arch (e.g. linux-x86_64, linux-aarch64).
-        var release = platform.Releases.FirstOrDefault(r =>
+        PlexManifestRelease? release = platform.Releases.FirstOrDefault(r =>
             string.Equals(r.Distro, "debian", StringComparison.OrdinalIgnoreCase) &&
             string.Equals(r.Build, options.Build, StringComparison.OrdinalIgnoreCase));
         if (release is null)
@@ -75,7 +75,7 @@ public sealed class PlexUpdateProvider(
 
     private async Task<string> InstalledVersionAsync(CancellationToken ct)
     {
-        var result = await runner.RunAsync("dpkg-query", ["-W", "-f=${Version}", PackageName], ct);
+        ProcessResult result = await runner.RunAsync("dpkg-query", ["-W", "-f=${Version}", PackageName], ct);
         // dpkg-query exits non-zero when the package is not installed; treat that as "none".
         return result.ExitCode == 0 ? result.StandardOutput.Trim() : string.Empty;
     }

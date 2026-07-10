@@ -20,7 +20,7 @@ public static class AgentHandshake
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(jobs);
 
-        var hello = new Hello
+        Hello hello = new Hello
         {
             AgentId = identity.AgentId,
             AgentVersion = identity.AgentVersion,
@@ -28,25 +28,25 @@ public static class AgentHandshake
             Arch = identity.Arch,
             NodeKind = identity.NodeKind
         };
-        var local = await jobs.GetLocalJobStateAsync(ct);
+        IReadOnlyList<AgentResyncEntry> local = await jobs.GetLocalJobStateAsync(ct);
         hello.InFlightJobIds.AddRange(local.Select(e => e.JobId));
 
         await transport.SendAsync(
             new AgentMessage { Envelope = Envelopes.New(), Hello = hello },
             ct);
 
-        await using var incoming = transport.Incoming(ct).GetAsyncEnumerator(ct);
+        await using IAsyncEnumerator<ControllerMessage> incoming = transport.Incoming(ct).GetAsyncEnumerator(ct);
 
         if (!await incoming.MoveNextAsync())
         {
             return AgentHandshakeResult.Rejected("stream closed before HelloAck");
         }
 
-        var reply = incoming.Current;
+        ControllerMessage reply = incoming.Current;
         if (reply.PayloadCase == ControllerMessage.PayloadOneofCase.Goodbye)
         {
-            var reason = reply.Goodbye.Reason;
-            var terminal = reason is GoodbyeReason.VersionMismatch or GoodbyeReason.Revoked;
+            GoodbyeReason reason = reply.Goodbye.Reason;
+            bool terminal = reason is GoodbyeReason.VersionMismatch or GoodbyeReason.Revoked;
             return AgentHandshakeResult.Rejected($"{reason}: {reply.Goodbye.Message}", terminal);
         }
 
@@ -55,7 +55,7 @@ public static class AgentHandshake
             return AgentHandshakeResult.Rejected($"expected HelloAck, got {reply.PayloadCase}");
         }
 
-        var ack = reply.HelloAck;
+        HelloAck ack = reply.HelloAck;
 
         if (ack.WantsResync)
         {
@@ -65,8 +65,8 @@ public static class AgentHandshake
                 return AgentHandshakeResult.Rejected("expected ResyncRequest after HelloAck");
             }
 
-            var report = new JobResyncReport();
-            foreach (var entry in local)
+            JobResyncReport report = new JobResyncReport();
+            foreach (AgentResyncEntry entry in local)
             {
                 report.Entries.Add(new JobResyncEntry
                 {

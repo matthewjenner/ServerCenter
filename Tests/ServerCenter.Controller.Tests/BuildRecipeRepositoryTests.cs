@@ -31,7 +31,7 @@ public sealed class BuildRecipeRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task Insert_and_get_round_trips_the_recipe()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _recipes.InsertAsync(Recipe(5), 1000, ct);
 
         (await _recipes.GetAsync("cs2-server", 5, ct)).Should().BeEquivalentTo(Recipe(5));
@@ -40,7 +40,7 @@ public sealed class BuildRecipeRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task GetLatest_returns_the_highest_version()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _recipes.InsertAsync(Recipe(1), 1000, ct);
         await _recipes.InsertAsync(Recipe(5), 5000, ct);
         await _recipes.InsertAsync(Recipe(2), 2000, ct);

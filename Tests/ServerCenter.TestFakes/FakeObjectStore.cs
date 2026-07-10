@@ -12,17 +12,17 @@ public sealed class FakeObjectStore : IObjectStore
 
     public Task<PutResult> PutAsync(string key, Stream content, CancellationToken ct)
     {
-        using var buffer = new MemoryStream();
+        using MemoryStream buffer = new MemoryStream();
         content.CopyTo(buffer);
-        var data = buffer.ToArray();
+        byte[] data = buffer.ToArray();
 
-        if (!_objects.TryGetValue(key, out var versions))
+        if (!_objects.TryGetValue(key, out List<(string VersionId, byte[] Data)>? versions))
         {
             versions = [];
             _objects[key] = versions;
         }
 
-        var versionId = $"v{versions.Count + 1}";
+        string versionId = $"v{versions.Count + 1}";
         versions.Add((versionId, data));
         PutKeys.Add(key);
         return Task.FromResult(new PutResult(key, versionId, data.Length));
@@ -30,14 +30,14 @@ public sealed class FakeObjectStore : IObjectStore
 
     public Task<Stream> GetAsync(string key, string? versionId, CancellationToken ct)
     {
-        var versions = _objects[key];
-        var entry = versionId is null ? versions[^1] : versions.First(v => v.VersionId == versionId);
+        List<(string VersionId, byte[] Data)> versions = _objects[key];
+        (string VersionId, byte[] Data) entry = versionId is null ? versions[^1] : versions.First(v => v.VersionId == versionId);
         return Task.FromResult<Stream>(new MemoryStream(entry.Data));
     }
 
     public Task<IReadOnlyList<ObjectVersion>> ListVersionsAsync(string keyPrefix, CancellationToken ct)
     {
-        var results = _objects
+        List<ObjectVersion> results = _objects
             .Where(kv => kv.Key.StartsWith(keyPrefix, StringComparison.Ordinal))
             .SelectMany(kv => kv.Value.Select(v => new ObjectVersion(kv.Key, v.VersionId, v.Data.Length, 0)))
             .ToList();

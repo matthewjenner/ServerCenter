@@ -1,0 +1,37 @@
+# The controller, on the hypervisor host.
+#
+# Copy JUST this file + a `templates/` dir to the hypervisor - NO source, NO .NET SDK needed. It
+# PULLS the published image from GHCR:
+#     docker compose pull && docker compose up -d
+#     docker compose logs -f
+# (First time: make the GHCR package public in GitHub -> Packages, or run `docker login ghcr.io`.)
+#
+# This defaults to PLAINTEXT (h2c :5080) for a trusted-LAN first smoke - agents dial :5080, no client
+# certs. To switch to mTLS, see the commented block; note mTLS also needs a bootstrap-token mint step
+# for which there is not yet an operator endpoint (Docs/linux-smoke-runbook.md "Known gaps").
+services:
+  controller:
+    image: ghcr.io/matthewjenner/servercenter-controller:latest
+    # For LOCAL DEV from source instead of the published image, comment `image:` above and use:
+    # build:
+    #   context: ../..
+    #   dockerfile: Deploy/controller/Dockerfile
+    container_name: servercenter-controller
+    restart: unless-stopped
+    ports:
+      - "5080:5080"        # plaintext h2c (bring-up). For mTLS use "5443:5443" instead.
+    volumes:
+      - controller-data:/data                       # SQLite precious state - BACK THIS UP (runbook)
+      - ./templates:/templates:ro                   # config templates: <schemaRef> files (e.g. cs2/server.cfg)
+      - /var/run/libvirt/libvirt-sock:/var/run/libvirt/libvirt-sock  # VM-lifecycle plane (controller-driven)
+    environment:
+      Security__RequireClientCertificate: "false"   # bring-up only; remove to enable mTLS on :5443
+      Libvirt__Enabled: "true"
+      Libvirt__ConnectUri: "qemu:///system"         # virsh over the mounted system socket
+
+    # --- mTLS variant (once a bootstrap-token mint endpoint exists) ---
+    # ports:       [ "5443:5443" ]
+    # environment: remove Security__RequireClientCertificate (defaults to true), keep the Libvirt__* vars.
+
+volumes:
+  controller-data:

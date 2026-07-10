@@ -17,16 +17,16 @@ public sealed class ConfigGenCapabilityTests
     [Fact]
     public async Task Renders_the_template_and_writes_it_to_the_path()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var templates = new FakeConfigTemplateSource(
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeConfigTemplateSource templates = new FakeConfigTemplateSource(
             new Dictionary<string, string> { ["cs2/server.cfg"] = "hostname={{name}}\nport={{ports.game}}" });
-        var writer = new RecordingConfigWriter();
-        var ctx = new ConfigContext(new Dictionary<string, string> { ["name"] = "ffa", ["ports.game"] = "27015" });
+        RecordingConfigWriter writer = new RecordingConfigWriter();
+        ConfigContext ctx = new ConfigContext(new Dictionary<string, string> { ["name"] = "ffa", ["ports.game"] = "27015" });
 
         await new ConfigGenCapability(Spec, templates, writer).ApplyAsync(ctx, new RecordingJobSink(), ct);
 
         writer.Writes.Should().ContainSingle();
-        var write = writer.Writes[0];
+        (string Path, string Content) write = writer.Writes[0];
         write.Path.Should().Be("/opt/cs2/cfg/server.cfg");
         write.Content.Should().Be("hostname=ffa\nport=27015");
     }
@@ -34,13 +34,13 @@ public sealed class ConfigGenCapabilityTests
     [Fact]
     public async Task Fails_on_a_missing_token_without_writing()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var templates = new FakeConfigTemplateSource(
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeConfigTemplateSource templates = new FakeConfigTemplateSource(
             new Dictionary<string, string> { ["cs2/server.cfg"] = "rcon={{rcon.password}}" });
-        var writer = new RecordingConfigWriter();
-        var ctx = new ConfigContext(new Dictionary<string, string>());
+        RecordingConfigWriter writer = new RecordingConfigWriter();
+        ConfigContext ctx = new ConfigContext(new Dictionary<string, string>());
 
-        var act = async () =>
+        Func<Task> act = async () =>
             await new ConfigGenCapability(Spec, templates, writer).ApplyAsync(ctx, new RecordingJobSink(), ct);
 
         await act.Should().ThrowAsync<KeyNotFoundException>();

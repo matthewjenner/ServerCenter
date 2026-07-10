@@ -13,8 +13,8 @@ public sealed class JobDispatcher(JobRepository jobs, ConnectedAgents agents, Ti
     public async Task<string> DispatchAsync(
         string agentId, string type, string paramsJson, bool cancellable, bool requeueable, CancellationToken ct)
     {
-        var jobId = Guid.NewGuid().ToString("N");
-        var now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        string jobId = Guid.NewGuid().ToString("N");
+        long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
 
         await jobs.InsertAsync(new Job
         {
@@ -28,7 +28,7 @@ public sealed class JobDispatcher(JobRepository jobs, ConnectedAgents agents, Ti
             CreatedAtUnixMs = now
         }, ct);
 
-        if (agents.TryGet(agentId, out var stream) && stream is not null)
+        if (agents.TryGet(agentId, out IControllerStream? stream) && stream is not null)
         {
             await stream.SendAsync(
                 new ControllerMessage

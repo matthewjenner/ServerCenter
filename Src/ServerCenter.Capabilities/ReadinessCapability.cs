@@ -21,9 +21,9 @@ public sealed class ReadinessCapability(ReadinessSpec spec, IPortProbe portProbe
                 $"readiness primitive '{spec.Primitive}' is not supported yet (only port-probe)");
         }
 
-        var host = ctx.InstanceParams.GetValueOrDefault("readiness.host", "127.0.0.1");
-        var portText = ConfigTemplateRenderer.Render(spec.Port, ctx.InstanceParams);
-        if (!int.TryParse(portText, out var port))
+        string host = ctx.InstanceParams.GetValueOrDefault("readiness.host", "127.0.0.1");
+        string portText = ConfigTemplateRenderer.Render(spec.Port, ctx.InstanceParams);
+        if (!int.TryParse(portText, out int port))
         {
             throw new InvalidOperationException($"readiness port '{spec.Port}' resolved to '{portText}', not a number");
         }

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Time.Testing;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
 using ServerCenter.Core.Games;
+using ServerCenter.Core.Jobs;
 using ServerCenter.Core.Recipes;
 using ServerCenter.TestFakes;
 using Xunit;
@@ -22,19 +23,19 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         _db = await TempDatabase.CreateAsync(ct);
         _descriptors = new GameDescriptorRepository(_db.Database);
         _recipes = new BuildRecipeRepository(_db.Database);
         _instances = new ServerInstanceRepository(_db.Database);
         _jobs = new JobRepository(_db.Database);
 
-        var nodes = new AgentNodeRepository(_db.Database);
+        AgentNodeRepository nodes = new AgentNodeRepository(_db.Database);
         await nodes.EnsureAgentAsync("agent-1", "agent-1", "fpr", 1, ct);
         await nodes.EnsureNodeAsync("agent-1", "agent-1", "guest", "managed", 1, ct);
 
-        var jobDispatcher = new JobDispatcher(_jobs, new ConnectedAgents(), new FakeTimeProvider());
-        var templates = new FakeConfigTemplateSource(
+        JobDispatcher jobDispatcher = new JobDispatcher(_jobs, new ConnectedAgents(), new FakeTimeProvider());
+        FakeConfigTemplateSource templates = new FakeConfigTemplateSource(
             new Dictionary<string, string> { ["cs2/server.cfg"] = "hostname={{name}}" });
         _dispatcher = new ServerJobDispatcher(_descriptors, _recipes, _instances, jobDispatcher, templates);
     }
@@ -57,7 +58,7 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
 
     private async Task SeedAsync(bool withConfigGen)
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _descriptors.InsertAsync(Descriptor(withConfigGen), 1000, ct);
         await _instances.InsertAsync(new ServerInstance
         {
@@ -73,15 +74,15 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task Install_dispatches_a_server_install_from_the_descriptor_app()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await SeedAsync(withConfigGen: false);
 
-        var result = await _dispatcher.InstallAsync("agent-1", "srv-1", ct);
+        ServerDispatchResult result = await _dispatcher.InstallAsync("agent-1", "srv-1", ct);
 
         result.Outcome.Should().Be(ServerDispatchOutcome.Dispatched);
-        var job = await _jobs.GetAsync(result.JobId!, ct);
+        Job? job = await _jobs.GetAsync(result.JobId!, ct);
         job!.Type.Should().Be("server.install");
-        var request = ServerJobParamsSerializer.Deserialize<ServerInstallParams>(job.ParamsJson);
+        ServerInstallParams request = ServerJobParamsSerializer.Deserialize<ServerInstallParams>(job.ParamsJson);
         request.AppId.Should().Be(730);
         request.InstallDir.Should().Be("/opt/cs2");
     }
@@ -89,9 +90,9 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task Install_reports_a_missing_instance()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
 
-        var result = await _dispatcher.InstallAsync("agent-1", "nope", ct);
+        ServerDispatchResult result = await _dispatcher.InstallAsync("agent-1", "nope", ct);
 
         result.Outcome.Should().Be(ServerDispatchOutcome.NotFound);
     }
@@ -99,15 +100,15 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task ConfigApply_ships_the_resolved_template_and_flattened_params()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await SeedAsync(withConfigGen: true);
 
-        var result = await _dispatcher.ConfigApplyAsync("agent-1", "srv-1", ct);
+        ServerDispatchResult result = await _dispatcher.ConfigApplyAsync("agent-1", "srv-1", ct);
 
         result.Outcome.Should().Be(ServerDispatchOutcome.Dispatched);
-        var job = await _jobs.GetAsync(result.JobId!, ct);
+        Job? job = await _jobs.GetAsync(result.JobId!, ct);
         job!.Type.Should().Be("server.config-apply");
-        var request = ServerJobParamsSerializer.Deserialize<ServerConfigApplyParams>(job.ParamsJson);
+        ServerConfigApplyParams request = ServerJobParamsSerializer.Deserialize<ServerConfigApplyParams>(job.ParamsJson);
         request.Templates["cs2/server.cfg"].Should().Be("hostname={{name}}");
         request.InstanceParams["ports.game"].Should().Be("27015");
     }
@@ -115,10 +116,10 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task ConfigApply_reports_a_descriptor_without_config_gen()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await SeedAsync(withConfigGen: false);
 
-        var result = await _dispatcher.ConfigApplyAsync("agent-1", "srv-1", ct);
+        ServerDispatchResult result = await _dispatcher.ConfigApplyAsync("agent-1", "srv-1", ct);
 
         result.Outcome.Should().Be(ServerDispatchOutcome.NotConfigured);
     }
@@ -126,7 +127,7 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task ApplyRecipe_resolves_the_pinned_recipe_and_ships_its_templates()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _recipes.InsertAsync(new BuildRecipe
         {
             Id = "cs2-server",
@@ -144,12 +145,12 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
             CreatedAtUnixMs = 1000
         }, ct);
 
-        var result = await _dispatcher.ApplyRecipeAsync("agent-1", "srv-1", ct);
+        ServerDispatchResult result = await _dispatcher.ApplyRecipeAsync("agent-1", "srv-1", ct);
 
         result.Outcome.Should().Be(ServerDispatchOutcome.Dispatched);
-        var job = await _jobs.GetAsync(result.JobId!, ct);
+        Job? job = await _jobs.GetAsync(result.JobId!, ct);
         job!.Type.Should().Be("recipe.apply");
-        var request = RecipeApplyParamsSerializer.Deserialize(job.ParamsJson);
+        RecipeApplyParams request = RecipeApplyParamsSerializer.Deserialize(job.ParamsJson);
         request.Recipe.Version.Should().Be(5);
         request.Templates["cs2/server.cfg"].Should().Be("hostname={{name}}");
         request.InstanceParams["name"].Should().Be("ffa");
@@ -158,10 +159,10 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task ApplyRecipe_reports_an_instance_with_no_recipe()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await SeedAsync(withConfigGen: false); // seeds an instance with a descriptor but no recipe
 
-        var result = await _dispatcher.ApplyRecipeAsync("agent-1", "srv-1", ct);
+        ServerDispatchResult result = await _dispatcher.ApplyRecipeAsync("agent-1", "srv-1", ct);
 
         result.Outcome.Should().Be(ServerDispatchOutcome.NotConfigured);
     }

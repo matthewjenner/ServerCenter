@@ -17,7 +17,7 @@ public sealed class JobResyncReconcilerTests
     [Fact]
     public void Running_and_agent_still_running_resumes()
     {
-        var actions = JobResyncReconciler.Reconcile(
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile(
             [RunningJob],
             [new AgentResyncEntry("job-A", AgentJobLocalState.StillRunning, 42)]);
 
@@ -28,7 +28,7 @@ public sealed class JobResyncReconcilerTests
     [Fact]
     public void Running_and_agent_finished_succeeded_closes_succeeded()
     {
-        var actions = JobResyncReconciler.Reconcile(
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile(
             [RunningJob],
             [new AgentResyncEntry("job-A", AgentJobLocalState.FinishedSucceeded, 99)]);
 
@@ -39,7 +39,7 @@ public sealed class JobResyncReconcilerTests
     [Fact]
     public void Running_and_agent_finished_failed_closes_failed()
     {
-        var actions = JobResyncReconciler.Reconcile(
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile(
             [RunningJob],
             [new AgentResyncEntry("job-A", AgentJobLocalState.FinishedFailed, 99)]);
 
@@ -50,7 +50,7 @@ public sealed class JobResyncReconcilerTests
     [Fact]
     public void Running_and_agent_unknown_fails_lost_when_not_requeueable()
     {
-        var actions = JobResyncReconciler.Reconcile(
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile(
             [RunningJob],
             [new AgentResyncEntry("job-A", AgentJobLocalState.Unknown, 0)]);
 
@@ -61,7 +61,7 @@ public sealed class JobResyncReconcilerTests
     [Fact]
     public void Running_and_agent_unknown_requeues_when_requeueable()
     {
-        var actions = JobResyncReconciler.Reconcile(
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile(
             [RunningRequeueable],
             [new AgentResyncEntry("job-A", AgentJobLocalState.Unknown, 0)]);
 
@@ -73,7 +73,7 @@ public sealed class JobResyncReconcilerTests
     public void Running_but_agent_never_mentions_it_is_treated_as_lost()
     {
         // Agent rebuilt and lost all state: reports nothing for a job the controller has open.
-        var actions = JobResyncReconciler.Reconcile([RunningJob], []);
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile([RunningJob], []);
 
         actions.Should().ContainSingle()
             .Which.Should().Be(new ReconcileAction("job-A", ReconcileOutcome.FailLost));
@@ -82,7 +82,7 @@ public sealed class JobResyncReconcilerTests
     [Fact]
     public void Agent_reports_a_job_the_controller_does_not_know_is_dropped()
     {
-        var actions = JobResyncReconciler.Reconcile(
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile(
             [],
             [new AgentResyncEntry("ghost", AgentJobLocalState.StillRunning, 5)]);
 
@@ -93,7 +93,7 @@ public sealed class JobResyncReconcilerTests
     [Fact]
     public void Mixed_set_reconciles_each_job_independently_and_in_order()
     {
-        var actions = JobResyncReconciler.Reconcile(
+        IReadOnlyList<ReconcileAction> actions = JobResyncReconciler.Reconcile(
             [
                 new ControllerOpenJob("resume", Requeueable: false),
                 new ControllerOpenJob("done", Requeueable: false),

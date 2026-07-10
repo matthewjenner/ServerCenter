@@ -11,7 +11,7 @@ public sealed class SystemdUnitRendererTests
     [Fact]
     public void Render_produces_a_valid_unit_with_the_service_fields()
     {
-        var unit = SystemdUnitRenderer.Render(new ServiceDefinition("cs2.service", "/opt/cs2/start.sh", "cs2"));
+        string unit = SystemdUnitRenderer.Render(new ServiceDefinition("cs2.service", "/opt/cs2/start.sh", "cs2"));
 
         unit.Should().Contain("ExecStart=/opt/cs2/start.sh");
         unit.Should().Contain("User=cs2");

@@ -17,7 +17,7 @@ public static class ControllerSessionPump
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(sink);
 
-        await foreach (var msg in stream.Incoming(ct))
+        await foreach (AgentMessage msg in stream.Incoming(ct))
         {
             switch (msg.PayloadCase)
             {

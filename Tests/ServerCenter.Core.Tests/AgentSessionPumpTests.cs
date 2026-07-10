@@ -15,14 +15,14 @@ public sealed class AgentSessionPumpTests
     [Fact]
     public async Task Sends_heartbeat_and_status_immediately_then_each_interval()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var clock = new FakeTimeProvider();
-        using var link = new InMemoryDuplexLink();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeTimeProvider clock = new FakeTimeProvider();
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
 
-        var pump = AgentSessionPump.RunAsync(
+        Task<AgentSessionOutcome> pump = AgentSessionPump.RunAsync(
             link.AgentSide, new FakeAgentStatusSource(), new NoopAgentCommandHandler(), clock, Interval, ct);
 
-        await using var incoming = link.ControllerSide.Incoming(ct).GetAsyncEnumerator(ct);
+        await using IAsyncEnumerator<AgentMessage> incoming = link.ControllerSide.Incoming(ct).GetAsyncEnumerator(ct);
 
         // Immediate first tick.
         await ExpectAsync(incoming, AgentMessage.PayloadOneofCase.Heartbeat);
@@ -40,10 +40,10 @@ public sealed class AgentSessionPumpTests
     [Fact]
     public async Task Controller_goodbye_ends_the_session_with_that_reason()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
 
-        var pump = AgentSessionPump.RunAsync(
+        Task<AgentSessionOutcome> pump = AgentSessionPump.RunAsync(
             link.AgentSide, new FakeAgentStatusSource(), new NoopAgentCommandHandler(),
             new FakeTimeProvider(), Interval, ct);
 
@@ -51,7 +51,7 @@ public sealed class AgentSessionPumpTests
             new ControllerMessage { Envelope = Envelopes.New(), Goodbye = new Goodbye { Reason = GoodbyeReason.ShuttingDown } },
             ct);
 
-        var outcome = await pump;
+        AgentSessionOutcome outcome = await pump;
         outcome.Kind.Should().Be(SessionEndKind.ControllerGoodbye);
         outcome.GoodbyeReason.Should().Be(GoodbyeReason.ShuttingDown);
     }
@@ -59,11 +59,11 @@ public sealed class AgentSessionPumpTests
     [Fact]
     public async Task Dispatches_pushed_commands_to_the_handler()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
-        var commands = new NoopAgentCommandHandler();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
+        NoopAgentCommandHandler commands = new NoopAgentCommandHandler();
 
-        var pump = AgentSessionPump.RunAsync(
+        Task<AgentSessionOutcome> pump = AgentSessionPump.RunAsync(
             link.AgentSide, new FakeAgentStatusSource(), commands, new FakeTimeProvider(), Interval, ct);
 
         await link.ControllerSide.SendAsync(

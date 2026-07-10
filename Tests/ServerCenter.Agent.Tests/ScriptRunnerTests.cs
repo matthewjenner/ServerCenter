@@ -14,18 +14,18 @@ public sealed class ScriptRunnerTests
     private static FakeProcessRunner Runner(Dictionary<string, int> exitByCommand) => new()
     {
         Respond = (_, args) => new ProcessResult(
-            args.Count > 1 && exitByCommand.TryGetValue(args[1], out var code) ? code : 0, string.Empty, string.Empty)
+            args.Count > 1 && exitByCommand.TryGetValue(args[1], out int code) ? code : 0, string.Empty, string.Empty)
     };
 
     [Fact]
     public async Task Skips_a_step_whose_already_done_check_passes()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         // alreadyDone "check" passes (exit 0) -> the step is already done.
-        var runner = Runner(new Dictionary<string, int> { ["check"] = 0 });
-        var scripts = new[] { new RecipeScript("s1", "do-work", AlreadyDone: "check", OnSuccess: "mark") };
+        FakeProcessRunner runner = Runner(new Dictionary<string, int> { ["check"] = 0 });
+        RecipeScript[] scripts = new[] { new RecipeScript("s1", "do-work", AlreadyDone: "check", OnSuccess: "mark") };
 
-        var outcome = await new ScriptRunner(runner).RunAsync(scripts, new RecordingJobSink(), ct);
+        ScriptRunOutcome outcome = await new ScriptRunner(runner).RunAsync(scripts, new RecordingJobSink(), ct);
 
         outcome.Success.Should().BeTrue();
         outcome.Skipped.Should().Equal("s1");
@@ -36,12 +36,12 @@ public sealed class ScriptRunnerTests
     [Fact]
     public async Task Runs_and_marks_a_step_that_is_not_done()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         // alreadyDone "check" fails (exit 1) -> not done -> run + onSuccess.
-        var runner = Runner(new Dictionary<string, int> { ["check"] = 1 });
-        var scripts = new[] { new RecipeScript("s1", "do-work", AlreadyDone: "check", OnSuccess: "mark") };
+        FakeProcessRunner runner = Runner(new Dictionary<string, int> { ["check"] = 1 });
+        RecipeScript[] scripts = new[] { new RecipeScript("s1", "do-work", AlreadyDone: "check", OnSuccess: "mark") };
 
-        var outcome = await new ScriptRunner(runner).RunAsync(scripts, new RecordingJobSink(), ct);
+        ScriptRunOutcome outcome = await new ScriptRunner(runner).RunAsync(scripts, new RecordingJobSink(), ct);
 
         outcome.Success.Should().BeTrue();
         outcome.Executed.Should().Equal("s1");
@@ -52,11 +52,11 @@ public sealed class ScriptRunnerTests
     [Fact]
     public async Task A_step_with_no_already_done_always_runs()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = Runner([]);
-        var scripts = new[] { new RecipeScript("s1", "always") };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = Runner([]);
+        RecipeScript[] scripts = new[] { new RecipeScript("s1", "always") };
 
-        var outcome = await new ScriptRunner(runner).RunAsync(scripts, new RecordingJobSink(), ct);
+        ScriptRunOutcome outcome = await new ScriptRunner(runner).RunAsync(scripts, new RecordingJobSink(), ct);
 
         outcome.Executed.Should().Equal("s1");
     }
@@ -64,15 +64,15 @@ public sealed class ScriptRunnerTests
     [Fact]
     public async Task A_failing_step_stops_the_run()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = Runner(new Dictionary<string, int> { ["boom"] = 2 });
-        var scripts = new[]
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = Runner(new Dictionary<string, int> { ["boom"] = 2 });
+        RecipeScript[] scripts = new[]
         {
             new RecipeScript("s1", "boom"),
             new RecipeScript("s2", "never")
         };
 
-        var outcome = await new ScriptRunner(runner).RunAsync(scripts, new RecordingJobSink(), ct);
+        ScriptRunOutcome outcome = await new ScriptRunner(runner).RunAsync(scripts, new RecordingJobSink(), ct);
 
         outcome.Success.Should().BeFalse();
         outcome.FailedScriptId.Should().Be("s1");

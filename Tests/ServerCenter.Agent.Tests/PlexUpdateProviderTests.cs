@@ -38,10 +38,10 @@ public sealed class PlexUpdateProviderTests
     [Fact]
     public async Task Check_reports_an_update_when_the_installed_version_differs()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var http = new FakeHttpFetcher { Body = Manifest };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeHttpFetcher http = new FakeHttpFetcher { Body = Manifest };
 
-        var updates = await Provider(http, RunnerWithInstalled("1.41.0.1000-oldbuild")).CheckAsync(ct);
+        IReadOnlyList<AvailableUpdate> updates = await Provider(http, RunnerWithInstalled("1.41.0.1000-oldbuild")).CheckAsync(ct);
 
         updates.Should().ContainSingle();
         updates[0].Package.Should().Be("plexmediaserver");
@@ -52,10 +52,10 @@ public sealed class PlexUpdateProviderTests
     [Fact]
     public async Task Check_reports_nothing_when_already_current()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var http = new FakeHttpFetcher { Body = Manifest };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeHttpFetcher http = new FakeHttpFetcher { Body = Manifest };
 
-        var updates = await Provider(http, RunnerWithInstalled("1.41.3.9314-a0bfb8370")).CheckAsync(ct);
+        IReadOnlyList<AvailableUpdate> updates = await Provider(http, RunnerWithInstalled("1.41.3.9314-a0bfb8370")).CheckAsync(ct);
 
         updates.Should().BeEmpty();
     }
@@ -63,10 +63,10 @@ public sealed class PlexUpdateProviderTests
     [Fact]
     public async Task Check_reports_none_installed_as_the_current_version()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var http = new FakeHttpFetcher { Body = Manifest };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeHttpFetcher http = new FakeHttpFetcher { Body = Manifest };
 
-        var updates = await Provider(http, RunnerWithInstalled(string.Empty)).CheckAsync(ct);
+        IReadOnlyList<AvailableUpdate> updates = await Provider(http, RunnerWithInstalled(string.Empty)).CheckAsync(ct);
 
         updates[0].CurrentVersion.Should().Be("(none)");
     }
@@ -74,18 +74,18 @@ public sealed class PlexUpdateProviderTests
     [Fact]
     public async Task Apply_downloads_the_arch_matched_deb_and_installs_it()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var http = new FakeHttpFetcher { Body = Manifest };
-        var runner = RunnerWithInstalled("1.41.0.1000-oldbuild");
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeHttpFetcher http = new FakeHttpFetcher { Body = Manifest };
+        FakeProcessRunner runner = RunnerWithInstalled("1.41.0.1000-oldbuild");
 
-        var outcome = await Provider(http, runner, build: "linux-aarch64")
+        UpdateOutcome outcome = await Provider(http, runner, build: "linux-aarch64")
             .ApplyAsync(new UpdatePlan([], AllowReboot: false), new RecordingJobSink(), ct);
 
         outcome.Success.Should().BeTrue();
         outcome.RebootRequired.Should().BeFalse(); // an app-channel update never reboots the host
         http.Downloads.Should().ContainSingle()
             .Which.Url.Should().Be("https://plex.tv/pms_1.41.3_arm64.deb");
-        var dpkg = runner.Invocations.Single(i => i.File == "dpkg");
+        FakeProcessRunner.Invocation dpkg = runner.Invocations.Single(i => i.File == "dpkg");
         dpkg.Args[0].Should().Be("-i");
         // dpkg installs exactly what was downloaded (path separator is OS-dependent - the tests run
         // on Windows, the provider on Linux - so assert the relationship, not a literal path).
@@ -96,16 +96,16 @@ public sealed class PlexUpdateProviderTests
     [Fact]
     public async Task Apply_fails_when_dpkg_fails()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var http = new FakeHttpFetcher { Body = Manifest };
-        var runner = new FakeProcessRunner
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeHttpFetcher http = new FakeHttpFetcher { Body = Manifest };
+        FakeProcessRunner runner = new FakeProcessRunner
         {
             Respond = (file, _) => file == "dpkg"
                 ? new ProcessResult(1, string.Empty, "dependency problems")
                 : new ProcessResult(0, "1.41.0.1000-oldbuild", string.Empty)
         };
 
-        var outcome = await Provider(http, runner)
+        UpdateOutcome outcome = await Provider(http, runner)
             .ApplyAsync(new UpdatePlan([], AllowReboot: false), new RecordingJobSink(), ct);
 
         outcome.Success.Should().BeFalse();

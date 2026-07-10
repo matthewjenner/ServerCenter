@@ -23,7 +23,7 @@ public sealed class ServerInstallExecutor(ISteamCmd steam) : IJobExecutor
             return JobOutcome.Failure($"invalid server.install params: {ex.Message}");
         }
 
-        var result = await steam.EnsureAppAsync(
+        SteamAppResult result = await steam.EnsureAppAsync(
             new SteamAppRequest(request.AppId, request.InstallDir, request.BetaBranch, request.Validate), sink, ct);
 
         return result.Success

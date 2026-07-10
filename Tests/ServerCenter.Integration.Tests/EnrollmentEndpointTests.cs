@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using ServerCenter.Controller;
 using ServerCenter.Controller.Endpoints;
 using ServerCenter.Controller.Services;
 using Xunit;
@@ -33,7 +34,7 @@ public sealed class EnrollmentEndpointTests : IAsyncLifetime
     {
         await _factory.DisposeAsync();
         SqliteConnection.ClearAllPools();
-        foreach (var file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
+        foreach (string? file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
         {
             try
             {
@@ -52,15 +53,15 @@ public sealed class EnrollmentEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Enroll_with_a_valid_token_returns_a_cert_bundle()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var trust = _factory.Services.GetRequiredService<ControllerOwnedTrustProvider>();
-        var token = await trust.CreateBootstrapTokenAsync("node-a", TimeSpan.FromMinutes(10), ct);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        ControllerOwnedTrustProvider trust = _factory.Services.GetRequiredService<ControllerOwnedTrustProvider>();
+        string token = await trust.CreateBootstrapTokenAsync("node-a", TimeSpan.FromMinutes(10), ct);
 
-        var client = _factory.CreateClient();
-        var response = await client.PostAsJsonAsync("/enroll", new EnrollRequest("node-a", token), ct);
+        HttpClient client = _factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync("/enroll", new EnrollRequest("node-a", token), ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<EnrollResponse>(ct);
+        EnrollResponse? body = await response.Content.ReadFromJsonAsync<EnrollResponse>(ct);
         body.Should().NotBeNull();
         body!.AgentId.Should().NotBeEmpty();
         body.CertPem.Should().Contain("BEGIN CERTIFICATE");
@@ -71,10 +72,10 @@ public sealed class EnrollmentEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Enroll_with_a_bad_token_is_unauthorized()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var client = _factory.CreateClient();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient client = _factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/enroll", new EnrollRequest("node-a", "not-a-real-token"), ct);
+        HttpResponseMessage response = await client.PostAsJsonAsync("/enroll", new EnrollRequest("node-a", "not-a-real-token"), ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }

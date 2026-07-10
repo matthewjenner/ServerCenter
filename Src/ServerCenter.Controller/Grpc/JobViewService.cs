@@ -22,7 +22,7 @@ public sealed class JobViewService(
     public override async Task WatchJobs(
         WatchJobsRequest request, IServerStreamWriter<JobListSnapshot> responseStream, ServerCallContext context)
     {
-        var ct = context.CancellationToken;
+        CancellationToken ct = context.CancellationToken;
         while (!ct.IsCancellationRequested)
         {
             await responseStream.WriteAsync(await BuildAsync(ct), ct);
@@ -39,8 +39,8 @@ public sealed class JobViewService(
 
     public override async Task<RestartServiceResponse> RestartService(RestartServiceRequest request, ServerCallContext context)
     {
-        var paramsJson = JsonSerializer.Serialize(new { unit = request.Unit });
-        var jobId = await dispatcher.DispatchAsync(
+        string paramsJson = JsonSerializer.Serialize(new { unit = request.Unit });
+        string jobId = await dispatcher.DispatchAsync(
             request.AgentId, "service.restart", paramsJson, cancellable: false, requeueable: false, context.CancellationToken);
         return new RestartServiceResponse { JobId = jobId };
     }
@@ -49,10 +49,10 @@ public sealed class JobViewService(
     // confirmation). Policy resolution happens controller-side in UpdateJobDispatcher.
     public override async Task<TriggerUpdateResponse> TriggerUpdate(TriggerUpdateRequest request, ServerCallContext context)
     {
-        var version = request.PolicyVersion > 0 ? request.PolicyVersion : (int?)null;
-        var serviceUnit = string.IsNullOrWhiteSpace(request.ServiceUnit) ? null : request.ServiceUnit;
+        int? version = request.PolicyVersion > 0 ? request.PolicyVersion : (int?)null;
+        string? serviceUnit = string.IsNullOrWhiteSpace(request.ServiceUnit) ? null : request.ServiceUnit;
 
-        var result = await updates.DispatchAsync(
+        UpdateDispatchResult result = await updates.DispatchAsync(
             request.AgentId, request.PolicyId, version, UpdatePolicyResolver.Trigger.Manual,
             request.Packages.ToList(), serviceUnit, context.CancellationToken);
 
@@ -68,7 +68,7 @@ public sealed class JobViewService(
     // node's domain.
     public override async Task<TriggerVmActionResponse> TriggerVmAction(TriggerVmActionRequest request, ServerCallContext context)
     {
-        var action = request.Action switch
+        VmAction? action = request.Action switch
         {
             VmLifecycleAction.Start => VmAction.Start,
             VmLifecycleAction.Stop => VmAction.Stop,
@@ -81,7 +81,7 @@ public sealed class JobViewService(
             return new TriggerVmActionResponse { Outcome = "NotFound", Reason = "unspecified VM action" };
         }
 
-        var result = await vms.DispatchAsync(request.NodeId, action.Value, context.CancellationToken);
+        VmDispatchResult result = await vms.DispatchAsync(request.NodeId, action.Value, context.CancellationToken);
         return new TriggerVmActionResponse
         {
             JobId = result.JobId ?? string.Empty,
@@ -92,9 +92,9 @@ public sealed class JobViewService(
 
     private async Task<JobListSnapshot> BuildAsync(CancellationToken ct)
     {
-        var recent = await jobs.ListRecentJobsAsync(50, ct);
-        var snapshot = new JobListSnapshot { GeneratedUnixMs = clock.GetUtcNow().ToUnixTimeMilliseconds() };
-        foreach (var job in recent)
+        IReadOnlyList<Core.Jobs.Job> recent = await jobs.ListRecentJobsAsync(50, ct);
+        JobListSnapshot snapshot = new JobListSnapshot { GeneratedUnixMs = clock.GetUtcNow().ToUnixTimeMilliseconds() };
+        foreach (Core.Jobs.Job job in recent)
         {
             snapshot.Jobs.Add(Map(job));
         }

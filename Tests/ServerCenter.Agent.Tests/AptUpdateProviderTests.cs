@@ -18,15 +18,15 @@ public sealed class AptUpdateProviderTests
     [Fact]
     public async Task Check_refreshes_lists_then_parses_upgradable_packages()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner
         {
             Respond = (file, args) => file == "apt" && args.Contains("list")
                 ? new ProcessResult(0, UpgradableOutput, string.Empty)
                 : new ProcessResult(0, string.Empty, string.Empty)
         };
 
-        var updates = await new AptUpdateProvider(runner).CheckAsync(ct);
+        IReadOnlyList<AvailableUpdate> updates = await new AptUpdateProvider(runner).CheckAsync(ct);
 
         runner.Invocations[0].Should().Match<FakeProcessRunner.Invocation>(i => i.File == "apt-get" && i.Args[0] == "update");
         updates.Should().BeEquivalentTo(new[]
@@ -39,14 +39,14 @@ public sealed class AptUpdateProviderTests
     [Fact]
     public async Task Apply_named_packages_runs_a_targeted_only_upgrade_non_interactively()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner();
 
-        var outcome = await new AptUpdateProvider(runner)
+        UpdateOutcome outcome = await new AptUpdateProvider(runner)
             .ApplyAsync(new UpdatePlan(["plexmediaserver"], AllowReboot: false), new RecordingJobSink(), ct);
 
         outcome.Success.Should().BeTrue();
-        var install = runner.Invocations.Single(i => i.Args.Contains("install"));
+        FakeProcessRunner.Invocation install = runner.Invocations.Single(i => i.Args.Contains("install"));
         install.File.Should().Be("apt-get");
         install.Args.Should().Equal("install", "-y", "--only-upgrade", "plexmediaserver");
         install.Env.Should().Contain(new KeyValuePair<string, string>("DEBIAN_FRONTEND", "noninteractive"));
@@ -55,8 +55,8 @@ public sealed class AptUpdateProviderTests
     [Fact]
     public async Task Apply_with_no_named_packages_upgrades_everything()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner();
 
         await new AptUpdateProvider(runner)
             .ApplyAsync(new UpdatePlan([], AllowReboot: false), new RecordingJobSink(), ct);
@@ -67,12 +67,12 @@ public sealed class AptUpdateProviderTests
     [Fact]
     public async Task Apply_reports_reboot_required_from_the_flag_probe()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         // `test -f /var/run/reboot-required` -> exit 0 means the flag is present. Everything here
         // succeeds, so the probe returns 0 and reboot-required is reported.
-        var runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(0, string.Empty, string.Empty) };
+        FakeProcessRunner runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(0, string.Empty, string.Empty) };
 
-        var outcome = await new AptUpdateProvider(runner)
+        UpdateOutcome outcome = await new AptUpdateProvider(runner)
             .ApplyAsync(new UpdatePlan([], AllowReboot: true), new RecordingJobSink(), ct);
 
         outcome.RebootRequired.Should().BeTrue();
@@ -81,15 +81,15 @@ public sealed class AptUpdateProviderTests
     [Fact]
     public async Task Apply_fails_when_apt_get_update_fails()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner
         {
             Respond = (file, args) => file == "apt-get" && args[0] == "update"
                 ? new ProcessResult(100, string.Empty, "could not resolve archive host")
                 : new ProcessResult(0, string.Empty, string.Empty)
         };
 
-        var outcome = await new AptUpdateProvider(runner)
+        UpdateOutcome outcome = await new AptUpdateProvider(runner)
             .ApplyAsync(new UpdatePlan([], AllowReboot: false), new RecordingJobSink(), ct);
 
         outcome.Success.Should().BeFalse();
@@ -99,8 +99,8 @@ public sealed class AptUpdateProviderTests
     [Fact]
     public async Task RebootRequired_is_false_when_the_flag_is_absent()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(1, string.Empty, string.Empty) };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeProcessRunner runner = new FakeProcessRunner { Respond = (_, _) => new ProcessResult(1, string.Empty, string.Empty) };
 
         (await new AptUpdateProvider(runner).RebootRequiredAsync(ct)).Should().BeFalse();
     }

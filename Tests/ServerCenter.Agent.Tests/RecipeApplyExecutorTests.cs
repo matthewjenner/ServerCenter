@@ -48,11 +48,11 @@ public sealed class RecipeApplyExecutorTests
     [Fact]
     public async Task Applies_every_section_of_the_recipe()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var h = NewHarness();
-        var templates = new Dictionary<string, string> { ["cs2/server.cfg"] = "hostname={{name}}" };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Harness h = NewHarness();
+        Dictionary<string, string> templates = new Dictionary<string, string> { ["cs2/server.cfg"] = "hostname={{name}}" };
 
-        var outcome = await h.Executor().ExecuteAsync(Context(FullRecipe, templates), new RecordingJobSink(), ct);
+        JobOutcome outcome = await h.Executor().ExecuteAsync(Context(FullRecipe, templates), new RecordingJobSink(), ct);
 
         outcome.Succeeded.Should().BeTrue();
         h.Packages.Installed.Should().Contain("steamcmd");
@@ -67,11 +67,11 @@ public sealed class RecipeApplyExecutorTests
     [Fact]
     public async Task A_steam_failure_fails_the_job_before_config()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var h = NewHarness() with { Steam = new FakeSteamCmd { Result = new SteamAppResult(false, null, "boom") } };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Harness h = NewHarness() with { Steam = new FakeSteamCmd { Result = new SteamAppResult(false, null, "boom") } };
         // Rebuild harness fields consistently (record 'with' keeps the others).
 
-        var outcome = await h.Executor().ExecuteAsync(
+        JobOutcome outcome = await h.Executor().ExecuteAsync(
             Context(FullRecipe, new Dictionary<string, string> { ["cs2/server.cfg"] = "hostname={{name}}" }),
             new RecordingJobSink(), ct);
 
@@ -82,11 +82,11 @@ public sealed class RecipeApplyExecutorTests
     [Fact]
     public async Task An_unsupported_package_provider_fails()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var h = NewHarness();
-        var recipe = FullRecipe with { BaseRequirements = new BaseRequirements("yum", ["x"]) };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Harness h = NewHarness();
+        BuildRecipe recipe = FullRecipe with { BaseRequirements = new BaseRequirements("yum", ["x"]) };
 
-        var outcome = await h.Executor().ExecuteAsync(Context(recipe), new RecordingJobSink(), ct);
+        JobOutcome outcome = await h.Executor().ExecuteAsync(Context(recipe), new RecordingJobSink(), ct);
 
         outcome.Succeeded.Should().BeFalse();
         outcome.FailReason.Should().Contain("unsupported package provider");
@@ -95,16 +95,16 @@ public sealed class RecipeApplyExecutorTests
     [Fact]
     public async Task A_config_only_recipe_writes_config_and_nothing_else()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var h = NewHarness();
-        var recipe = new BuildRecipe
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Harness h = NewHarness();
+        BuildRecipe recipe = new BuildRecipe
         {
             Id = "config-only",
             Version = 1,
             ConfigFiles = [new ConfigFileSpec("cs2/server.cfg", "/opt/cs2/cfg/server.cfg", ConfigFormat.Kv)]
         };
 
-        var outcome = await h.Executor().ExecuteAsync(
+        JobOutcome outcome = await h.Executor().ExecuteAsync(
             Context(recipe, new Dictionary<string, string> { ["cs2/server.cfg"] = "hostname={{name}}" }),
             new RecordingJobSink(), ct);
 

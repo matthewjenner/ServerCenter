@@ -34,7 +34,7 @@ public sealed class BackoffPolicy
             attempt = 0;
         }
 
-        var cap = Math.Min(_max.TotalMilliseconds, _base.TotalMilliseconds * Math.Pow(2, attempt));
+        double cap = Math.Min(_max.TotalMilliseconds, _base.TotalMilliseconds * Math.Pow(2, attempt));
         return TimeSpan.FromMilliseconds(cap * _rng());
     }
 }

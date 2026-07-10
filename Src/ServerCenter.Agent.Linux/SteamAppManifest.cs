@@ -11,7 +11,7 @@ public static partial class SteamAppManifest
 
     public static string? ParseBuildId(string acfContent)
     {
-        var match = BuildIdRegex().Match(acfContent);
+        Match match = BuildIdRegex().Match(acfContent);
         return match.Success ? match.Groups[1].Value : null;
     }
 }

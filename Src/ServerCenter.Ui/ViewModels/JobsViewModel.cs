@@ -27,12 +27,12 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
 
     public void Apply(JobListSnapshot snapshot)
     {
-        var seen = new HashSet<string>(snapshot.Jobs.Count);
-        for (var i = 0; i < snapshot.Jobs.Count; i++)
+        HashSet<string> seen = new HashSet<string>(snapshot.Jobs.Count);
+        for (int i = 0; i < snapshot.Jobs.Count; i++)
         {
-            var job = snapshot.Jobs[i];
+            JobInfo job = snapshot.Jobs[i];
             seen.Add(job.JobId);
-            var existing = Jobs.FirstOrDefault(j => j.JobId == job.JobId);
+            JobRowViewModel? existing = Jobs.FirstOrDefault(j => j.JobId == job.JobId);
             if (existing is null)
             {
                 Jobs.Insert(Math.Min(i, Jobs.Count), new JobRowViewModel(job)); // newest-first
@@ -43,7 +43,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
             }
         }
 
-        for (var i = Jobs.Count - 1; i >= 0; i--)
+        for (int i = Jobs.Count - 1; i >= 0; i--)
         {
             if (!seen.Contains(Jobs[i].JobId))
             {
@@ -63,7 +63,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
 
         try
         {
-            var jobId = await client.RestartServiceAsync(RestartAgentId.Trim(), RestartUnit.Trim(), CancellationToken.None);
+            string jobId = await client.RestartServiceAsync(RestartAgentId.Trim(), RestartUnit.Trim(), CancellationToken.None);
             TriggerStatus = $"dispatched {(jobId.Length > 8 ? jobId[..8] : jobId)}";
         }
         catch (Exception ex)
@@ -83,7 +83,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
 
         try
         {
-            var result = await client.TriggerUpdateAsync(
+            UpdateTriggerResult result = await client.TriggerUpdateAsync(
                 UpdateAgentId.Trim(),
                 UpdatePolicyId.Trim(),
                 string.IsNullOrWhiteSpace(UpdateServiceUnit) ? null : UpdateServiceUnit.Trim(),
@@ -114,7 +114,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
 
         try
         {
-            var result = await client.TriggerVmActionAsync(VmNodeId.Trim(), action, CancellationToken.None);
+            UpdateTriggerResult result = await client.TriggerVmActionAsync(VmNodeId.Trim(), action, CancellationToken.None);
             VmStatus = result is { Outcome: "Dispatched", JobId: { } jobId }
                 ? $"{action} dispatched {(jobId.Length > 8 ? jobId[..8] : jobId)}"
                 : $"{result.Outcome}: {result.Reason}";
@@ -131,7 +131,7 @@ public sealed partial class JobsViewModel(IJobClient client) : ObservableObject
         {
             try
             {
-                await foreach (var snapshot in client.Watch(ct))
+                await foreach (JobListSnapshot snapshot in client.Watch(ct))
                 {
                     await Dispatcher.UIThread.InvokeAsync(() => Apply(snapshot));
                 }

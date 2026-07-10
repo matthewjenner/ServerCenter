@@ -16,7 +16,7 @@ public sealed class FakeControllerJobView : IControllerJobView
 
     public Task<IReadOnlyList<ControllerOpenJob>> GetOpenJobsAsync(string agentId, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<ControllerOpenJob>>(
-            _open.TryGetValue(agentId, out var jobs) ? jobs : []);
+            _open.TryGetValue(agentId, out List<ControllerOpenJob>? jobs) ? jobs : []);
 
     public Task ApplyAsync(ReconcileAction action, CancellationToken ct)
     {

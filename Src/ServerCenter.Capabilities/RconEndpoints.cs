@@ -9,14 +9,14 @@ public static class RconEndpoints
 {
     public static RconEndpoint From(IReadOnlyDictionary<string, string> instanceParams)
     {
-        var host = instanceParams.GetValueOrDefault("rcon.host", "127.0.0.1");
+        string host = instanceParams.GetValueOrDefault("rcon.host", "127.0.0.1");
 
-        if (!instanceParams.TryGetValue("ports.rcon", out var portText) || !int.TryParse(portText, out var port))
+        if (!instanceParams.TryGetValue("ports.rcon", out string? portText) || !int.TryParse(portText, out int port))
         {
             throw new InvalidOperationException("instance params are missing a valid 'ports.rcon'");
         }
 
-        if (!instanceParams.TryGetValue("rcon.password", out var password))
+        if (!instanceParams.TryGetValue("rcon.password", out string? password))
         {
             throw new InvalidOperationException("instance params are missing 'rcon.password'");
         }

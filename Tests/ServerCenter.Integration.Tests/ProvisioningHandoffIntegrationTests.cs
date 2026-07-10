@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using AwesomeAssertions;
+using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -7,6 +8,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using ServerCenter.Agent;
 using ServerCenter.Contracts.V1;
+using ServerCenter.Controller;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
 using ServerCenter.Core.Connection;
@@ -37,7 +39,7 @@ public sealed class ProvisioningHandoffIntegrationTests : IAsyncLifetime
     {
         await _factory.DisposeAsync();
         SqliteConnection.ClearAllPools();
-        foreach (var file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
+        foreach (string? file in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
         {
             try { if (File.Exists(file)) File.Delete(file); } catch (IOException) { }
         }
@@ -46,25 +48,25 @@ public sealed class ProvisioningHandoffIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task A_provisioning_node_flips_to_managed_when_its_agent_checks_in()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
 
         // Pre-record the node as provisioning (as if its VM was just defined + cloud-init'd).
-        var nodes = _factory.Services.GetRequiredService<AgentNodeRepository>();
+        AgentNodeRepository nodes = _factory.Services.GetRequiredService<AgentNodeRepository>();
         await nodes.ProvisionNodeAsync("prov-agent", "guest", "cs2-ffa", "linux", 1000, ct);
         (await nodes.GetNodeAsync("prov-agent", ct))!.Lifecycle.Should().Be("provisioning");
 
-        var channel = GrpcChannel.ForAddress(
+        GrpcChannel channel = GrpcChannel.ForAddress(
             _factory.Server.BaseAddress,
             new GrpcChannelOptions { HttpHandler = _factory.Server.CreateHandler() });
-        var call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
-        await using var transport = new GrpcAgentTransport(channel, call);
+        AsyncDuplexStreamingCall<AgentMessage, ControllerMessage> call = new AgentLink.AgentLinkClient(channel).Connect(cancellationToken: ct);
+        await using GrpcAgentTransport transport = new GrpcAgentTransport(channel, call);
 
-        var identity = new AgentIdentity("prov-agent", "0.1.0", "linux", "x64");
+        AgentIdentity identity = new AgentIdentity("prov-agent", "0.1.0", "linux", "x64");
         (await AgentHandshake.PerformAsync(transport, identity, new EmptyAgentJobStateSource(), ct))
             .Established.Should().BeTrue();
 
-        using var pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var pump = AgentSessionPump.RunAsync(
+        using CancellationTokenSource pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task<AgentSessionOutcome> pump = AgentSessionPump.RunAsync(
             transport, new BasicAgentStatusSource(), new NoopCommandHandler(),
             TimeProvider.System, TimeSpan.FromSeconds(10), pumpCts.Token);
 
@@ -72,7 +74,7 @@ public sealed class ProvisioningHandoffIntegrationTests : IAsyncLifetime
         await WaitUntilAsync(
             () => nodes.GetNodeAsync("prov-agent", ct).GetAwaiter().GetResult() is { Lifecycle: "managed" }, ct);
 
-        var node = await nodes.GetNodeAsync("prov-agent", ct);
+        NodeRow? node = await nodes.GetNodeAsync("prov-agent", ct);
         node!.AgentId.Should().Be("prov-agent");   // adopted its agent
         node.LibvirtDomain.Should().Be("cs2-ffa"); // domain preserved -> VM truth + lifecycle work
 
@@ -82,7 +84,7 @@ public sealed class ProvisioningHandoffIntegrationTests : IAsyncLifetime
 
     private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken ct, int timeoutMs = 5000)
     {
-        var sw = Stopwatch.StartNew();
+        Stopwatch sw = Stopwatch.StartNew();
         while (!condition())
         {
             if (sw.ElapsedMilliseconds > timeoutMs)

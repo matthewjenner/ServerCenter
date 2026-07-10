@@ -37,7 +37,7 @@ public sealed class VirshLibvirtHost(TimeProvider clock, string virshPath = "vir
 
     public async IAsyncEnumerable<DomainEvent> WatchEventsAsync([EnumeratorCancellation] CancellationToken ct)
     {
-        var lastState = new Dictionary<string, DomainState>();
+        Dictionary<string, DomainState> lastState = new Dictionary<string, DomainState>();
         while (!ct.IsCancellationRequested)
         {
             IReadOnlyList<DomainInfo> domains;
@@ -50,9 +50,9 @@ public sealed class VirshLibvirtHost(TimeProvider clock, string virshPath = "vir
                 domains = [];
             }
 
-            foreach (var domain in domains)
+            foreach (DomainInfo domain in domains)
             {
-                if (!lastState.TryGetValue(domain.Name, out var previous) || previous != domain.State)
+                if (!lastState.TryGetValue(domain.Name, out DomainState previous) || previous != domain.State)
                 {
                     lastState[domain.Name] = domain.State;
                     yield return new DomainEvent(domain.Name, domain.State, clock.GetUtcNow().ToUnixTimeMilliseconds());
@@ -72,7 +72,7 @@ public sealed class VirshLibvirtHost(TimeProvider clock, string virshPath = "vir
 
     private async Task<string> RunAsync(CancellationToken ct, params string[] args)
     {
-        using var process = new Process
+        using Process process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
@@ -89,14 +89,14 @@ public sealed class VirshLibvirtHost(TimeProvider clock, string virshPath = "vir
             process.StartInfo.ArgumentList.Add(connectUri);
         }
 
-        foreach (var arg in args)
+        foreach (string arg in args)
         {
             process.StartInfo.ArgumentList.Add(arg);
         }
 
         process.Start();
-        var stdout = process.StandardOutput.ReadToEndAsync(ct);
-        var stderr = process.StandardError.ReadToEndAsync(ct);
+        Task<string> stdout = process.StandardOutput.ReadToEndAsync(ct);
+        Task<string> stderr = process.StandardError.ReadToEndAsync(ct);
         await process.WaitForExitAsync(ct);
 
         if (process.ExitCode != 0)

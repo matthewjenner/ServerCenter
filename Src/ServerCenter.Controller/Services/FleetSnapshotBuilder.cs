@@ -21,13 +21,13 @@ public sealed class FleetSnapshotBuilder(
 {
     public async Task<FleetSnapshot> BuildAsync(CancellationToken ct)
     {
-        var now = clock.GetUtcNow().ToUnixTimeMilliseconds();
-        var rows = await nodes.ListNodesAsync(ct);
+        long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        IReadOnlyList<NodeRow> rows = await nodes.ListNodesAsync(ct);
 
-        var snapshot = new FleetSnapshot { GeneratedUnixMs = now };
-        foreach (var row in rows)
+        FleetSnapshot snapshot = new FleetSnapshot { GeneratedUnixMs = now };
+        foreach (NodeRow row in rows)
         {
-            var state = new NodeState
+            NodeState state = new NodeState
             {
                 NodeId = row.NodeId,
                 DisplayName = row.DisplayName,
@@ -35,7 +35,7 @@ public sealed class FleetSnapshotBuilder(
                 VmState = DeriveVmState(row.LibvirtDomain)
             };
 
-            if (presence.TryGet(row.AgentId, out var entry) && entry is not null)
+            if (presence.TryGet(row.AgentId, out AgentPresence? entry) && entry is not null)
             {
                 state.LastHeartbeatUnixMs = entry.LastHeartbeatUnixMs;
                 state.AgentLiveness = entry.LastHeartbeatUnixMs > 0
@@ -62,7 +62,7 @@ public sealed class FleetSnapshotBuilder(
     // A node with no linked domain, or one libvirt has not reported, is Unknown - not "Stopped".
     // Unknown is a first-class dual-truth state, never a lying green/red dot (brief 3.7).
     private VmState DeriveVmState(string? libvirtDomain) =>
-        !string.IsNullOrEmpty(libvirtDomain) && domainStates.TryGet(libvirtDomain, out var domainState)
+        !string.IsNullOrEmpty(libvirtDomain) && domainStates.TryGet(libvirtDomain, out DomainState domainState)
             ? MapVm(domainState)
             : VmState.Unknown;
 

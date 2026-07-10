@@ -10,7 +10,7 @@ public static class SystemdUnitRenderer
 {
     public static string Render(ServiceDefinition service)
     {
-        var unit = new StringBuilder();
+        StringBuilder unit = new StringBuilder();
         unit.Append("[Unit]\n");
         unit.Append($"Description={service.Unit}\n\n");
         unit.Append("[Service]\n");

@@ -12,11 +12,11 @@ public sealed class RconProtocolTests
     [Fact]
     public void Encode_then_decode_round_trips()
     {
-        var packet = new RconPacket(7, RconPacketTypes.ExecCommand, "status");
+        RconPacket packet = new RconPacket(7, RconPacketTypes.ExecCommand, "status");
 
-        var bytes = RconProtocol.Encode(packet);
-        var length = BinaryPrimitives.ReadInt32LittleEndian(bytes);
-        var content = bytes.AsSpan(4).ToArray();
+        byte[] bytes = RconProtocol.Encode(packet);
+        int length = BinaryPrimitives.ReadInt32LittleEndian(bytes);
+        byte[] content = bytes.AsSpan(4).ToArray();
 
         content.Length.Should().Be(length);
         RconProtocol.Decode(content).Should().Be(packet);
@@ -25,7 +25,7 @@ public sealed class RconProtocolTests
     [Fact]
     public void Encode_writes_little_endian_length_and_trailing_nulls()
     {
-        var bytes = RconProtocol.Encode(new RconPacket(1, RconPacketTypes.Auth, "pw"));
+        byte[] bytes = RconProtocol.Encode(new RconPacket(1, RconPacketTypes.Auth, "pw"));
 
         // length = id(4) + type(4) + "pw"(2) + two nulls = 12
         BinaryPrimitives.ReadInt32LittleEndian(bytes).Should().Be(12);
@@ -36,7 +36,7 @@ public sealed class RconProtocolTests
     [Fact]
     public void Decode_rejects_a_truncated_packet()
     {
-        var act = () => RconProtocol.Decode(new byte[] { 1, 0, 0 });
+        Func<RconPacket> act = () => RconProtocol.Decode(new byte[] { 1, 0, 0 });
 
         act.Should().Throw<InvalidDataException>();
     }

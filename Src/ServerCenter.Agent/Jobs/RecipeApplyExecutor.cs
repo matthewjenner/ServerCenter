@@ -36,7 +36,7 @@ public sealed class RecipeApplyExecutor(
             return JobOutcome.Failure($"invalid recipe.apply params: {ex.Message}");
         }
 
-        var recipe = request.Recipe;
+        BuildRecipe recipe = request.Recipe;
 
         if (recipe.BaseRequirements is { } baseRequirements)
         {
@@ -53,7 +53,7 @@ public sealed class RecipeApplyExecutor(
 
         if (recipe.SteamApp is { } app)
         {
-            var result = await steam.EnsureAppAsync(
+            SteamAppResult result = await steam.EnsureAppAsync(
                 new SteamAppRequest(app.AppId, app.InstallDir, app.BetaBranch, Validate: true), sink, ct);
             if (!result.Success)
             {
@@ -63,7 +63,7 @@ public sealed class RecipeApplyExecutor(
 
         if (recipe.ConfigFiles.Count > 0)
         {
-            var configGen = new ConfigGenCapability(
+            ConfigGenCapability configGen = new ConfigGenCapability(
                 new ConfigGenSpec("config-template", recipe.ConfigFiles),
                 new InlineConfigTemplateSource(request.Templates),
                 configWriter);
@@ -79,7 +79,7 @@ public sealed class RecipeApplyExecutor(
 
         if (recipe.Scripts.Count > 0)
         {
-            var outcome = await scripts.RunAsync(recipe.Scripts, sink, ct);
+            ScriptRunOutcome outcome = await scripts.RunAsync(recipe.Scripts, sink, ct);
             if (!outcome.Success)
             {
                 return JobOutcome.Failure(outcome.FailReason ?? "recipe script failed");

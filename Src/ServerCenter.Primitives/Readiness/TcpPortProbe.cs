@@ -11,7 +11,7 @@ public sealed class TcpPortProbe : IPortProbe
     {
         try
         {
-            using var client = new TcpClient();
+            using TcpClient client = new TcpClient();
             await client.ConnectAsync(host, port, ct);
             return client.Connected;
         }

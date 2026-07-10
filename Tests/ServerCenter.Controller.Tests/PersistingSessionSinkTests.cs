@@ -16,12 +16,12 @@ public sealed class PersistingSessionSinkTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         _db = await TempDatabase.CreateAsync(ct);
         _jobs = new JobRepository(_db.Database);
         _sink = new PersistingSessionSink(new AgentPresenceStore(), _jobs, _clock);
 
-        var repo = new AgentNodeRepository(_db.Database);
+        AgentNodeRepository repo = new AgentNodeRepository(_db.Database);
         await repo.EnsureAgentAsync("a1", "a1", "fpr", 1, ct);
         await repo.EnsureNodeAsync("a1", "a1", "guest", "managed", 1, ct);
     }
@@ -31,7 +31,7 @@ public sealed class PersistingSessionSinkTests : IAsyncLifetime
     [Fact]
     public async Task Progress_marks_a_queued_job_running_and_persists_pct_and_log()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await InsertJobAsync("j1", ServerCenter.Core.Jobs.JobState.Queued, ct);
 
         await _sink.OnJobProgressAsync("a1", new JobProgress
@@ -43,7 +43,7 @@ public sealed class PersistingSessionSinkTests : IAsyncLifetime
             Log = new LogLine { Stream = LogStream.Stdout, Line = "hello" }
         }, ct);
 
-        var job = await _jobs.GetAsync("j1", ct);
+        Core.Jobs.Job? job = await _jobs.GetAsync("j1", ct);
         job!.State.Should().Be(ServerCenter.Core.Jobs.JobState.Running);
         job.ProgressPct.Should().Be(50);
         job.StartedAtUnixMs.Should().NotBeNull();
@@ -53,13 +53,13 @@ public sealed class PersistingSessionSinkTests : IAsyncLifetime
     [Fact]
     public async Task CommandResult_moves_the_job_to_a_terminal_state()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await InsertJobAsync("j1", ServerCenter.Core.Jobs.JobState.Running, ct);
 
         await _sink.OnCommandResultAsync("a1",
             new CommandResult { JobId = "j1", FinalState = JobState.Succeeded }, ct);
 
-        var job = await _jobs.GetAsync("j1", ct);
+        Core.Jobs.Job? job = await _jobs.GetAsync("j1", ct);
         job!.State.Should().Be(ServerCenter.Core.Jobs.JobState.Succeeded);
         job.TerminalAtUnixMs.Should().NotBeNull();
     }

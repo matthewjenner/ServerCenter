@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using Grpc.Core;
+using Grpc.Net.Client;
 using ServerCenter.Contracts.V1;
 
 namespace ServerCenter.Ui.Services;
@@ -9,9 +10,9 @@ public sealed class GrpcFleetClient(string address) : IFleetClient
 {
     public async IAsyncEnumerable<FleetSnapshot> Watch([EnumeratorCancellation] CancellationToken ct)
     {
-        using var channel = GrpcChannels.Create(address);
-        var client = new FleetView.FleetViewClient(channel);
-        using var call = client.WatchFleet(new WatchFleetRequest(), cancellationToken: ct);
+        using GrpcChannel channel = GrpcChannels.Create(address);
+        FleetView.FleetViewClient client = new FleetView.FleetViewClient(channel);
+        using AsyncServerStreamingCall<FleetSnapshot> call = client.WatchFleet(new WatchFleetRequest(), cancellationToken: ct);
 
         while (await call.ResponseStream.MoveNext(ct))
         {

@@ -27,7 +27,7 @@ public sealed class BuildRecipeSerializerTests
     [Fact]
     public void Serialize_emits_the_brief_schema_tokens()
     {
-        var json = BuildRecipeSerializer.Serialize(Cs2);
+        string json = BuildRecipeSerializer.Serialize(Cs2);
 
         json.Should().Contain("\"format\":\"kv\"");
         json.Should().Contain("\"alreadyDone\":\"test -f /opt/cs2/.collection-ok\"");
@@ -44,14 +44,14 @@ public sealed class BuildRecipeSerializerTests
     [Fact]
     public void A_config_only_recipe_omits_the_absent_sections()
     {
-        var minimal = new BuildRecipe
+        BuildRecipe minimal = new BuildRecipe
         {
             Id = "config-only",
             Version = 1,
             ConfigFiles = [new ConfigFileSpec("x", "/x", ConfigFormat.Ini)]
         };
 
-        var json = BuildRecipeSerializer.Serialize(minimal);
+        string json = BuildRecipeSerializer.Serialize(minimal);
         json.Should().NotContain("steamApp");
         json.Should().NotContain("serviceDefinition");
 

@@ -19,10 +19,10 @@ public sealed class UnattendedUpgradesNeutralizer(IProcessRunner runner)
 
     public async Task EnsureDisabledAsync(IJobSink sink, CancellationToken ct)
     {
-        foreach (var unit in Units)
+        foreach (string unit in Units)
         {
             sink.Log(LogStream.Note, $"masking {unit}");
-            var result = await runner.RunAsync("systemctl", ["mask", "--now", unit], ct);
+            ProcessResult result = await runner.RunAsync("systemctl", ["mask", "--now", unit], ct);
             if (result.ExitCode != 0)
             {
                 throw new InvalidOperationException(

@@ -19,7 +19,7 @@ public sealed class FleetService(FleetSnapshotBuilder builder) : FleetView.Fleet
         IServerStreamWriter<FleetSnapshot> responseStream,
         ServerCallContext context)
     {
-        var ct = context.CancellationToken;
+        CancellationToken ct = context.CancellationToken;
         while (!ct.IsCancellationRequested)
         {
             await responseStream.WriteAsync(await builder.BuildAsync(ct), ct);

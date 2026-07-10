@@ -22,8 +22,8 @@ public sealed class JobRepository(ServerCenterDatabase database)
 
     public async Task InsertAsync(Job job, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             $"INSERT INTO job ({InsertColumns}) VALUES " +
             "(@id, @node, @type, @params, @state, @pct, @note, @cancellable, @requeueable, " +
@@ -48,11 +48,11 @@ public sealed class JobRepository(ServerCenterDatabase database)
 
     public async Task<Job?> GetAsync(string jobId, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT {SelectColumns} FROM job WHERE id = @id;";
         cmd.Parameters.AddWithValue("@id", jobId);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? Map(reader) : null;
     }
 
@@ -60,15 +60,15 @@ public sealed class JobRepository(ServerCenterDatabase database)
     // handshake (phase-0-contracts.md 2.3).
     public async Task<IReadOnlyList<Job>> GetOpenJobsForAgentAsync(string agentId, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             $"SELECT {SelectColumns} FROM job JOIN node ON node.id = job.node_id " +
             "WHERE node.agent_id = @agentId AND job.terminal_at IS NULL;";
         cmd.Parameters.AddWithValue("@agentId", agentId);
 
-        var jobs = new List<Job>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        List<Job> jobs = new List<Job>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             jobs.Add(Map(reader));
@@ -80,13 +80,13 @@ public sealed class JobRepository(ServerCenterDatabase database)
     // Recent jobs across the fleet, newest first, for the operator job view.
     public async Task<IReadOnlyList<Job>> ListRecentJobsAsync(int limit, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT {SelectColumns} FROM job ORDER BY created_at DESC LIMIT @limit;";
         cmd.Parameters.AddWithValue("@limit", limit);
 
-        var jobs = new List<Job>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        List<Job> jobs = new List<Job>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             jobs.Add(Map(reader));
@@ -98,8 +98,8 @@ public sealed class JobRepository(ServerCenterDatabase database)
     public async Task UpdateStateAsync(
         string jobId, JobState state, string? failReason, long? terminalAtUnixMs, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         // Requeue (back to queued) clears the terminal and start markers so it can run afresh.
         cmd.CommandText =
             "UPDATE job SET state = @state, fail_reason = @fail, terminal_at = @terminal, " +
@@ -116,8 +116,8 @@ public sealed class JobRepository(ServerCenterDatabase database)
     // progress pct/note update. Guarded on non-terminal so a late tick cannot revert a finished job.
     public async Task ApplyProgressAsync(string jobId, int? pct, string? note, long nowUnixMs, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             "UPDATE job SET " +
             "state = CASE WHEN state = 'queued' THEN 'running' ELSE state END, " +
@@ -134,8 +134,8 @@ public sealed class JobRepository(ServerCenterDatabase database)
     public async Task AppendLogAsync(
         string jobId, long seq, LogStream stream, string line, long tsUnixMs, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             "INSERT INTO job_log (job_id, seq, ts_unix_ms, stream, line) " +
             "VALUES (@job, @seq, @ts, @stream, @line);";
@@ -150,8 +150,8 @@ public sealed class JobRepository(ServerCenterDatabase database)
     // Move the ack watermark forward only (bounds the agent's replay buffer, 2.3).
     public async Task AckLogAsync(string jobId, long seq, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = "UPDATE job SET last_acked_seq = @seq WHERE id = @id AND @seq > last_acked_seq;";
         cmd.Parameters.AddWithValue("@id", jobId);
         cmd.Parameters.AddWithValue("@seq", seq);

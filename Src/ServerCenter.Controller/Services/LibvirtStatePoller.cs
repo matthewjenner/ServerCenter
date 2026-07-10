@@ -15,12 +15,12 @@ public sealed class LibvirtStatePoller(
     {
         try
         {
-            foreach (var domain in await libvirt.ListDomainsAsync(stoppingToken))
+            foreach (DomainInfo domain in await libvirt.ListDomainsAsync(stoppingToken))
             {
                 states.Set(domain.Name, domain.State);
             }
 
-            await foreach (var change in libvirt.WatchEventsAsync(stoppingToken))
+            await foreach (DomainEvent change in libvirt.WatchEventsAsync(stoppingToken))
             {
                 states.Set(change.NameOrUuid, change.State);
             }

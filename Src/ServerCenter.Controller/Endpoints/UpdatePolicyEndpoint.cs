@@ -15,9 +15,9 @@ public static class UpdatePolicyEndpoint
         app.MapPost("/update-policies",
             async (HttpRequest request, UpdatePolicyRepository policies, TimeProvider clock, CancellationToken ct) =>
             {
-                using var reader = new StreamReader(request.Body);
-                var body = await reader.ReadToEndAsync(ct);
-                var policy = UpdatePolicySerializer.Deserialize(body);
+                using StreamReader reader = new StreamReader(request.Body);
+                string body = await reader.ReadToEndAsync(ct);
+                UpdatePolicy policy = UpdatePolicySerializer.Deserialize(body);
                 await policies.InsertAsync(policy, clock.GetUtcNow().ToUnixTimeMilliseconds(), ct);
                 return Results.Ok(new { policy.Id, policy.Version });
             });
@@ -27,11 +27,11 @@ public static class UpdatePolicyEndpoint
             {
                 // A dev/operator POST is an explicit (manual) trigger unless it declares itself a
                 // scheduler tick. Manual overrides the window and is its own confirmation.
-                var trigger = request.Scheduled
+                UpdatePolicyResolver.Trigger trigger = request.Scheduled
                     ? UpdatePolicyResolver.Trigger.Scheduled
                     : UpdatePolicyResolver.Trigger.Manual;
 
-                var result = await dispatcher.DispatchAsync(
+                UpdateDispatchResult result = await dispatcher.DispatchAsync(
                     request.AgentId, request.PolicyId, request.PolicyVersion, trigger,
                     request.Packages ?? [], request.ServiceUnit, ct);
 

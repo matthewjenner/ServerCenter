@@ -32,9 +32,19 @@ Three declarative surfaces, all controller-owned versioned data: **game capabili
 - Identity & auth model → `/docs/identity.md`
 - Backup/restore runbook (consistent snapshot → versioned S3; **test the restore**) → `/docs/backup.md`
 - Phase plans (contracts touched, primitives built/reused, definition of done) → `/docs/phases/`
+- Living build tracker + Decisions Log (READ FIRST on cold load) → `/Docs/workplan.md`
+- Dev environment: build/run/deploy, code style, IDE phantom errors → `/Docs/dev-environment.md`
+- Linux end-to-end smoke checklist → `/Docs/linux-smoke-runbook.md`
 
 ## Standing reminders
 
 - **Contracts before code.** No feature code ahead of an approved contract.
 - Ubuntu agent before Windows; read/status before actions; reuse before bespoke.
+- **Code style is build-enforced: no `var`, no top-level statements** - explicit types, full classes,
+  file-scoped namespaces (`.editorconfig` + `EnforceCodeStyleInBuild`). Target-typed `new()` is fine.
+- **Trust `dotnet build ServerCenter.slnx`, not IDE diagnostics.** The VS Code Roslyn server throws
+  phantom CS0246/CS1061 (stale `.slnx`/generated-code workspace); the full build is authoritative.
+  See `/Docs/dev-environment.md`.
+- ALL Windows work (Phases 8/9) and the S3 backup job are DEFERRED until the Linux platform is stable
+  end to end (user decision 2026-07-10). Do not start them without an explicit ask.
 - Known traps: resync-across-disconnect (top refactor risk), readiness ≠ process-alive, idempotent steps, Windows Update (session-0, slow reboots), host reboot, consistent SQLite snapshot, "what"-provider must include a non-apt case early, libvirt-from-.NET behind a swappable `ILibvirtHost`.

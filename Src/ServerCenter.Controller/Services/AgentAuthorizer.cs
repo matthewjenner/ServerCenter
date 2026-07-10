@@ -17,13 +17,13 @@ public sealed class AgentAuthorizer(ControllerOwnedTrustProvider trust)
             return false;
         }
 
-        var subjectCommonName = clientCertificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
+        string subjectCommonName = clientCertificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
         if (!string.Equals(subjectCommonName, claimedAgentId, StringComparison.Ordinal))
         {
             return false;
         }
 
-        var fingerprint = CertificateAuthority.Fingerprint(clientCertificate);
+        string fingerprint = CertificateAuthority.Fingerprint(clientCertificate);
         if (!await trust.VerifyAsync(new PresentedIdentity(claimedAgentId, fingerprint), ct))
         {
             return false;

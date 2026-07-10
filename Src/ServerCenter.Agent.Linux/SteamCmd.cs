@@ -15,10 +15,10 @@ public sealed class SteamCmd(IProcessRunner runner, string executable = "steamcm
 
     public async Task<SteamAppResult> EnsureAppAsync(SteamAppRequest request, IJobSink sink, CancellationToken ct)
     {
-        var appId = request.AppId.ToString(CultureInfo.InvariantCulture);
+        string appId = request.AppId.ToString(CultureInfo.InvariantCulture);
 
         // force_install_dir must precede app_update; login must precede it too.
-        var args = new List<string>
+        List<string> args = new List<string>
         {
             "+force_install_dir", request.InstallDir,
             "+login", "anonymous",
@@ -38,10 +38,10 @@ public sealed class SteamCmd(IProcessRunner runner, string executable = "steamcm
         args.Add("+quit");
 
         sink.Log(LogStream.Note, $"steamcmd +app_update {appId}{(request.Validate ? " validate" : string.Empty)}");
-        var result = await runner.RunAsync(executable, args, ct);
+        ProcessResult result = await runner.RunAsync(executable, args, ct);
 
         // buildid is read best-effort from the manifest (absent in a dry unit test -> null).
-        var buildId = await GetInstalledBuildIdAsync(request.InstallDir, request.AppId, ct);
+        string? buildId = await GetInstalledBuildIdAsync(request.InstallDir, request.AppId, ct);
 
         if (result.ExitCode != 0)
         {
@@ -55,14 +55,14 @@ public sealed class SteamCmd(IProcessRunner runner, string executable = "steamcm
 
     public async Task<string?> GetInstalledBuildIdAsync(string installDir, long appId, CancellationToken ct)
     {
-        var manifest = Path.Combine(
+        string manifest = Path.Combine(
             installDir, "steamapps", $"appmanifest_{appId.ToString(CultureInfo.InvariantCulture)}.acf");
         if (!File.Exists(manifest))
         {
             return null;
         }
 
-        var content = await File.ReadAllTextAsync(manifest, ct);
+        string content = await File.ReadAllTextAsync(manifest, ct);
         return SteamAppManifest.ParseBuildId(content);
     }
 }

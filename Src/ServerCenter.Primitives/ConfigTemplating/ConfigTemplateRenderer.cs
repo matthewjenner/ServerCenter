@@ -18,8 +18,8 @@ public static partial class ConfigTemplateRenderer
 
         return TokenRegex().Replace(template, match =>
         {
-            var key = match.Groups[1].Value;
-            if (!values.TryGetValue(key, out var value))
+            string key = match.Groups[1].Value;
+            if (!values.TryGetValue(key, out string? value))
             {
                 throw new KeyNotFoundException($"Config template references unknown token '{key}'.");
             }

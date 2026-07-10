@@ -22,7 +22,7 @@ public sealed class AptPackageInstaller(IProcessRunner runner) : IPackageInstall
 
         sink.Log(LogStream.Note, $"apt-get install {string.Join(' ', packages)}");
         IReadOnlyList<string> args = ["install", "-y", .. packages];
-        var result = await runner.RunAsync("apt-get", args, NonInteractive, ct);
+        ProcessResult result = await runner.RunAsync("apt-get", args, NonInteractive, ct);
         if (result.ExitCode != 0)
         {
             sink.Log(LogStream.Stderr, result.StandardError);

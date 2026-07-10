@@ -18,10 +18,10 @@ public sealed class ServerJobExecutorTests
     [Fact]
     public async Task Install_runs_steamcmd_for_the_app()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var steam = new FakeSteamCmd();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeSteamCmd steam = new FakeSteamCmd();
 
-        var outcome = await new ServerInstallExecutor(steam).ExecuteAsync(
+        JobOutcome outcome = await new ServerInstallExecutor(steam).ExecuteAsync(
             Context("server.install", new ServerInstallParams(730, "/opt/cs2", null, Validate: true)),
             new RecordingJobSink(), ct);
 
@@ -33,10 +33,10 @@ public sealed class ServerJobExecutorTests
     [Fact]
     public async Task Install_fails_when_steamcmd_fails()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var steam = new FakeSteamCmd { Result = new SteamAppResult(false, null, "disk full") };
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeSteamCmd steam = new FakeSteamCmd { Result = new SteamAppResult(false, null, "disk full") };
 
-        var outcome = await new ServerInstallExecutor(steam).ExecuteAsync(
+        JobOutcome outcome = await new ServerInstallExecutor(steam).ExecuteAsync(
             Context("server.install", new ServerInstallParams(730, "/opt/cs2", null, true)), new RecordingJobSink(), ct);
 
         outcome.Succeeded.Should().BeFalse();
@@ -46,14 +46,14 @@ public sealed class ServerJobExecutorTests
     [Fact]
     public async Task ConfigApply_renders_the_shipped_template_and_writes_it()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var writer = new RecordingConfigWriter();
-        var payload = new ServerConfigApplyParams(
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        RecordingConfigWriter writer = new RecordingConfigWriter();
+        ServerConfigApplyParams payload = new ServerConfigApplyParams(
             [new ConfigFileSpec("cs2/server.cfg", "/opt/cs2/cfg/server.cfg", ConfigFormat.Kv)],
             new Dictionary<string, string> { ["cs2/server.cfg"] = "hostname={{name}}\nport={{ports.game}}" },
             new Dictionary<string, string> { ["name"] = "ffa", ["ports.game"] = "27015" });
 
-        var outcome = await new ServerConfigApplyExecutor(writer).ExecuteAsync(
+        JobOutcome outcome = await new ServerConfigApplyExecutor(writer).ExecuteAsync(
             Context("server.config-apply", payload), new RecordingJobSink(), ct);
 
         outcome.Succeeded.Should().BeTrue();
@@ -65,13 +65,13 @@ public sealed class ServerJobExecutorTests
     [Fact]
     public async Task ConfigApply_fails_on_a_missing_token()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var payload = new ServerConfigApplyParams(
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        ServerConfigApplyParams payload = new ServerConfigApplyParams(
             [new ConfigFileSpec("cs2/server.cfg", "/opt/cs2/cfg/server.cfg", ConfigFormat.Kv)],
             new Dictionary<string, string> { ["cs2/server.cfg"] = "rcon={{rcon.password}}" },
             new Dictionary<string, string>());
 
-        var outcome = await new ServerConfigApplyExecutor(new RecordingConfigWriter()).ExecuteAsync(
+        JobOutcome outcome = await new ServerConfigApplyExecutor(new RecordingConfigWriter()).ExecuteAsync(
             Context("server.config-apply", payload), new RecordingJobSink(), ct);
 
         outcome.Succeeded.Should().BeFalse();

@@ -35,12 +35,12 @@ public sealed class JobExecutingCommandHandler : IAgentCommandHandler
     private async Task RunAsync(Command command, IAgentTransport transport, CancellationToken ct)
     {
         _store.MarkRunning(command.JobId);
-        var sink = new TransportJobSink(transport, command.JobId, ct);
+        TransportJobSink sink = new TransportJobSink(transport, command.JobId, ct);
 
         JobOutcome outcome;
         try
         {
-            if (!_byType.TryGetValue(command.Type, out var executor))
+            if (!_byType.TryGetValue(command.Type, out IJobExecutor? executor))
             {
                 outcome = JobOutcome.Failure($"no executor for job type '{command.Type}'");
             }

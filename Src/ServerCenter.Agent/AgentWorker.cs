@@ -23,7 +23,7 @@ public sealed class AgentWorker(
     {
         try
         {
-            var (connector, identity) = await AgentBootstrap.PrepareAsync(options, logger, stoppingToken);
+            (GrpcTransportConnector? connector, AgentIdentity? identity) = await AgentBootstrap.PrepareAsync(options, logger, stoppingToken);
 
             logger.LogInformation(
                 "Agent {AgentId} (node kind {NodeKind}) dialing {Address}",
@@ -37,13 +37,13 @@ public sealed class AgentWorker(
             // The "what" providers are Linux-only for now (apt + Plex); on Windows the update
             // executor is registered with none, so a dispatched update.apply fails cleanly with
             // "no provider for channel" (Windows Update is Phase 9).
-            var runner = new ProcessRunner();
+            ProcessRunner runner = new ProcessRunner();
             IReadOnlyList<IUpdateProvider> updateProviders = OperatingSystem.IsWindows()
                 ? []
                 : [new AptUpdateProvider(runner), new PlexUpdateProvider(new HttpFetcher(new HttpClient()), runner, new PlexUpdateOptions())];
 
-            var jobStore = new AgentJobStore();
-            var commandHandler = new JobExecutingCommandHandler(
+            AgentJobStore jobStore = new AgentJobStore();
+            JobExecutingCommandHandler commandHandler = new JobExecutingCommandHandler(
                 new IJobExecutor[]
                 {
                     new ServiceRestartExecutor(services),
@@ -60,7 +60,7 @@ public sealed class AgentWorker(
                 jobStore,
                 loggerFactory.CreateLogger<JobExecutingCommandHandler>());
 
-            var connectionOptions = new AgentConnectionOptions(
+            AgentConnectionOptions connectionOptions = new AgentConnectionOptions(
                 options.HeartbeatInterval,
                 new BackoffPolicy(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30)));
 

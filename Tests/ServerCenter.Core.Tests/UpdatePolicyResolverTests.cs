@@ -28,7 +28,7 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void Scheduled_tick_inside_the_window_is_eligible()
     {
-        var decision = DecideStart(Windowed(), Trigger.Scheduled, InWindow);
+        StartDecision decision = DecideStart(Windowed(), Trigger.Scheduled, InWindow);
 
         decision.Eligible.Should().BeTrue();
         decision.IneligibleReason.Should().BeNull();
@@ -37,7 +37,7 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void Scheduled_tick_outside_the_window_is_not_eligible()
     {
-        var decision = DecideStart(Windowed(), Trigger.Scheduled, OutOfWindow);
+        StartDecision decision = DecideStart(Windowed(), Trigger.Scheduled, OutOfWindow);
 
         decision.Eligible.Should().BeFalse();
         decision.IneligibleReason.Should().Contain("window");
@@ -46,7 +46,7 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void Manual_trigger_overrides_the_window()
     {
-        var decision = DecideStart(Windowed(), Trigger.Manual, OutOfWindow);
+        StartDecision decision = DecideStart(Windowed(), Trigger.Manual, OutOfWindow);
 
         decision.Eligible.Should().BeTrue();
     }
@@ -54,9 +54,9 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void Manual_schedule_never_runs_on_a_scheduled_tick()
     {
-        var policy = Windowed() with { When = UpdateSchedule.Manual };
+        UpdatePolicy policy = Windowed() with { When = UpdateSchedule.Manual };
 
-        var decision = DecideStart(policy, Trigger.Scheduled, InWindow);
+        StartDecision decision = DecideStart(policy, Trigger.Scheduled, InWindow);
 
         decision.Eligible.Should().BeFalse();
         decision.IneligibleReason.Should().Contain("manual");
@@ -65,7 +65,7 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void Manual_schedule_runs_on_an_explicit_trigger()
     {
-        var policy = Windowed() with { When = UpdateSchedule.Manual };
+        UpdatePolicy policy = Windowed() with { When = UpdateSchedule.Manual };
 
         DecideStart(policy, Trigger.Manual, OutOfWindow).Eligible.Should().BeTrue();
     }
@@ -73,7 +73,7 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void Require_confirmation_gates_a_scheduled_run()
     {
-        var decision = DecideStart(Windowed(ApprovalMode.RequireConfirmation), Trigger.Scheduled, InWindow);
+        StartDecision decision = DecideStart(Windowed(ApprovalMode.RequireConfirmation), Trigger.Scheduled, InWindow);
 
         decision.Eligible.Should().BeTrue();
         decision.RequiresConfirmation.Should().BeTrue();
@@ -82,7 +82,7 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void An_explicit_trigger_is_its_own_confirmation()
     {
-        var decision = DecideStart(Windowed(ApprovalMode.RequireConfirmation), Trigger.Manual, InWindow);
+        StartDecision decision = DecideStart(Windowed(ApprovalMode.RequireConfirmation), Trigger.Manual, InWindow);
 
         decision.RequiresConfirmation.Should().BeFalse();
     }
@@ -90,10 +90,10 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void Preflight_is_deduped_preserving_declared_order()
     {
-        var policy = Windowed(preflight:
+        UpdatePolicy policy = Windowed(preflight:
             [PreflightStep.Notify, PreflightStep.DrainPlayersViaRcon, PreflightStep.Notify]);
 
-        var decision = DecideStart(policy, Trigger.Manual, InWindow);
+        StartDecision decision = DecideStart(policy, Trigger.Manual, InWindow);
 
         decision.Preflight.Should().Equal(PreflightStep.Notify, PreflightStep.DrainPlayersViaRcon);
     }
@@ -101,7 +101,7 @@ public sealed class UpdatePolicyResolverTests
     [Fact]
     public void A_broken_cron_fails_closed_on_a_scheduled_tick()
     {
-        var policy = Windowed() with
+        UpdatePolicy policy = Windowed() with
         {
             When = new UpdateSchedule { Mode = ScheduleMode.Window, Cron = "not a cron", WindowMinutes = 120 }
         };

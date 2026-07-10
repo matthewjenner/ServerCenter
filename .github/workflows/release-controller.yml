@@ -1,0 +1,92 @@
+name: Release Controller
+
+# Builds and publishes the controller container image to GHCR on push to main. Idempotent and
+# version-gated on VersionPrefix (tag controller-v<version>): if that release already exists the job
+# exits clean. So: bump the version -> commit -> push -> image published. The HYPERVISOR pulls the
+# image (docker compose pull); it never needs the source tree or the .NET SDK.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create the version tag/release
+  packages: write   # push to GHCR
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release-controller:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/servercenter-controller
+    steps:
+      # Action versions verified against latest per the global rule (Node 24 runners).
+      - uses: actions/checkout@v7
+
+      - name: Read version from Directory.Build.props
+        id: version
+        run: |
+          v=$(grep -oE '<VersionPrefix>[^<]+</VersionPrefix>' Directory.Build.props \
+              | sed -E 's|</?VersionPrefix>||g' | tr -d '[:space:]')
+          if [[ -z "$v" ]]; then
+              echo "Could not read VersionPrefix from Directory.Build.props" >&2
+              exit 1
+          fi
+          echo "VERSION=$v"          >> "$GITHUB_OUTPUT"
+          echo "TAG=controller-v$v"  >> "$GITHUB_OUTPUT"
+          echo "Controller version: $v"
+
+      - name: Check whether this release already exists
+        id: tag-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.version.outputs.TAG }}"
+          if gh release view "$tag" --json tagName >/dev/null 2>&1; then
+              echo "Release $tag already exists - nothing to do."
+              echo "SKIP=true"  >> "$GITHUB_OUTPUT"
+          else
+              echo "SKIP=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GHCR
+        if: steps.tag-check.outputs.SKIP == 'false'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        if: steps.tag-check.outputs.SKIP == 'false'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push the controller image
+        if: steps.tag-check.outputs.SKIP == 'false'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Deploy/controller/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.VERSION }}
+            ${{ env.IMAGE }}:latest
+          # The source label links the GHCR package to the repo (so its visibility can follow it).
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create GitHub Release (marks this version published)
+        if: steps.tag-check.outputs.SKIP == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.TAG }}" \
+              --title "Controller ${{ steps.version.outputs.VERSION }}" \
+              --notes "Controller image \`${{ env.IMAGE }}:${{ steps.version.outputs.VERSION }}\` published to GHCR. On the hypervisor: copy Deploy/controller/docker-compose.yml + a templates/ dir, then \`docker compose pull && docker compose up -d\` (no source needed). First time, set the GHCR package visibility to public (or docker login ghcr.io)."

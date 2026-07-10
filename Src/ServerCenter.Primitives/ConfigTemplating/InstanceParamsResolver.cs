@@ -11,8 +11,8 @@ public static class InstanceParamsResolver
 {
     public static IReadOnlyDictionary<string, string> Flatten(string instanceParamsJson)
     {
-        using var document = JsonDocument.Parse(instanceParamsJson);
-        var values = new Dictionary<string, string>();
+        using JsonDocument document = JsonDocument.Parse(instanceParamsJson);
+        Dictionary<string, string> values = new Dictionary<string, string>();
         Walk(prefix: null, document.RootElement, values);
         return values;
     }
@@ -22,7 +22,7 @@ public static class InstanceParamsResolver
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-                foreach (var property in element.EnumerateObject())
+                foreach (JsonProperty property in element.EnumerateObject())
                 {
                     Walk(prefix is null ? property.Name : $"{prefix}.{property.Name}", property.Value, into);
                 }
@@ -30,8 +30,8 @@ public static class InstanceParamsResolver
                 break;
 
             case JsonValueKind.Array:
-                var index = 0;
-                foreach (var item in element.EnumerateArray())
+                int index = 0;
+                foreach (JsonElement item in element.EnumerateArray())
                 {
                     Walk(prefix is null ? index.ToString(CultureInfo.InvariantCulture) : $"{prefix}.{index}", item, into);
                     index++;

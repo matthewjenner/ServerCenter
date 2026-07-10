@@ -11,7 +11,7 @@ public sealed class ConfigTemplateRendererTests
     [Fact]
     public void Render_substitutes_known_tokens()
     {
-        var result = ConfigTemplateRenderer.Render(
+        string result = ConfigTemplateRenderer.Render(
             "hostname={{name}}\nport={{ports.game}}",
             new Dictionary<string, string> { ["name"] = "cs2-ffa", ["ports.game"] = "27015" });
 
@@ -21,7 +21,7 @@ public sealed class ConfigTemplateRendererTests
     [Fact]
     public void Render_throws_on_unknown_token()
     {
-        var act = () => ConfigTemplateRenderer.Render(
+        Func<string> act = () => ConfigTemplateRenderer.Render(
             "rcon={{rcon.password}}",
             new Dictionary<string, string>());
 

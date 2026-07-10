@@ -31,11 +31,11 @@ public static class VirshOutputParser
     // The state column can be multiple words; UUID is not in this view (empty until GetDomain).
     public static IReadOnlyList<DomainInfo> ParseDomainList(string listOutput)
     {
-        var domains = new List<DomainInfo>();
-        var pastHeader = false;
-        foreach (var raw in listOutput.Split('\n'))
+        List<DomainInfo> domains = new List<DomainInfo>();
+        bool pastHeader = false;
+        foreach (string raw in listOutput.Split('\n'))
         {
-            var line = raw.TrimEnd();
+            string line = raw.TrimEnd();
             if (!pastHeader)
             {
                 if (line.Contains("----", StringComparison.Ordinal))
@@ -51,14 +51,14 @@ public static class VirshOutputParser
                 continue;
             }
 
-            var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 3)
             {
                 continue;
             }
 
-            var name = parts[1];
-            var state = string.Join(' ', parts.Skip(2));
+            string name = parts[1];
+            string state = string.Join(' ', parts.Skip(2));
             domains.Add(new DomainInfo(name, string.Empty, ParseState(state)));
         }
 
@@ -73,9 +73,9 @@ public static class VirshOutputParser
         string? uuid = null;
         string? state = null;
 
-        foreach (var raw in domInfoOutput.Split('\n'))
+        foreach (string raw in domInfoOutput.Split('\n'))
         {
-            var line = raw.Trim();
+            string line = raw.Trim();
             if (line.StartsWith("Name:", StringComparison.Ordinal))
             {
                 name = FieldValue(line);

@@ -15,14 +15,14 @@ public sealed class RconShutdownCapability(ShutdownSpec spec, IRconClient rcon, 
 
     public async Task GracefulShutdownAsync(ShutdownContext ctx, IJobSink sink, CancellationToken ct)
     {
-        var endpoint = RconEndpoints.From(ctx.InstanceParams);
-        await using var session = await rcon.ConnectAsync(endpoint, ct);
+        RconEndpoint endpoint = RconEndpoints.From(ctx.InstanceParams);
+        await using IRconSession session = await rcon.ConnectAsync(endpoint, ct);
 
         sink.Log(LogStream.Note, $"draining: {spec.DrainCommand}");
         await session.ExecuteAsync(spec.DrainCommand, ct);
 
         // The caller's grace overrides the descriptor default when set.
-        var graceSeconds = ctx.GraceSeconds > 0 ? ctx.GraceSeconds : spec.GraceSeconds;
+        int graceSeconds = ctx.GraceSeconds > 0 ? ctx.GraceSeconds : spec.GraceSeconds;
         if (graceSeconds > 0)
         {
             sink.Log(LogStream.Note, $"grace period {graceSeconds}s");

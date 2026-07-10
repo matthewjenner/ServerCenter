@@ -2,6 +2,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.Time.Testing;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
+using ServerCenter.Core.Jobs;
 using ServerCenter.Core.Updates;
 using Xunit;
 
@@ -22,17 +23,17 @@ public sealed class UpdateJobDispatcherTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         _db = await TempDatabase.CreateAsync(ct);
         _policies = new UpdatePolicyRepository(_db.Database);
         _jobs = new JobRepository(_db.Database);
 
-        var nodes = new AgentNodeRepository(_db.Database);
+        AgentNodeRepository nodes = new AgentNodeRepository(_db.Database);
         await nodes.EnsureAgentAsync("agent-1", "agent-1", "fpr", 1, ct);
         await nodes.EnsureNodeAsync("agent-1", "agent-1", "guest", "managed", 1, ct);
 
-        var clock = new FakeTimeProvider(InWindow);
-        var jobDispatcher = new JobDispatcher(_jobs, new ConnectedAgents(), clock);
+        FakeTimeProvider clock = new FakeTimeProvider(InWindow);
+        JobDispatcher jobDispatcher = new JobDispatcher(_jobs, new ConnectedAgents(), clock);
         _dispatcher = new UpdateJobDispatcher(_policies, jobDispatcher, clock);
     }
 
@@ -59,18 +60,18 @@ public sealed class UpdateJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task Dispatches_a_resolved_update_apply_job_from_the_policy()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await StoreAsync(PlexPolicy());
 
-        var result = await _dispatcher.DispatchAsync(
+        UpdateDispatchResult result = await _dispatcher.DispatchAsync(
             "agent-1", "plex-nightly", null, UpdatePolicyResolver.Trigger.Manual, [], "plex.service", ct);
 
         result.Outcome.Should().Be(UpdateDispatchOutcome.Dispatched);
-        var job = await _jobs.GetAsync(result.JobId!, ct);
+        Job? job = await _jobs.GetAsync(result.JobId!, ct);
         job!.Type.Should().Be("update.apply");
         job.State.Should().Be(Core.Jobs.JobState.Queued);
 
-        var request = UpdateJobParamsSerializer.Deserialize(job.ParamsJson);
+        UpdateJobParams request = UpdateJobParamsSerializer.Deserialize(job.ParamsJson);
         request.Channel.Should().Be("plex");
         request.How.Should().Be(UpdateHow.StopUpdateStart);
         request.ServiceUnit.Should().Be("plex.service");
@@ -80,9 +81,9 @@ public sealed class UpdateJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task Reports_policy_not_found()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
 
-        var result = await _dispatcher.DispatchAsync(
+        UpdateDispatchResult result = await _dispatcher.DispatchAsync(
             "agent-1", "does-not-exist", null, UpdatePolicyResolver.Trigger.Manual, [], null, ct);
 
         result.Outcome.Should().Be(UpdateDispatchOutcome.PolicyNotFound);
@@ -92,10 +93,10 @@ public sealed class UpdateJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task A_scheduled_tick_on_a_manual_policy_is_not_eligible()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await StoreAsync(PlexPolicy());
 
-        var result = await _dispatcher.DispatchAsync(
+        UpdateDispatchResult result = await _dispatcher.DispatchAsync(
             "agent-1", "plex-nightly", null, UpdatePolicyResolver.Trigger.Scheduled, [], null, ct);
 
         result.Outcome.Should().Be(UpdateDispatchOutcome.NotEligible);
@@ -104,10 +105,10 @@ public sealed class UpdateJobDispatcherTests : IAsyncLifetime
     [Fact]
     public async Task A_scheduled_run_of_a_confirm_required_policy_needs_confirmation()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await StoreAsync(PlexPolicy(ScheduleMode.Window, ApprovalMode.RequireConfirmation));
 
-        var result = await _dispatcher.DispatchAsync(
+        UpdateDispatchResult result = await _dispatcher.DispatchAsync(
             "agent-1", "plex-nightly", null, UpdatePolicyResolver.Trigger.Scheduled, [], null, ct);
 
         result.Outcome.Should().Be(UpdateDispatchOutcome.NeedsConfirmation);

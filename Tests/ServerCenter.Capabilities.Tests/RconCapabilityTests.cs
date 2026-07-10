@@ -22,7 +22,7 @@ public sealed class RconCapabilityTests
     [Fact]
     public void RconEndpoints_resolves_from_instance_params_with_loopback_default()
     {
-        var endpoint = RconEndpoints.From(InstanceParams);
+        RconEndpoint endpoint = RconEndpoints.From(InstanceParams);
 
         endpoint.Should().Be(new RconEndpoint("127.0.0.1", 27016, "secret"));
     }
@@ -30,7 +30,7 @@ public sealed class RconCapabilityTests
     [Fact]
     public void RconEndpoints_fails_loudly_on_a_missing_port()
     {
-        var act = () => RconEndpoints.From(new Dictionary<string, string> { ["rcon.password"] = "secret" });
+        Func<RconEndpoint> act = () => RconEndpoints.From(new Dictionary<string, string> { ["rcon.password"] = "secret" });
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*ports.rcon*");
     }
@@ -38,12 +38,12 @@ public sealed class RconCapabilityTests
     [Fact]
     public async Task Stats_runs_each_command_and_returns_the_raw_responses()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var factory = new FakeRconChannelFactory("secret",
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeRconChannelFactory factory = new FakeRconChannelFactory("secret",
             new Dictionary<string, string[]> { ["status"] = ["players 3/10"], ["stats"] = ["cpu 12%"] });
-        var spec = new StatsSpec("rcon", new Dictionary<string, string> { ["players"] = "status", ["perf"] = "stats" });
+        StatsSpec spec = new StatsSpec("rcon", new Dictionary<string, string> { ["players"] = "status", ["perf"] = "stats" });
 
-        var result = await new RconStatsCapability(spec, new SourceRconClient(factory))
+        ServerStats result = await new RconStatsCapability(spec, new SourceRconClient(factory))
             .ReadAsync(new StatsContext(InstanceParams), ct);
 
         result.Raw["players"].Should().Be("players 3/10");
@@ -53,9 +53,9 @@ public sealed class RconCapabilityTests
     [Fact]
     public async Task Shutdown_sends_the_drain_command()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var factory = new FakeRconChannelFactory("secret");
-        var spec = new ShutdownSpec("rcon", "say Restarting; sv_shutdown", GraceSeconds: 0);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeRconChannelFactory factory = new FakeRconChannelFactory("secret");
+        ShutdownSpec spec = new ShutdownSpec("rcon", "say Restarting; sv_shutdown", GraceSeconds: 0);
 
         await new RconShutdownCapability(spec, new SourceRconClient(factory), TimeProvider.System)
             .GracefulShutdownAsync(new ShutdownContext(0, InstanceParams), new RecordingJobSink(), ct);
@@ -67,12 +67,12 @@ public sealed class RconCapabilityTests
     [Fact]
     public async Task Shutdown_waits_out_the_grace_period()
     {
-        var ct = TestContext.Current.CancellationToken;
-        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 7, 10, 0, 0, 0, TimeSpan.Zero));
-        var factory = new FakeRconChannelFactory("secret");
-        var spec = new ShutdownSpec("rcon", "sv_shutdown", GraceSeconds: 60);
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeTimeProvider clock = new FakeTimeProvider(new DateTimeOffset(2026, 7, 10, 0, 0, 0, TimeSpan.Zero));
+        FakeRconChannelFactory factory = new FakeRconChannelFactory("secret");
+        ShutdownSpec spec = new ShutdownSpec("rcon", "sv_shutdown", GraceSeconds: 60);
 
-        var task = new RconShutdownCapability(spec, new SourceRconClient(factory), clock)
+        Task task = new RconShutdownCapability(spec, new SourceRconClient(factory), clock)
             .GracefulShutdownAsync(new ShutdownContext(0, InstanceParams), new RecordingJobSink(), ct);
 
         task.IsCompleted.Should().BeFalse(); // still draining/waiting

@@ -20,7 +20,7 @@ public sealed class VmLifecycleService(
 {
     public async Task<VmDispatchResult> DispatchAsync(string nodeId, VmAction action, CancellationToken ct)
     {
-        var node = await nodes.GetNodeAsync(nodeId, ct);
+        NodeRow? node = await nodes.GetNodeAsync(nodeId, ct);
         if (node is null)
         {
             return VmDispatchResult.NotFound($"node '{nodeId}' not found");
@@ -31,8 +31,8 @@ public sealed class VmLifecycleService(
             return VmDispatchResult.NoDomain($"node '{nodeId}' has no libvirt domain linked");
         }
 
-        var jobId = Guid.NewGuid().ToString("N");
-        var now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        string jobId = Guid.NewGuid().ToString("N");
+        long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
         await jobs.InsertAsync(new Job
         {
             Id = jobId,

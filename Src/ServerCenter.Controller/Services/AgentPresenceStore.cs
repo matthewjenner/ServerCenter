@@ -13,7 +13,7 @@ public sealed class AgentPresenceStore : IControllerSessionSink
 
     public bool TryGet(string agentId, out AgentPresence? presence)
     {
-        var found = _byAgent.TryGetValue(agentId, out var value);
+        bool found = _byAgent.TryGetValue(agentId, out AgentPresence? value);
         presence = value;
         return found;
     }

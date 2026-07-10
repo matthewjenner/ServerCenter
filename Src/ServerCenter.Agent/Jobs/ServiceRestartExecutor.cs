@@ -15,7 +15,7 @@ public sealed class ServiceRestartExecutor(IServiceController services) : IJobEx
 
     public async Task<JobOutcome> ExecuteAsync(JobContext context, IJobSink sink, CancellationToken ct)
     {
-        var unit = ParseUnit(context.ParamsJson);
+        string? unit = ParseUnit(context.ParamsJson);
         if (string.IsNullOrWhiteSpace(unit))
         {
             return JobOutcome.Failure("missing 'unit' param");
@@ -24,7 +24,7 @@ public sealed class ServiceRestartExecutor(IServiceController services) : IJobEx
         sink.Log(LogStream.Note, $"restarting {unit}");
         await services.RestartAsync(unit, ct);
 
-        var state = await services.GetStateAsync(unit, ct);
+        ServiceState state = await services.GetStateAsync(unit, ct);
         sink.Progress(100, $"state: {state}");
 
         return state == ServiceState.Active

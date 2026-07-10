@@ -1,0 +1,15 @@
+# Keep the build context small + deterministic: let the SDK stage restore/publish from source only.
+**/bin/
+**/obj/
+artifacts/
+.git/
+.github/
+.vs/
+.idea/
+*.user
+# Local runtime state that must never leak into an image.
+**/*.db
+**/*.db-wal
+**/*.db-shm
+certs/
+templates-local/

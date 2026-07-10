@@ -15,9 +15,9 @@ public static class RconProtocol
 
     public static byte[] Encode(RconPacket packet)
     {
-        var body = Encoding.UTF8.GetBytes(packet.Body);
-        var length = 4 + 4 + body.Length + 2; // id + type + body + two trailing nulls
-        var buffer = new byte[4 + length];
+        byte[] body = Encoding.UTF8.GetBytes(packet.Body);
+        int length = 4 + 4 + body.Length + 2; // id + type + body + two trailing nulls
+        byte[] buffer = new byte[4 + length];
         BinaryPrimitives.WriteInt32LittleEndian(buffer, length);
         BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(4), packet.Id);
         BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(8), packet.Type);
@@ -34,9 +34,9 @@ public static class RconProtocol
             throw new InvalidDataException($"RCON packet content too short ({content.Length} bytes)");
         }
 
-        var id = BinaryPrimitives.ReadInt32LittleEndian(content);
-        var type = BinaryPrimitives.ReadInt32LittleEndian(content[4..]);
-        var body = Encoding.UTF8.GetString(content[8..^2]); // drop the two trailing nulls
+        int id = BinaryPrimitives.ReadInt32LittleEndian(content);
+        int type = BinaryPrimitives.ReadInt32LittleEndian(content[4..]);
+        string body = Encoding.UTF8.GetString(content[8..^2]); // drop the two trailing nulls
         return new RconPacket(id, type, body);
     }
 }

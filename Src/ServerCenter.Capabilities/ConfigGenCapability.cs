@@ -16,10 +16,10 @@ public sealed class ConfigGenCapability(
 
     public async Task ApplyAsync(ConfigContext ctx, IJobSink sink, CancellationToken ct)
     {
-        foreach (var file in spec.Files)
+        foreach (ConfigFileSpec file in spec.Files)
         {
-            var template = await templates.GetAsync(file.SchemaRef, ct);
-            var rendered = ConfigTemplateRenderer.Render(template, ctx.InstanceParams);
+            string template = await templates.GetAsync(file.SchemaRef, ct);
+            string rendered = ConfigTemplateRenderer.Render(template, ctx.InstanceParams);
             sink.Log(LogStream.Note, $"writing {file.Path} ({file.Format.ToString().ToLowerInvariant()})");
             await writer.WriteAsync(file.Path, rendered, ct);
         }

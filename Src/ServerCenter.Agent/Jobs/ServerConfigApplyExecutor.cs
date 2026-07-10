@@ -25,7 +25,7 @@ public sealed class ServerConfigApplyExecutor(IConfigWriter writer) : IJobExecut
             return JobOutcome.Failure($"invalid server.config-apply params: {ex.Message}");
         }
 
-        var capability = new ConfigGenCapability(
+        ConfigGenCapability capability = new ConfigGenCapability(
             new ConfigGenSpec("config-template", request.Files),
             new InlineConfigTemplateSource(request.Templates),
             writer);

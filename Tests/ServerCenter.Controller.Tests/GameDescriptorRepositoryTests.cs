@@ -34,10 +34,10 @@ public sealed class GameDescriptorRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task Insert_and_get_round_trips_the_descriptor()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _descriptors.InsertAsync(Descriptor(3), 1000, ct);
 
-        var got = await _descriptors.GetAsync("cs2-dedicated", 3, ct);
+        GameDescriptor? got = await _descriptors.GetAsync("cs2-dedicated", 3, ct);
 
         got.Should().BeEquivalentTo(Descriptor(3));
     }
@@ -45,7 +45,7 @@ public sealed class GameDescriptorRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task GetLatest_returns_the_highest_version()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _descriptors.InsertAsync(Descriptor(1), 1000, ct);
         await _descriptors.InsertAsync(Descriptor(3), 3000, ct);
         await _descriptors.InsertAsync(Descriptor(2), 2000, ct);

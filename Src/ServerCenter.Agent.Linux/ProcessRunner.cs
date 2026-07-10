@@ -18,7 +18,7 @@ public sealed class ProcessRunner : IProcessRunner
         IReadOnlyDictionary<string, string> environment,
         CancellationToken ct)
     {
-        using var process = new Process
+        using Process process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
@@ -29,19 +29,19 @@ public sealed class ProcessRunner : IProcessRunner
             }
         };
 
-        foreach (var argument in arguments)
+        foreach (string argument in arguments)
         {
             process.StartInfo.ArgumentList.Add(argument);
         }
 
-        foreach (var (key, value) in environment)
+        foreach ((string? key, string? value) in environment)
         {
             process.StartInfo.Environment[key] = value;
         }
 
         process.Start();
-        var stdout = process.StandardOutput.ReadToEndAsync(ct);
-        var stderr = process.StandardError.ReadToEndAsync(ct);
+        Task<string> stdout = process.StandardOutput.ReadToEndAsync(ct);
+        Task<string> stderr = process.StandardError.ReadToEndAsync(ct);
         await process.WaitForExitAsync(ct);
 
         return new ProcessResult(process.ExitCode, (await stdout).Trim(), (await stderr).Trim());

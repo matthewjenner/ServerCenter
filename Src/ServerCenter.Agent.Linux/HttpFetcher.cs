@@ -9,8 +9,8 @@ public sealed class HttpFetcher(HttpClient client) : IHttpFetcher
 
     public async Task<string> DownloadToFileAsync(string url, string destinationPath, CancellationToken ct)
     {
-        await using var response = await client.GetStreamAsync(url, ct);
-        await using var file = File.Create(destinationPath);
+        await using Stream response = await client.GetStreamAsync(url, ct);
+        await using FileStream file = File.Create(destinationPath);
         await response.CopyToAsync(file, ct);
         return destinationPath;
     }

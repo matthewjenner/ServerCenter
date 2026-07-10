@@ -12,7 +12,7 @@ public sealed class JobsViewModelTests
     [Fact]
     public void Apply_adds_updates_and_removes_jobs()
     {
-        var vm = new JobsViewModel(new NoopJobClient());
+        JobsViewModel vm = new JobsViewModel(new NoopJobClient());
 
         vm.Apply(Snapshot(
             Job("j1", "n1", JobState.Running, 50),
@@ -23,14 +23,14 @@ public sealed class JobsViewModelTests
         vm.Apply(Snapshot(Job("j1", "n1", JobState.Succeeded, 100)));
 
         vm.Jobs.Select(j => j.JobId).Should().BeEquivalentTo(["j1"]);
-        var j1 = vm.Jobs.Single();
+        JobRowViewModel j1 = vm.Jobs.Single();
         j1.StateText.Should().Be("Succeeded");
         j1.ProgressText.Should().Be("100%");
     }
 
     private static JobListSnapshot Snapshot(params JobInfo[] jobs)
     {
-        var snapshot = new JobListSnapshot { GeneratedUnixMs = 1 };
+        JobListSnapshot snapshot = new JobListSnapshot { GeneratedUnixMs = 1 };
         snapshot.Jobs.AddRange(jobs);
         return snapshot;
     }
@@ -47,8 +47,8 @@ public sealed class JobsViewModelTests
     [Fact]
     public async Task Trigger_update_dispatches_with_trimmed_inputs_and_reports_the_job()
     {
-        var client = new RecordingJobClient { Result = new UpdateTriggerResult("Dispatched", "abcdef1234", string.Empty) };
-        var vm = new JobsViewModel(client)
+        RecordingJobClient client = new RecordingJobClient { Result = new UpdateTriggerResult("Dispatched", "abcdef1234", string.Empty) };
+        JobsViewModel vm = new JobsViewModel(client)
         {
             UpdateAgentId = "  plex-node ",
             UpdatePolicyId = " plex-nightly ",
@@ -64,8 +64,8 @@ public sealed class JobsViewModelTests
     [Fact]
     public async Task Trigger_update_requires_an_agent_and_a_policy()
     {
-        var client = new RecordingJobClient();
-        var vm = new JobsViewModel(client) { UpdateAgentId = "n1", UpdatePolicyId = "" };
+        RecordingJobClient client = new RecordingJobClient();
+        JobsViewModel vm = new JobsViewModel(client) { UpdateAgentId = "n1", UpdatePolicyId = "" };
 
         await vm.TriggerUpdateCommand.ExecuteAsync(null);
 
@@ -76,8 +76,8 @@ public sealed class JobsViewModelTests
     [Fact]
     public async Task Vm_action_triggers_the_selected_action_for_the_node()
     {
-        var client = new RecordingJobClient { Result = new UpdateTriggerResult("Dispatched", "vmjob1234", string.Empty) };
-        var vm = new JobsViewModel(client) { VmNodeId = " cs2-node " };
+        RecordingJobClient client = new RecordingJobClient { Result = new UpdateTriggerResult("Dispatched", "vmjob1234", string.Empty) };
+        JobsViewModel vm = new JobsViewModel(client) { VmNodeId = " cs2-node " };
 
         await vm.VmActionCommand.ExecuteAsync("restart");
 
@@ -88,8 +88,8 @@ public sealed class JobsViewModelTests
     [Fact]
     public async Task Vm_action_requires_a_node_id()
     {
-        var client = new RecordingJobClient();
-        var vm = new JobsViewModel(client) { VmNodeId = "" };
+        RecordingJobClient client = new RecordingJobClient();
+        JobsViewModel vm = new JobsViewModel(client) { VmNodeId = "" };
 
         await vm.VmActionCommand.ExecuteAsync("start");
 
@@ -100,11 +100,11 @@ public sealed class JobsViewModelTests
     [Fact]
     public async Task Trigger_update_surfaces_a_non_dispatched_outcome()
     {
-        var client = new RecordingJobClient
+        RecordingJobClient client = new RecordingJobClient
         {
             Result = new UpdateTriggerResult("NeedsConfirmation", null, "policy requires operator confirmation")
         };
-        var vm = new JobsViewModel(client) { UpdateAgentId = "n1", UpdatePolicyId = "p1" };
+        JobsViewModel vm = new JobsViewModel(client) { UpdateAgentId = "n1", UpdatePolicyId = "p1" };
 
         await vm.TriggerUpdateCommand.ExecuteAsync(null);
 

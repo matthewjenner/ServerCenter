@@ -14,11 +14,11 @@ public sealed class ServerInstanceRepositoryTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         _db = await TempDatabase.CreateAsync(ct);
         _instances = new ServerInstanceRepository(_db.Database);
 
-        var nodes = new AgentNodeRepository(_db.Database);
+        AgentNodeRepository nodes = new AgentNodeRepository(_db.Database);
         await nodes.EnsureAgentAsync("agent-1", "agent-1", "fpr", 1, ct);
         await nodes.EnsureNodeAsync("node-1", "agent-1", "guest", "managed", 1, ct);
     }
@@ -38,10 +38,10 @@ public sealed class ServerInstanceRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task Insert_and_get_round_trips_all_fields()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _instances.InsertAsync(Instance("srv-1"), ct);
 
-        var got = await _instances.GetAsync("srv-1", ct);
+        ServerInstance? got = await _instances.GetAsync("srv-1", ct);
 
         got.Should().BeEquivalentTo(Instance("srv-1"));
     }
@@ -49,11 +49,11 @@ public sealed class ServerInstanceRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task ListByNode_returns_the_node_instances()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _instances.InsertAsync(Instance("srv-1"), ct);
         await _instances.InsertAsync(Instance("srv-2"), ct);
 
-        var list = await _instances.ListByNodeAsync("node-1", ct);
+        IReadOnlyList<ServerInstance> list = await _instances.ListByNodeAsync("node-1", ct);
 
         list.Select(i => i.Id).Should().BeEquivalentTo(["srv-1", "srv-2"]);
     }

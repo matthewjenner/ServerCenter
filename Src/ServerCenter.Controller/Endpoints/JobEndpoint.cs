@@ -12,8 +12,8 @@ public static class JobEndpoint
         app.MapPost("/jobs/service-restart",
             async (ServiceRestartRequest request, JobDispatcher dispatcher, CancellationToken ct) =>
             {
-                var paramsJson = JsonSerializer.Serialize(new { unit = request.Unit });
-                var jobId = await dispatcher.DispatchAsync(
+                string paramsJson = JsonSerializer.Serialize(new { unit = request.Unit });
+                string jobId = await dispatcher.DispatchAsync(
                     request.AgentId, "service.restart", paramsJson, cancellable: false, requeueable: false, ct);
                 return Results.Ok(new { jobId });
             });

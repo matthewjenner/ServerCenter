@@ -17,16 +17,16 @@ public static class EnrollmentClient
     public static async Task<EnrollmentBundle> EnrollAsync(
         string httpsBaseAddress, string displayName, string token, CancellationToken ct)
     {
-        using var handler = new SocketsHttpHandler
+        using SocketsHttpHandler handler = new SocketsHttpHandler
         {
             SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = (_, _, _, _) => true }
         };
-        using var http = new HttpClient(handler) { BaseAddress = new Uri(httpsBaseAddress) };
+        using HttpClient http = new HttpClient(handler) { BaseAddress = new Uri(httpsBaseAddress) };
 
-        var response = await http.PostAsJsonAsync("/enroll", new EnrollBody(displayName, token), ct);
+        HttpResponseMessage response = await http.PostAsJsonAsync("/enroll", new EnrollBody(displayName, token), ct);
         response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadFromJsonAsync<EnrollResult>(ct)
+        EnrollResult result = await response.Content.ReadFromJsonAsync<EnrollResult>(ct)
             ?? throw new InvalidOperationException("empty enrollment response");
         return new EnrollmentBundle(result.AgentId, result.CertPem, result.PrivateKeyPem, result.CaCertPem, result.Fingerprint);
     }
@@ -43,9 +43,9 @@ public static class AgentTls
     // (PKCS#12 round-trip) plus the CA cert to validate the controller.
     public static AgentTlsMaterial ToTlsMaterial(EnrollmentBundle bundle)
     {
-        using var fromPem = X509Certificate2.CreateFromPem(bundle.CertPem, bundle.PrivateKeyPem);
-        var clientCertificate = X509CertificateLoader.LoadPkcs12(fromPem.Export(X509ContentType.Pkcs12), null);
-        var caCertificate = X509Certificate2.CreateFromPem(bundle.CaCertPem);
+        using X509Certificate2 fromPem = X509Certificate2.CreateFromPem(bundle.CertPem, bundle.PrivateKeyPem);
+        X509Certificate2 clientCertificate = X509CertificateLoader.LoadPkcs12(fromPem.Export(X509ContentType.Pkcs12), null);
+        X509Certificate2 caCertificate = X509Certificate2.CreateFromPem(bundle.CaCertPem);
         return new AgentTlsMaterial(clientCertificate, caCertificate);
     }
 }

@@ -17,17 +17,17 @@ public sealed class HandshakeEndToEndTests
     [Fact]
     public async Task Empty_resync_round_trips_and_establishes_the_session()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
-        var jobs = new FakeControllerJobView(); // no open jobs
-        var agentJobs = new FakeAgentJobStateSource(); // no in-flight jobs
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
+        FakeControllerJobView jobs = new FakeControllerJobView(); // no open jobs
+        FakeAgentJobStateSource agentJobs = new FakeAgentJobStateSource(); // no in-flight jobs
 
-        var controllerTask = ControllerHandshake.PerformAsync(link.ControllerSide, jobs, () => "sess-1", ct);
-        var agentTask = AgentHandshake.PerformAsync(link.AgentSide, Identity, agentJobs, ct);
+        Task<ControllerHandshakeResult> controllerTask = ControllerHandshake.PerformAsync(link.ControllerSide, jobs, () => "sess-1", ct);
+        Task<AgentHandshakeResult> agentTask = AgentHandshake.PerformAsync(link.AgentSide, Identity, agentJobs, ct);
         await Task.WhenAll(controllerTask, agentTask);
 
-        var controller = await controllerTask;
-        var agent = await agentTask;
+        ControllerHandshakeResult controller = await controllerTask;
+        AgentHandshakeResult agent = await agentTask;
 
         controller.Established.Should().BeTrue();
         controller.AgentId.Should().Be("agent-1");
@@ -39,12 +39,12 @@ public sealed class HandshakeEndToEndTests
     [Fact]
     public async Task Node_kind_host_flows_from_the_agent_to_the_controller()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
-        var hostIdentity = new AgentIdentity("host-agent", "0.1.0", "linux", "x64", NodeKind: "host");
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
+        AgentIdentity hostIdentity = new AgentIdentity("host-agent", "0.1.0", "linux", "x64", NodeKind: "host");
 
-        var controllerTask = ControllerHandshake.PerformAsync(link.ControllerSide, new FakeControllerJobView(), () => "s", ct);
-        var agentTask = AgentHandshake.PerformAsync(link.AgentSide, hostIdentity, new FakeAgentJobStateSource(), ct);
+        Task<ControllerHandshakeResult> controllerTask = ControllerHandshake.PerformAsync(link.ControllerSide, new FakeControllerJobView(), () => "s", ct);
+        Task<AgentHandshakeResult> agentTask = AgentHandshake.PerformAsync(link.AgentSide, hostIdentity, new FakeAgentJobStateSource(), ct);
         await Task.WhenAll(controllerTask, agentTask);
 
         (await controllerTask).NodeKind.Should().Be("host");
@@ -53,21 +53,21 @@ public sealed class HandshakeEndToEndTests
     [Fact]
     public async Task Resync_after_reconnect_reconciles_an_in_flight_job()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
 
         // The controller still believes job-A is running; the agent, on reconnect, reports it
         // finished while the stream was down.
-        var jobs = new FakeControllerJobView();
+        FakeControllerJobView jobs = new FakeControllerJobView();
         jobs.SeedOpenJobs("agent-1", new ControllerOpenJob("job-A", Requeueable: false));
-        var agentJobs = new FakeAgentJobStateSource(
+        FakeAgentJobStateSource agentJobs = new FakeAgentJobStateSource(
             new AgentResyncEntry("job-A", AgentJobLocalState.FinishedSucceeded, 42));
 
-        var controllerTask = ControllerHandshake.PerformAsync(link.ControllerSide, jobs, () => "sess-2", ct);
-        var agentTask = AgentHandshake.PerformAsync(link.AgentSide, Identity, agentJobs, ct);
+        Task<ControllerHandshakeResult> controllerTask = ControllerHandshake.PerformAsync(link.ControllerSide, jobs, () => "sess-2", ct);
+        Task<AgentHandshakeResult> agentTask = AgentHandshake.PerformAsync(link.AgentSide, Identity, agentJobs, ct);
         await Task.WhenAll(controllerTask, agentTask);
 
-        var controller = await controllerTask;
+        ControllerHandshakeResult controller = await controllerTask;
 
         controller.Established.Should().BeTrue();
         controller.ReconcileActions.Should().ContainSingle()
@@ -79,12 +79,12 @@ public sealed class HandshakeEndToEndTests
     [Fact]
     public async Task Controller_rejects_a_version_skewed_hello_with_goodbye()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
-        var jobs = new FakeControllerJobView();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
+        FakeControllerJobView jobs = new FakeControllerJobView();
 
         // Push a Hello whose envelope declares an incompatible major, then run the controller.
-        var badHello = new AgentMessage
+        AgentMessage badHello = new AgentMessage
         {
             Envelope = new Envelope
             {
@@ -96,12 +96,12 @@ public sealed class HandshakeEndToEndTests
         };
         await link.AgentSide.SendAsync(badHello, ct);
 
-        var result = await ControllerHandshake.PerformAsync(link.ControllerSide, jobs, () => "unused", ct);
+        ControllerHandshakeResult result = await ControllerHandshake.PerformAsync(link.ControllerSide, jobs, () => "unused", ct);
 
         result.Established.Should().BeFalse();
 
         // The agent side should observe a typed Goodbye(VERSION_MISMATCH).
-        await using var incoming = link.AgentSide.Incoming(ct).GetAsyncEnumerator(ct);
+        await using IAsyncEnumerator<ControllerMessage> incoming = link.AgentSide.Incoming(ct).GetAsyncEnumerator(ct);
         (await incoming.MoveNextAsync()).Should().BeTrue();
         incoming.Current.PayloadCase.Should().Be(ControllerMessage.PayloadOneofCase.Goodbye);
         incoming.Current.Goodbye.Reason.Should().Be(GoodbyeReason.VersionMismatch);

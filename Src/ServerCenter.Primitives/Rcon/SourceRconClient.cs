@@ -10,10 +10,10 @@ public sealed class SourceRconClient(IRconChannelFactory channels) : IRconClient
 {
     public async Task<IRconSession> ConnectAsync(RconEndpoint endpoint, CancellationToken ct)
     {
-        var channel = await channels.OpenAsync(endpoint, ct);
+        IRconChannel channel = await channels.OpenAsync(endpoint, ct);
         try
         {
-            var session = new SourceRconSession(channel);
+            SourceRconSession session = new SourceRconSession(channel);
             await session.AuthenticateAsync(endpoint.Password, ct);
             return session;
         }
@@ -34,12 +34,12 @@ internal sealed class SourceRconSession(IRconChannel channel) : IRconSession
     // request) means the password was rejected.
     public async Task AuthenticateAsync(string password, CancellationToken ct)
     {
-        var id = NextId();
+        int id = NextId();
         await channel.SendAsync(new RconPacket(id, RconPacketTypes.Auth, password), ct);
 
         while (true)
         {
-            var reply = await channel.ReceiveAsync(ct);
+            RconPacket reply = await channel.ReceiveAsync(ct);
             if (reply.Type != RconPacketTypes.AuthResponse)
             {
                 continue; // the pre-auth junk RESPONSE_VALUE some servers send
@@ -56,18 +56,18 @@ internal sealed class SourceRconSession(IRconChannel channel) : IRconSession
 
     public async Task<string> ExecuteAsync(string command, CancellationToken ct)
     {
-        var commandId = NextId();
-        var sentinelId = NextId();
+        int commandId = NextId();
+        int sentinelId = NextId();
 
         await channel.SendAsync(new RconPacket(commandId, RconPacketTypes.ExecCommand, command), ct);
         // Empty follow-up packet: the server echoes it AFTER every real response packet, marking the
         // end of a possibly multi-packet response (Valve's documented multi-packet technique).
         await channel.SendAsync(new RconPacket(sentinelId, RconPacketTypes.ResponseValue, string.Empty), ct);
 
-        var body = new StringBuilder();
+        StringBuilder body = new StringBuilder();
         while (true)
         {
-            var reply = await channel.ReceiveAsync(ct);
+            RconPacket reply = await channel.ReceiveAsync(ct);
             if (reply.Id == sentinelId)
             {
                 break;

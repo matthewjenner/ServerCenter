@@ -35,10 +35,10 @@ public sealed class UpdatePolicyRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task Insert_and_get_round_trips_the_policy()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _policies.InsertAsync(Policy(1), 1000, ct);
 
-        var got = await _policies.GetAsync("plex-lowtraffic", 1, ct);
+        UpdatePolicy? got = await _policies.GetAsync("plex-lowtraffic", 1, ct);
 
         got.Should().BeEquivalentTo(Policy(1));
     }
@@ -46,12 +46,12 @@ public sealed class UpdatePolicyRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task GetLatest_returns_the_highest_version()
     {
-        var ct = TestContext.Current.CancellationToken;
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await _policies.InsertAsync(Policy(1), 1000, ct);
         await _policies.InsertAsync(Policy(3) with { How = UpdateHow.InPlace }, 3000, ct);
         await _policies.InsertAsync(Policy(2), 2000, ct);
 
-        var latest = await _policies.GetLatestAsync("plex-lowtraffic", ct);
+        UpdatePolicy? latest = await _policies.GetLatestAsync("plex-lowtraffic", ct);
 
         latest!.Version.Should().Be(3);
         latest.How.Should().Be(UpdateHow.InPlace);
@@ -60,7 +60,7 @@ public sealed class UpdatePolicyRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task GetLatest_is_null_for_an_unknown_id()
     {
-        var latest = await _policies.GetLatestAsync("nope", TestContext.Current.CancellationToken);
+        UpdatePolicy? latest = await _policies.GetLatestAsync("nope", TestContext.Current.CancellationToken);
 
         latest.Should().BeNull();
     }

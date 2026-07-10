@@ -14,8 +14,8 @@ public sealed class ServerInstanceRepository(ServerCenterDatabase database)
 
     public async Task InsertAsync(ServerInstance instance, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText =
             $"INSERT INTO server_instance ({Columns}) VALUES " +
             "(@id, @node, @did, @dver, @rid, @rver, @pid, @pver, @params, @created);";
@@ -34,23 +34,23 @@ public sealed class ServerInstanceRepository(ServerCenterDatabase database)
 
     public async Task<ServerInstance?> GetAsync(string id, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM server_instance WHERE id = @id;";
         cmd.Parameters.AddWithValue("@id", id);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? Map(reader) : null;
     }
 
     public async Task<IReadOnlyList<ServerInstance>> ListByNodeAsync(string nodeId, CancellationToken ct)
     {
-        await using var connection = await database.OpenConnectionAsync(ct);
-        await using var cmd = connection.CreateCommand();
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT {Columns} FROM server_instance WHERE node_id = @node ORDER BY created_at;";
         cmd.Parameters.AddWithValue("@node", nodeId);
 
-        var instances = new List<ServerInstance>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        List<ServerInstance> instances = new List<ServerInstance>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             instances.Add(Map(reader));

@@ -12,11 +12,11 @@ public sealed class ControllerSessionPumpTests
     [Fact]
     public async Task Ingests_heartbeat_and_status_to_the_sink_tagged_with_the_agent()
     {
-        var ct = TestContext.Current.CancellationToken;
-        using var link = new InMemoryDuplexLink();
-        var sink = new RecordingControllerSink();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        using InMemoryDuplexLink link = new InMemoryDuplexLink();
+        RecordingControllerSink sink = new RecordingControllerSink();
 
-        var pump = ControllerSessionPump.RunAsync(link.ControllerSide, "agent-1", sink, ct);
+        Task pump = ControllerSessionPump.RunAsync(link.ControllerSide, "agent-1", sink, ct);
 
         await link.AgentSide.SendAsync(
             new AgentMessage { Envelope = Envelopes.New(), Heartbeat = new Heartbeat { AgentUnixMs = 123 } }, ct);

@@ -17,7 +17,7 @@ public sealed class PersistingSessionSink(AgentPresenceStore presence, JobReposi
 
     public async Task OnJobProgressAsync(string agentId, JobProgress progress, CancellationToken ct)
     {
-        var now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
 
         if (progress.Log is not null)
         {
@@ -40,7 +40,7 @@ public sealed class PersistingSessionSink(AgentPresenceStore presence, JobReposi
 
     public async Task OnCommandResultAsync(string agentId, CommandResult result, CancellationToken ct)
     {
-        var now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
         await jobs.UpdateStateAsync(
             result.JobId, MapState(result.FinalState),
             string.IsNullOrEmpty(result.FailReason) ? null : result.FailReason, now, ct);

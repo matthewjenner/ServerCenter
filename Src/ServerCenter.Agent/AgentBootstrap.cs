@@ -12,12 +12,12 @@ public static class AgentBootstrap
     public static async Task<(GrpcTransportConnector Connector, AgentIdentity Identity)> PrepareAsync(
         AgentOptions options, ILogger logger, CancellationToken ct)
     {
-        var osFamily = OperatingSystem.IsWindows() ? "windows" : "linux";
-        var arch = RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant();
+        string osFamily = OperatingSystem.IsWindows() ? "windows" : "linux";
+        string arch = RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant();
 
         if (options.ControllerAddress.StartsWith("https", StringComparison.OrdinalIgnoreCase))
         {
-            var store = new AgentCertStore(options.CertDirectory);
+            AgentCertStore store = new AgentCertStore(options.CertDirectory);
             if (!store.Exists)
             {
                 if (string.IsNullOrEmpty(options.EnrollToken))
@@ -28,19 +28,19 @@ public static class AgentBootstrap
                 }
 
                 logger.LogInformation("Enrolling '{DisplayName}' with {Address}", options.DisplayName, options.ControllerAddress);
-                var bundle = await EnrollmentClient.EnrollAsync(
+                EnrollmentBundle bundle = await EnrollmentClient.EnrollAsync(
                     options.ControllerAddress, options.DisplayName, options.EnrollToken, ct);
                 store.Save(bundle);
                 logger.LogInformation("Enrolled as agent {AgentId}", bundle.AgentId);
             }
 
-            var identity = new AgentIdentity(store.AgentId, "0.1.0", osFamily, arch, options.NodeKind);
+            AgentIdentity identity = new AgentIdentity(store.AgentId, "0.1.0", osFamily, arch, options.NodeKind);
             return (new GrpcTransportConnector(options.ControllerAddress, store.LoadTls()), identity);
         }
 
         // Plaintext dev: allow HTTP/2 over cleartext and use a fixed dev id (no enrollment).
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
-        var devId = options.DevAgentId ?? "dev-agent";
+        string devId = options.DevAgentId ?? "dev-agent";
         return (new GrpcTransportConnector(options.ControllerAddress),
             new AgentIdentity(devId, "0.1.0", osFamily, arch, options.NodeKind));
     }
