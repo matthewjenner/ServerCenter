@@ -38,6 +38,11 @@ echo "==> Staging deployment assets"
 cp Deploy/servercenter-agent.service Deploy/servercenter-agent.env Deploy/install.sh Deploy/README.md "$stage/"
 chmod +x "$stage/install.sh"
 
+# Bundle the controller compose so `install.sh --with-controller` can stand up node zero's
+# controller from the tarball alone (pulls the published image - nothing copied from a workstation).
+mkdir -p "$stage/controller"
+cp Deploy/controller/docker-compose.yml "$stage/controller/"
+
 tarball="$out/servercenter-agent-$version-$rid.tar.gz"
 tar -czf "$tarball" -C "$stage" .
 

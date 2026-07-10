@@ -72,7 +72,14 @@ then treat it as real.
   track (Velopack or a self-contained zip, `ui-v<version>`) is not built yet; add it if you need to run
   the UI on a machine without source.
 
-So for end-to-end testing: install the AGENT from its release; pull + run the CONTROLLER image via
-compose on the hypervisor; run the UI from source. See `Docs/linux-smoke-runbook.md` for the ordered
-pass, including its Known gaps (no bootstrap-token mint endpoint yet -> plaintext for now; no store
-endpoints for descriptors/recipes/instances -> sqlite3 seeding for the P5/P7 steps).
+**Turnkey node zero:** the agent tarball also bundles the controller compose, so on the hypervisor
+`sudo ./install.sh --with-controller` stands up the controller container (pulling the published
+image), wires this host's agent to it (`http://127.0.0.1:5080`, `NODE_KIND=host`), and starts -
+one command, nothing copied from a workstation. If a controller is already running it is left as-is
+and only the agent installs. Guests use plain `sudo ./install.sh` + a UNIQUE `SERVERCENTER_AGENT_ID`.
+
+So for end-to-end testing: on the hypervisor run `install.sh --with-controller` (controller + host
+agent in one shot); on each guest install the AGENT from its release; run the UI from source. See
+`Docs/linux-smoke-runbook.md` for the ordered pass, including its Known gaps (no bootstrap-token mint
+endpoint yet -> plaintext for now; no store endpoints for descriptors/recipes/instances -> sqlite3
+seeding for the P5/P7 steps).
