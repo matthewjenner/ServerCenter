@@ -9,9 +9,9 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 7 (provisioning + build recipes) - IN PROGRESS. 7a done (the BuildRecipe declarative surface:
-  model reusing SteamAppSpec/ConfigFileSpec + serializer + schema V5 + repository). 7b (idempotent
-  script runner primitive) + 7c (recipe.apply engine) + 7d (provisioning->managed handoff) pending.
+- Phase: 7 (provisioning + build recipes) - IN PROGRESS. 7a BuildRecipe declarative surface; 7b the
+  idempotent script runner primitive (skip-if-alreadyDone, run+onSuccess, stop-on-failure). 7c
+  (recipe.apply engine) + 7d (provisioning->managed handoff) pending.
 - Phase: 6 (libvirt: read + VM lifecycle) - DoD MET (6a+6b+6c). ILibvirtHost realized; dual-truth is
   REAL (VM-running from libvirt alongside agent-online); VM start/stop/restart run as CONTROLLER-driven
   jobs (execute on the controller via local libvirt, not pushed to an agent) with a dashboard control.
@@ -40,8 +40,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (102 Core + 41 Agent + 60 Controller + 8 integration + 8 UI +
-  13 Capabilities = 232).
+  on); `dotnet test` green (102 Core + 45 Agent + 60 Controller + 8 integration + 8 UI +
+  13 Capabilities = 236).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -421,9 +421,12 @@ Windows, reuse before bespoke.
     null-omit, tokens preserved). Schema V5 build_recipe (versioned JSON keyed by id+version, like
     update_policy/game_descriptor) + `BuildRecipeRepository` (immutable revisions, GetLatest). Every
     step is convergent by design (RecipeScript carries alreadyDone + onSuccess). Tier 1 (+5).
-  - [ ] 7b - the idempotent ordered script runner (the one genuinely new primitive). Each step: run
-    UNLESS alreadyDone passes; on success run onSuccess (sentinel). Behind IProcessRunner (Agent.Linux).
-    Tier 1 convergence logic (skip-when-done); Tier 2 real.
+  - [x] 7b - the idempotent ordered script runner (the one genuinely new primitive). `ScriptRunner`
+    (Agent.Linux, via IProcessRunner): for each step in order, if its `alreadyDone` shell check passes
+    -> SKIP (convergence); else `sh -c run`, and on success `sh -c onSuccess` (the mark-done sentinel).
+    A failed step STOPS the run (later steps may depend on it). Returns Executed/Skipped lists +
+    FailedScriptId. All commands via `sh -c` so shell syntax works. Tier 1 (+4: skip-when-done,
+    run+mark-when-not, no-alreadyDone-always-runs, stop-on-failure). Real scripts are Tier 2.
   - [ ] 7c - the recipe.apply execution engine composing the primitives: baseRequirements (apt) ->
     steamApp (SteamCMD ensure) -> configFiles (ConfigGen) -> scripts (runner) -> serviceDefinition
     (write unit + ensure-enabled). Convergent throughout (build=repair=rebuild). Agent executor +
@@ -493,6 +496,14 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 7b - the idempotent script runner, the ONE genuinely new primitive (everything
+  else in Phase 7 reuses existing primitives). Convergence is data-driven, not code: each step's
+  alreadyDone check gates whether it runs, onSuccess marks it done - the runner has no per-step
+  special-casing, it just honors the recipe data. This is what realizes build = repair = rebuild.
+  Commands run via `sh -c` (they are shell expressions - test -f, touch, pipes). A failed step stops
+  the run (later steps may depend on earlier ones) and reports FailedScriptId. Lives in Agent.Linux
+  over IProcessRunner (same shell-exec home as apt/steamcmd), Tier-1 tested by exit-code-per-command.
 
 - 2026-07-10: Phase 7a - the BuildRecipe declarative surface (the third and last class catalog).
   Deliberately REUSES the descriptor's SteamAppSpec + ConfigFileSpec rather than defining recipe-
