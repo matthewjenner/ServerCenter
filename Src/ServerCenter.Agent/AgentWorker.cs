@@ -32,9 +32,22 @@ public sealed class AgentWorker(
             IServiceController services = OperatingSystem.IsWindows()
                 ? new WindowsServiceController()
                 : new LinuxServiceController(new ProcessRunner());
+
+            // The "what" providers are Linux-only for now (apt + Plex); on Windows the update
+            // executor is registered with none, so a dispatched update.apply fails cleanly with
+            // "no provider for channel" (Windows Update is Phase 9).
+            var runner = new ProcessRunner();
+            IReadOnlyList<IUpdateProvider> updateProviders = OperatingSystem.IsWindows()
+                ? []
+                : [new AptUpdateProvider(runner), new PlexUpdateProvider(new HttpFetcher(new HttpClient()), runner, new PlexUpdateOptions())];
+
             var jobStore = new AgentJobStore();
             var commandHandler = new JobExecutingCommandHandler(
-                new IJobExecutor[] { new ServiceRestartExecutor(services) },
+                new IJobExecutor[]
+                {
+                    new ServiceRestartExecutor(services),
+                    new UpdateApplyExecutor(updateProviders, [new NotifyPreflight()], services)
+                },
                 jobStore,
                 loggerFactory.CreateLogger<JobExecutingCommandHandler>());
 

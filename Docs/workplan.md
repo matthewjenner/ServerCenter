@@ -9,9 +9,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 4 (Ubuntu updates as policy-driven jobs) - IN PROGRESS. 4a done (the declarative
-  UpdatePolicy surface + its resolver + persistence); 4b done (real apt + Plex "what" providers +
-  neuter-unattended-upgrades); 4c/4d pending (see the Phase 4 tracker).
+- Phase: 4 (Ubuntu updates as policy-driven jobs) - DoD MET (4a+4b+4c). Updates now run as
+  policy-driven jobs end to end: store a policy -> controller resolves it -> dispatches update.apply
+  -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists. 4d (thin UI surface
+  for updates) is the only optional remainder. See the Phase 4 tracker.
   Phases 0-3 + 1.5 complete. Full job spine works: dispatch on the controller -> execute on the
   agent -> stream progress -> persist result; live jobs + a trigger in the dashboard; real Linux
   service control (systemctl). The dashboard smoke works via `Scripts/dev-stack.sh`.
@@ -20,7 +21,7 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (77 Core + 23 Agent + 37 Controller + 6 integration + 3 UI = 146).
+  on); `dotnet test` green (77 Core + 30 Agent + 41 Controller + 7 integration + 3 UI = 158).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -253,10 +254,21 @@ Windows, reuse before bespoke.
     gained an env overload (apt/dpkg need DEBIAN_FRONTEND; systemctl uses the plain one).
     RecordingJobSink added to TestFakes. Tier 1 (+13 tests, Agent.Tests). Real apt/Plex is the
     user's Tier 2 smoke on a Linux node.
-  - [ ] 4c - execution + dispatch. `update.apply` IJobExecutor composing provider + resolver into
-    the job spine (preflight -> apply -> reboot decision); controller dispatch from a stored policy
-    + a dev trigger; end-to-end integration test (fake provider). Wire into AgentWorker.
-  - [ ] 4d - thin UI surface (trigger an update / show reboot-pending). May fold into 4c.
+  - [x] 4c - execution + dispatch. `UpdateApplyExecutor` (update.apply) composes the resolved policy
+    (carried as `UpdateJobParams`) with the pluggable "what" provider + the job spine: validate
+    provider/preflight availability -> run ordered preflight -> optional stop-update-start service
+    bracket (restart even on failure) -> provider.ApplyAsync -> ResolveReboot decision recorded (the
+    actual reboot is DEFERRED - rebooting mid-job kills the agent before the terminal result; host
+    reboot is its own special-policy job). Preflight is pluggable `IPreflightAction` (only Notify
+    today; a policy needing an unhandled step FAILS rather than silently skipping). Controller
+    `UpdateJobDispatcher` resolves the stored policy (agent never sees it) -> eligible+confirmed ->
+    builds params -> dispatches (cancellable=false, requeueable=false). Endpoints POST
+    /update-policies (raw-body, canonical dialect) + POST /jobs/update-apply (manual trigger).
+    `UpdateJobParams`/`UpdateJson` shared dialect. Wired into AgentWorker (apt+Plex on Linux, none on
+    Windows). FakeUpdateProvider + FakeServiceController.Calls added. Tier 1 (executor 7, dispatcher
+    4) + a real-gRPC end-to-end integration test (+12). DoD met.
+  - [ ] 4d - OPTIONAL thin UI surface (trigger an update / show reboot-pending). Deferred; the DoD
+    is already met by the dispatch path. Pick up if/when the dashboard should drive updates.
 - DoD: neuter unattended-upgrades on onboarding; run an apt update and a Plex update as
   policy-driven jobs, each expressing how/when/reboot/preflight/approval as pure data.
 
@@ -355,6 +367,26 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 4c - update.apply closes the Phase 4 DoD end to end. Split of labor: the
+  controller resolves the policy (UpdateJobDispatcher runs the resolver, agent never sees the
+  policy) and pushes a concrete `UpdateJobParams` (channel/how/preflight/reboot from the class +
+  packages/serviceUnit from the instance = the class-vs-instance split). Key scope decision: the
+  executor does NOT perform the reboot - rebooting mid-job kills the agent before the terminal
+  CommandResult lands (a resync scenario), and a host reboot is its own special-policy job with
+  drain/confirm (brief 3.4); update.apply only RECORDS the ResolveReboot decision, a follow-on job
+  acts on it. Preflight is a pluggable `IPreflightAction` set; a policy requiring a step with no
+  handler FAILS the job rather than silently skipping (skipping a player-drain before an update
+  would be a quiet correctness bug) - only Notify ships now, RCON drain/snapshot/quiesce land with
+  their primitives (Phase 5+). `How` stop-update-start/drain-then-update brackets the service via
+  IServiceController and always restarts it, even on apply failure (never leave a service down).
+  Jobs are cancellable=false + requeueable=false (mid-transaction apt is not cancellable; an
+  interrupted update re-checks, it is not blindly requeued - brief 2.1). Shared `UpdateJson` dialect
+  for both policy body and job params. Providers wired apt+Plex on Linux, none on Windows (a
+  dispatched update.apply fails cleanly there until Phase 9). Tier 1 (executor + dispatcher) + a
+  real-gRPC end-to-end integration test (+12). Still open for a full production update: an
+  autonomous scheduler to FIRE window-eligible policies (4a left the window as an eligibility gate),
+  the reboot follow-on job, and wiring neuter-unattended-upgrades into onboarding.
 
 - 2026-07-10: Phase 4b - the two "what" providers landed, proving IUpdateProvider is a real
   abstraction, not apt-with-extra-steps. apt shells apt-get/apt/dpkg-query behind IProcessRunner

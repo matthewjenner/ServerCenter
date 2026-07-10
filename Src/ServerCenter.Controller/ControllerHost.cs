@@ -27,6 +27,10 @@ public static class ControllerHost
         services.AddSingleton<AgentPresenceStore>();
         services.AddSingleton<ConnectedAgents>();
         services.AddSingleton<JobDispatcher>();
+
+        // Update plane (Phase 4): the declarative policy store + policy-resolving dispatcher.
+        services.AddSingleton<UpdatePolicyRepository>();
+        services.AddSingleton<UpdateJobDispatcher>();
         // The sink delegates presence to AgentPresenceStore and persists job progress/results.
         services.AddSingleton<IControllerSessionSink, PersistingSessionSink>();
 
@@ -48,6 +52,7 @@ public static class ControllerHost
         app.MapGrpcService<JobViewService>();
         app.MapEnrollment();
         app.MapJobs();
+        app.MapUpdatePolicies();
         app.MapGet("/", () => "ServerCenter Controller. AgentLink + FleetView gRPC + enrollment + jobs endpoints are mapped.");
     }
 }
