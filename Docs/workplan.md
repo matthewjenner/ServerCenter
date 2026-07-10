@@ -9,9 +9,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a done (RCON); 5b done (the
-  declarative surface: GameDescriptor + ServerInstance + schema V4 + instance-param resolution); 5c
-  done (the SteamCMD primitive). 5d+ pending (capabilities, wiring). See the Phase 5 tracker.
+- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a RCON; 5b declarative surface
+  (GameDescriptor + ServerInstance + schema V4 + instance-param resolution); 5c SteamCMD primitive;
+  5d ConfigGen + Stats + Shutdown capabilities (new ServerCenter.Capabilities.Tests project). 5e
+  (SaveBackup + Readiness) + 5f (wiring into the job spine) pending. See the Phase 5 tracker.
 - Phase: 4 (Ubuntu updates as policy-driven jobs) - COMPLETE (4a+4b+4c+4d). Updates run as
   policy-driven jobs end to end: store a policy -> controller resolves it -> dispatches update.apply
   -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists; the dashboard has an
@@ -27,7 +28,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (90 Core + 37 Agent + 45 Controller + 7 integration + 6 UI = 185).
+  on); `dotnet test` green (90 Core + 37 Agent + 45 Controller + 7 integration + 6 UI +
+  7 Capabilities = 192).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -323,11 +325,20 @@ Windows, reuse before bespoke.
     (+7: command construction/beta/validate/failure + manifest parse). Real multi-GB install is the
     Tier 2 smoke. NOTE: querying Steam's LATEST available buildid (true "update available?" without
     downloading) is deferred - needs app_info_print parsing; buildid compare is pre/post-update for now.
-  - [ ] 5d - capabilities implementing ICapability, composing the primitives: ConfigGen (template ->
-    write), SaveBackup (file-set -> IObjectStore, optional RCON quiesce), Readiness (port-probe/
-    query/log-scrape - game-level, NOT process-alive), Stats + Shutdown (RCON).
-  - [ ] 5e - wire capabilities into the job spine (server.install / config-apply / backup executors)
-    + dispatch + a descriptor-driven stand-up flow. Integration test.
+  - [x] 5d - the capabilities that compose EXISTING primitives (RCON + templating). `ConfigGenCapability`
+    (IConfigTemplateSource resolves schemaRef -> template; ConfigTemplateRenderer renders vs instance
+    params; IConfigWriter persists to path; missing token = hard fail, no half-write). `RconStatsCapability`
+    (runs the descriptor's command map, returns raw outputs; structured player-count parse is
+    game-specific/later). `RconShutdownCapability` (RCON drain command, then wait the grace via an
+    injected TimeProvider; the service stop is the executor's job). `RconEndpoints` resolves the
+    endpoint from instance params (loopback default, ports.rcon + rcon.password, fail loudly). Seams
+    IConfigTemplateSource/IConfigWriter in Core.Capabilities (+ File* real impls in Capabilities,
+    fakes in TestFakes). New ServerCenter.Capabilities.Tests project. Tier 1 (+7).
+  - [ ] 5e - the capabilities that need new file/network seams: `SaveBackup` (file-set enumerate ->
+    archive -> IObjectStore at the instance's own key prefix, optional RCON quiesce) + `Readiness`
+    (port-probe / query-protocol / log-scrape - game-level "accepting players", NOT process-alive).
+  - [ ] 5f - wire capabilities into the job spine (server.install via SteamCMD / config-apply /
+    backup executors) + dispatch + a descriptor-driven stand-up flow. Integration test. DoD close.
 - DoD: stand up an anonymous SteamCMD dedicated server driven by a descriptor; config is
   templated from instance params; readiness reflects game-level "accepting players" (not
   process-alive); save-backup writes to its own S3 path with optional RCON quiesce.
@@ -413,6 +424,21 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 5d - the first capabilities (ConfigGen, Stats, Shutdown), those that compose
+  primitives ALREADY built (config templating + RCON), split from the file/network-seam ones
+  (SaveBackup, Readiness -> 5e) to keep the ship reviewable. Each capability is constructed from its
+  descriptor spec + the primitive and implements the same ICapability contract (primitive-backed;
+  plugin-backed would be indistinguishable). ConfigGen needed two new seams (IConfigTemplateSource
+  resolving schemaRef -> template text, IConfigWriter persisting rendered output) placed in
+  Core.Capabilities so the fakes live in TestFakes with no Capabilities dependency; the real File*
+  impls are in ServerCenter.Capabilities (Tier 2). Shutdown injects a TimeProvider so the grace wait
+  is deterministic (FakeTimeProvider). Shutdown = graceful DRAIN only; the service stop stays the
+  executor's job (separation of concerns). RCON endpoint convention lives in one resolver
+  (RconEndpoints): host loopback default since the agent runs ON the game node, port ports.rcon,
+  password rcon.password, fail loudly on missing. Stats returns RAW command outputs (structured
+  player-count parse is game-specific, later). New ServerCenter.Capabilities.Tests project (per-src
+  test convention). Tier 1 only (+7).
 
 - 2026-07-10: Phase 5c - the SteamCMD primitive. Placed in Agent.Linux over IProcessRunner (not
   ServerCenter.Primitives), consistent with the apt/Plex "what" providers which also shell out and

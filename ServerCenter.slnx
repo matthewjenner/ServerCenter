@@ -15,6 +15,7 @@
   <Folder Name="/Tests/">
     <Project Path="Tests/ServerCenter.TestFakes/ServerCenter.TestFakes.csproj" />
     <Project Path="Tests/ServerCenter.Core.Tests/ServerCenter.Core.Tests.csproj" />
+    <Project Path="Tests/ServerCenter.Capabilities.Tests/ServerCenter.Capabilities.Tests.csproj" />
     <Project Path="Tests/ServerCenter.Agent.Tests/ServerCenter.Agent.Tests.csproj" />
     <Project Path="Tests/ServerCenter.Controller.Tests/ServerCenter.Controller.Tests.csproj" />
     <Project Path="Tests/ServerCenter.Integration.Tests/ServerCenter.Integration.Tests.csproj" />
