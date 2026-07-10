@@ -12,8 +12,9 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Phase: 1 (Controller + Ubuntu agent, bidi stream, read-only) - IN PROGRESS. Phase 0
   contracts + scaffold done and committed. First Phase 1 slice landed: the protocol brain.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (56 Core + 1 integration, stable across repeated runs incl. the
-  fake-clock reconnect test and the in-process real-gRPC integration test).
+  on); `dotnet test` green (56 Core + 9 Controller + 1 integration = 66, stable across
+  repeated runs incl. the fake-clock reconnect test, the real-SQLite persistence tests, and
+  the in-process real-gRPC integration test).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
   - [x] Protocol brain, transport-agnostic + Tier 1 tested: Hello/HelloAck handshake with
     version negotiation and clean Goodbye(VERSION_MISMATCH) rejection; the resync
@@ -33,10 +34,17 @@ Decisions Log / Known Edges before starting the next phase (house rule:
     (handshake + heartbeat/status reach the controller). AgentConnection now disposes the
     transport per session. Live two-process run left to the user's own smoke (per working
     style); in-process real-gRPC path is covered by the integration test.
-  - [ ] SQLite-backed IControllerJobView + agent/node/job persistence (schema from
-    phase-0-contracts.md 2.4), replacing the in-memory placeholder.
+  - [x] SQLite persistence: ServerCenterDatabase (WAL + user_version migrations, schema V1 =
+    agent_identity/node/job/job_log from phase-0-contracts.md 2.4); JobRepository (insert/get/
+    open-jobs-by-agent/state transitions/log+ack) and AgentNodeRepository (idempotent upserts);
+    SqliteControllerJobView replaces the in-memory placeholder; AgentLinkService registers the
+    connecting agent/node; DB initialized at controller startup. Live presence stays in-memory
+    (transient, not precious). New ServerCenter.Controller.Tests (real temp-file SQLite, incl.
+    a survives-restart test); integration test now uses an isolated temp DB. Class tables
+    (descriptors/policies/recipes/instance-params) + backup_snapshot land as later migrations
+    with their features.
   - [ ] Controller-owned identity + mTLS enrollment (IAgentTrustProvider real impl),
-    replacing the plaintext h2c dial.
+    replacing the plaintext h2c dial and the "unpinned" fingerprint.
 - Solution (`ServerCenter.slnx`, Title Case folders, Central Package Management, .NET 10):
   Contracts (the .proto wire), Core (job model + state machine + all seam interfaces +
   IAgentTransport + ProtocolVersion), Primitives (ConfigTemplateRenderer), Capabilities,
@@ -56,9 +64,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: SQLite-backed persistence - replace InMemoryControllerJobView + AgentPresenceStore
-  with a SQLite store (job/agent/node tables from phase-0-contracts.md 2.4), so jobs and
-  identities survive a controller restart. Then mTLS identity/enrollment.
+- Next (last Phase 1 sub-step): controller-owned identity + mTLS - IAgentTrustProvider real
+  impl (controller as private CA, per-agent cert minted at enrollment, fingerprint pinned),
+  one-time bootstrap token, replacing the plaintext h2c dial and the "unpinned" fingerprint.
+  Then Phase 1 is done and Phase 1.5 (host as node zero) / Phase 2 (dashboard) open up.
 
 ## Standing conventions (decided)
 
@@ -274,6 +283,12 @@ Windows, reuse before bespoke.
   SQLitePCLRaw.lib.e_sqlite3 2.1.11 (NU1903, GHSA-2m69-gcr7-jv3q). The 2.x line has no fix,
   so transitive-pinned the native lib to 3.53.3 (patched SQLite, ABI-compatible). Revisit
   when Microsoft.Data.Sqlite adopts SQLitePCLRaw 3.x. Documented in Directory.Packages.props.
+- 2026-07-10: SQLite persistence. Raw Microsoft.Data.Sqlite (no ORM) - own the SQL, WAL mode,
+  user_version migrations, per-connection foreign_keys. Job state stored as stable lowercase
+  text (decoupled from enum names). Precious state only (jobs/identities); live presence stays
+  in-memory per the one-backup invariant. Schema V1 = the four spine tables; class/instance/
+  backup tables come as later migrations with their features (avoid dead schema). Tested
+  against real temp-file SQLite incl. a survives-restart test.
 - 2026-07-10: Real gRPC transport wired. Dev uses plaintext HTTP/2 (h2c) on :5080 with the
   SocketsHttpHandler.Http2UnencryptedSupport switch on the agent; TLS/mTLS replaces it in the
   identity ship. Transport adapters serialize writes (gRPC forbids concurrent stream writes)

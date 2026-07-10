@@ -1,0 +1,59 @@
+using Microsoft.Data.Sqlite;
+
+namespace ServerCenter.Controller.Persistence;
+
+// The controller's precious state lives here (brief 3.9): jobs, identities, and later the
+// descriptors/policies/recipes/instance-params. WAL mode is set once at init; foreign keys are
+// per-connection so they are enabled on every open. Schema is applied by user_version
+// migrations. Live presence (heartbeat/status) is deliberately NOT here - it is transient.
+public sealed class ServerCenterDatabase(string dataSource)
+{
+    private readonly string _connectionString =
+        new SqliteConnectionStringBuilder { DataSource = dataSource }.ToString();
+
+    public async Task<SqliteConnection> OpenConnectionAsync(CancellationToken ct)
+    {
+        var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(ct);
+
+        await using var pragma = connection.CreateCommand();
+        pragma.CommandText = "PRAGMA foreign_keys = ON;";
+        await pragma.ExecuteNonQueryAsync(ct);
+
+        return connection;
+    }
+
+    public async Task InitializeAsync(CancellationToken ct)
+    {
+        await using var connection = await OpenConnectionAsync(ct);
+
+        // WAL is a durable, DB-level setting and cannot run inside a transaction.
+        await ExecuteAsync(connection, null, "PRAGMA journal_mode = WAL;", ct);
+
+        var version = Convert.ToInt64(await ScalarAsync(connection, "PRAGMA user_version;", ct));
+        if (version >= SchemaV1.Version)
+        {
+            return;
+        }
+
+        await using var tx = (SqliteTransaction)await connection.BeginTransactionAsync(ct);
+        await ExecuteAsync(connection, tx, SchemaV1.Ddl, ct);
+        await ExecuteAsync(connection, tx, $"PRAGMA user_version = {SchemaV1.Version};", ct);
+        await tx.CommitAsync(ct);
+    }
+
+    private static async Task ExecuteAsync(SqliteConnection connection, SqliteTransaction? tx, string sql, CancellationToken ct)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = sql;
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static async Task<object?> ScalarAsync(SqliteConnection connection, string sql, CancellationToken ct)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        return await cmd.ExecuteScalarAsync(ct);
+    }
+}
