@@ -21,6 +21,9 @@ public sealed class WindowsServiceController : IServiceController
     public Task EnsureEnabledAsync(string unit, bool enabled, CancellationToken ct) =>
         throw new NotImplementedException("Windows service control lands in Phase 8.");
 
+    // No SCM equivalent of daemon-reload; a no-op keeps the interface satisfiable.
+    public Task ReloadAsync(CancellationToken ct) => Task.CompletedTask;
+
     public IAsyncEnumerable<ServiceState> WatchAsync(string unit, CancellationToken ct) =>
         throw new NotImplementedException("Windows service control lands in Phase 8.");
 }

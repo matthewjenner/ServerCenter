@@ -45,6 +45,7 @@ public static class ControllerHost
         // and the template source it ships to config-apply jobs (a templates dir on the controller;
         // a DB-backed template store is a later refinement).
         services.AddSingleton<GameDescriptorRepository>();
+        services.AddSingleton<BuildRecipeRepository>();
         services.AddSingleton<ServerInstanceRepository>();
         services.AddSingleton<ServerJobDispatcher>();
         services.AddSingleton<IConfigTemplateSource>(new FileConfigTemplateSource(templatesRoot));

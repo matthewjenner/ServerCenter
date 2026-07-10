@@ -24,6 +24,15 @@ public sealed class LinuxServiceController(IProcessRunner runner) : IServiceCont
     public Task EnsureEnabledAsync(string unit, bool enabled, CancellationToken ct) =>
         RunUnitVerbAsync(enabled ? "enable" : "disable", unit, ct);
 
+    public async Task ReloadAsync(CancellationToken ct)
+    {
+        var result = await runner.RunAsync("systemctl", ["daemon-reload"], ct);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"systemctl daemon-reload failed (exit {result.ExitCode}): {result.StandardError}");
+        }
+    }
+
     public async IAsyncEnumerable<ServiceState> WatchAsync(string unit, [EnumeratorCancellation] CancellationToken ct)
     {
         ServiceState? last = null;

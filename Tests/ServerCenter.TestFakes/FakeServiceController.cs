@@ -38,8 +38,17 @@ public sealed class FakeServiceController : IServiceController
         return Task.CompletedTask;
     }
 
-    public Task EnsureEnabledAsync(string unit, bool enabled, CancellationToken ct) =>
-        Task.CompletedTask;
+    public Task EnsureEnabledAsync(string unit, bool enabled, CancellationToken ct)
+    {
+        Calls.Add((enabled ? "enable" : "disable", unit));
+        return Task.CompletedTask;
+    }
+
+    public Task ReloadAsync(CancellationToken ct)
+    {
+        Calls.Add(("daemon-reload", string.Empty));
+        return Task.CompletedTask;
+    }
 
     public async IAsyncEnumerable<ServiceState> WatchAsync(
         string unit,

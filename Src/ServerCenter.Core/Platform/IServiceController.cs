@@ -15,6 +15,10 @@ public interface IServiceController
 
     Task EnsureEnabledAsync(string unit, bool enabled, CancellationToken ct);
 
+    // Reload the service manager's unit definitions (systemd daemon-reload) so a newly written unit
+    // file is picked up. No-op where not applicable (Windows SCM).
+    Task ReloadAsync(CancellationToken ct);
+
     IAsyncEnumerable<ServiceState> WatchAsync(string unit, CancellationToken ct);
 }
 

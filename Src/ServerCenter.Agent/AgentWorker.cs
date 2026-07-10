@@ -51,7 +51,11 @@ public sealed class AgentWorker(
                     // Descriptor-driven game-server jobs (Phase 5). Backup wiring waits on a real S3
                     // IObjectStore; install (SteamCMD) + config-apply need no extra infra.
                     new ServerInstallExecutor(new SteamCmd(runner)),
-                    new ServerConfigApplyExecutor(new FileConfigWriter())
+                    new ServerConfigApplyExecutor(new FileConfigWriter()),
+                    // Recipe-driven provisioning (Phase 7): compose the convergent primitives.
+                    new RecipeApplyExecutor(
+                        new AptPackageInstaller(runner), new SteamCmd(runner), new FileConfigWriter(),
+                        new ScriptRunner(runner), services)
                 },
                 jobStore,
                 loggerFactory.CreateLogger<JobExecutingCommandHandler>());

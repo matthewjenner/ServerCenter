@@ -9,9 +9,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 7 (provisioning + build recipes) - IN PROGRESS. 7a BuildRecipe declarative surface; 7b the
-  idempotent script runner primitive (skip-if-alreadyDone, run+onSuccess, stop-on-failure). 7c
-  (recipe.apply engine) + 7d (provisioning->managed handoff) pending.
+- Phase: 7 (provisioning + build recipes) - IN PROGRESS. 7a BuildRecipe surface; 7b idempotent script
+  runner; 7c the recipe.apply engine (composes packages -> SteamCMD -> config -> scripts -> systemd
+  unit, convergent, proven end-to-end over real gRPC). Only 7d pending: provisioning->managed handoff
+  + set node.libvirt_domain at provision time (closes the Phase 6 loop).
 - Phase: 6 (libvirt: read + VM lifecycle) - DoD MET (6a+6b+6c). ILibvirtHost realized; dual-truth is
   REAL (VM-running from libvirt alongside agent-online); VM start/stop/restart run as CONTROLLER-driven
   jobs (execute on the controller via local libvirt, not pushed to an agent) with a dashboard control.
@@ -40,8 +41,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (102 Core + 45 Agent + 60 Controller + 8 integration + 8 UI +
-  13 Capabilities = 236).
+  on); `dotnet test` green (102 Core + 51 Agent + 62 Controller + 9 integration + 8 UI +
+  13 Capabilities = 245).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -427,10 +428,16 @@ Windows, reuse before bespoke.
     A failed step STOPS the run (later steps may depend on it). Returns Executed/Skipped lists +
     FailedScriptId. All commands via `sh -c` so shell syntax works. Tier 1 (+4: skip-when-done,
     run+mark-when-not, no-alreadyDone-always-runs, stop-on-failure). Real scripts are Tier 2.
-  - [ ] 7c - the recipe.apply execution engine composing the primitives: baseRequirements (apt) ->
-    steamApp (SteamCMD ensure) -> configFiles (ConfigGen) -> scripts (runner) -> serviceDefinition
-    (write unit + ensure-enabled). Convergent throughout (build=repair=rebuild). Agent executor +
-    controller dispatch + integration.
+  - [x] 7c - the recipe.apply execution engine. `RecipeApplyExecutor` (Agent) composes, in order and
+    all convergent: baseRequirements (`IPackageInstaller` -> `AptPackageInstaller`, apt-get install -y)
+    -> steamApp (SteamCMD ensure) -> configFiles (ConfigGen, templates shipped inline) -> scripts
+    (7b ScriptRunner) -> serviceDefinition (`SystemdUnitRenderer` -> write unit via IConfigWriter ->
+    IServiceController.ReloadAsync [daemon-reload, NEW on the interface] -> enable -> start). A failed
+    step fails+stops the job. Controller `ServerJobDispatcher.ApplyRecipeAsync` resolves the instance's
+    pinned recipe + ships its templates; POST /jobs/recipe-apply. Wired into AgentWorker. New seams:
+    IPackageInstaller (Core) + FakePackageInstaller; IServiceController.ReloadAsync (Linux=daemon-reload,
+    Windows/Fake=noop). Tier 1 (executor 4, unit renderer 2, dispatcher 2) + a real-gRPC end-to-end
+    recipe.apply integration test (+9). DoD engine met.
   - [ ] 7d - provisioning -> managed handoff (node.lifecycle: provisioning until first agent Hello,
     then managed) + set node.libvirt_domain at provision time (closes the Phase 6 loop). Handoff logic
     Tier 1; libvirt define + cloud-init first boot is Tier 3 (real VM).
@@ -496,6 +503,20 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 7c - the recipe.apply engine, which lands "late and cheap" exactly as the brief
+  predicted: it is almost entirely COMPOSITION of primitives already built (package install, SteamCMD,
+  ConfigGen, the 7b script runner, service control) in a fixed convergent order. Only two small new
+  pieces were needed: IPackageInstaller (INSTALL what a build needs - distinct from IUpdateProvider,
+  which UPDATES what is installed; apt-get install is idempotent so it is convergent) and
+  IServiceController.ReloadAsync (systemd daemon-reload so a freshly-written unit is picked up; no-op
+  on Windows SCM). The systemd unit is rendered by a pure SystemdUnitRenderer and written via the
+  SAME IConfigWriter as game configs - a unit file is just another file. Recipe convergence is
+  inherited from its parts (each step idempotent), so the executor itself has no special-case repair
+  logic - build = repair = rebuild falls out. recipe.apply is requeueable (convergent). Templates ship
+  inline with the job, same mechanism as server.config-apply. Tier 1 + a real-gRPC end-to-end test
+  (+9). The recipe ENGINE DoD is met; the remaining Phase 7 DoD (cloud-init first boot + libvirt
+  define/start of a base image + the provisioning->managed handoff) is 7d + Tier-3 real-VM work.
 
 - 2026-07-10: Phase 7b - the idempotent script runner, the ONE genuinely new primitive (everything
   else in Phase 7 reuses existing primitives). Convergence is data-driven, not code: each step's

@@ -3,17 +3,19 @@ using Microsoft.Extensions.Time.Testing;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
 using ServerCenter.Core.Games;
+using ServerCenter.Core.Recipes;
 using ServerCenter.TestFakes;
 using Xunit;
 
 namespace ServerCenter.Controller.Tests;
 
-// The controller-side descriptor-driven dispatch (real temp SQLite). It resolves the instance + its
-// pinned descriptor and dispatches server.install / server.config-apply with the resolved params.
+// The controller-side descriptor/recipe-driven dispatch (real temp SQLite). It resolves the instance
+// + its pinned descriptor/recipe and dispatches server.install / server.config-apply / recipe.apply.
 public sealed class ServerJobDispatcherTests : IAsyncLifetime
 {
     private TempDatabase _db = null!;
     private GameDescriptorRepository _descriptors = null!;
+    private BuildRecipeRepository _recipes = null!;
     private ServerInstanceRepository _instances = null!;
     private JobRepository _jobs = null!;
     private ServerJobDispatcher _dispatcher = null!;
@@ -23,6 +25,7 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
         var ct = TestContext.Current.CancellationToken;
         _db = await TempDatabase.CreateAsync(ct);
         _descriptors = new GameDescriptorRepository(_db.Database);
+        _recipes = new BuildRecipeRepository(_db.Database);
         _instances = new ServerInstanceRepository(_db.Database);
         _jobs = new JobRepository(_db.Database);
 
@@ -33,7 +36,7 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
         var jobDispatcher = new JobDispatcher(_jobs, new ConnectedAgents(), new FakeTimeProvider());
         var templates = new FakeConfigTemplateSource(
             new Dictionary<string, string> { ["cs2/server.cfg"] = "hostname={{name}}" });
-        _dispatcher = new ServerJobDispatcher(_descriptors, _instances, jobDispatcher, templates);
+        _dispatcher = new ServerJobDispatcher(_descriptors, _recipes, _instances, jobDispatcher, templates);
     }
 
     public ValueTask DisposeAsync() => _db.DisposeAsync();
@@ -116,6 +119,49 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
         await SeedAsync(withConfigGen: false);
 
         var result = await _dispatcher.ConfigApplyAsync("agent-1", "srv-1", ct);
+
+        result.Outcome.Should().Be(ServerDispatchOutcome.NotConfigured);
+    }
+
+    [Fact]
+    public async Task ApplyRecipe_resolves_the_pinned_recipe_and_ships_its_templates()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await _recipes.InsertAsync(new BuildRecipe
+        {
+            Id = "cs2-server",
+            Version = 5,
+            SteamApp = new SteamAppSpec(730, "/opt/cs2"),
+            ConfigFiles = [new ConfigFileSpec("cs2/server.cfg", "/opt/cs2/cfg/server.cfg", ConfigFormat.Kv)]
+        }, 1000, ct);
+        await _instances.InsertAsync(new ServerInstance
+        {
+            Id = "srv-1",
+            NodeId = "agent-1",
+            RecipeId = "cs2-server",
+            RecipeVersion = 5,
+            InstanceParamsJson = """{"name":"ffa"}""",
+            CreatedAtUnixMs = 1000
+        }, ct);
+
+        var result = await _dispatcher.ApplyRecipeAsync("agent-1", "srv-1", ct);
+
+        result.Outcome.Should().Be(ServerDispatchOutcome.Dispatched);
+        var job = await _jobs.GetAsync(result.JobId!, ct);
+        job!.Type.Should().Be("recipe.apply");
+        var request = RecipeApplyParamsSerializer.Deserialize(job.ParamsJson);
+        request.Recipe.Version.Should().Be(5);
+        request.Templates["cs2/server.cfg"].Should().Be("hostname={{name}}");
+        request.InstanceParams["name"].Should().Be("ffa");
+    }
+
+    [Fact]
+    public async Task ApplyRecipe_reports_an_instance_with_no_recipe()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await SeedAsync(withConfigGen: false); // seeds an instance with a descriptor but no recipe
+
+        var result = await _dispatcher.ApplyRecipeAsync("agent-1", "srv-1", ct);
 
         result.Outcome.Should().Be(ServerDispatchOutcome.NotConfigured);
     }

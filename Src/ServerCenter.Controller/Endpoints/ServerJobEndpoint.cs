@@ -15,6 +15,10 @@ public static class ServerJobEndpoint
         app.MapPost("/jobs/server-config-apply",
             async (ServerJobRequest request, ServerJobDispatcher dispatcher, CancellationToken ct) =>
                 Respond(await dispatcher.ConfigApplyAsync(request.AgentId, request.InstanceId, ct)));
+
+        app.MapPost("/jobs/recipe-apply",
+            async (ServerJobRequest request, ServerJobDispatcher dispatcher, CancellationToken ct) =>
+                Respond(await dispatcher.ApplyRecipeAsync(request.AgentId, request.InstanceId, ct)));
     }
 
     private static IResult Respond(ServerDispatchResult result) =>
