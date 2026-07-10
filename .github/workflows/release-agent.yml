@@ -1,0 +1,88 @@
+name: Release Agent
+
+# Builds and publishes the self-contained Linux agent as a GitHub release on every push to
+# main. Idempotent and version-gated: if the release for the current VersionPrefix already
+# exists, the job exits clean. So: bump the version with Scripts/bump-version.sh -> commit ->
+# push -> release. A commit without a version bump just runs the no-op path.
+#
+# Runs on Linux (native linux-x64 build; the same package installs on the host and every guest).
+# Only agent-relevant projects are built/tested here - the Windows operator UI is not touched.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release-agent:
+    runs-on: ubuntu-latest
+    steps:
+      # Action versions verified against latest per the global rule (Node 24 runners).
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Read version from Directory.Build.props
+        id: version
+        run: |
+          v=$(grep -oE '<VersionPrefix>[^<]+</VersionPrefix>' Directory.Build.props \
+              | sed -E 's|</?VersionPrefix>||g' \
+              | tr -d '[:space:]')
+          if [[ -z "$v" ]]; then
+              echo "Could not read VersionPrefix from Directory.Build.props" >&2
+              exit 1
+          fi
+          echo "VERSION=$v"        >> "$GITHUB_OUTPUT"
+          echo "TAG=agent-v$v"     >> "$GITHUB_OUTPUT"
+          echo "Agent version: $v"
+
+      - name: Check whether this release already exists
+        id: tag-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.version.outputs.TAG }}"
+          if gh release view "$tag" --json tagName >/dev/null 2>&1; then
+              echo "Release $tag already exists - nothing to do."
+              echo "SKIP=true"  >> "$GITHUB_OUTPUT"
+          else
+              echo "SKIP=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test (agent-relevant projects)
+        if: steps.tag-check.outputs.SKIP == 'false'
+        run: |
+          for project in \
+              Tests/ServerCenter.Core.Tests \
+              Tests/ServerCenter.Controller.Tests \
+              Tests/ServerCenter.Integration.Tests; do
+              dotnet test "$project" --configuration Release
+          done
+
+      - name: Package agent (linux-x64)
+        if: steps.tag-check.outputs.SKIP == 'false'
+        run: ./Scripts/publish-agent.sh linux-x64
+
+      - name: Package agent (linux-arm64)
+        if: steps.tag-check.outputs.SKIP == 'false'
+        run: ./Scripts/publish-agent.sh linux-arm64
+
+      - name: Create GitHub Release
+        if: steps.tag-check.outputs.SKIP == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.TAG }}" \
+              artifacts/agent/linux-x64/*.tar.gz \
+              artifacts/agent/linux-arm64/*.tar.gz \
+              --title "Agent ${{ steps.version.outputs.VERSION }}" \
+              --notes "Self-contained ServerCenter agent (Linux). Extract and run \`sudo ./install.sh\`; see Deploy/README.md. Same package for the hypervisor host (node zero) and guests."

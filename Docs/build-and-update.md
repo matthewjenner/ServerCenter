@@ -77,12 +77,19 @@ runbook) immediately before recreate.
 `ci.yml` exists now (non-publishing, safe on a non-functional scaffold). Same version-gate
 idempotency as the other apps' `release.yml` will apply to the publish tracks.
 
-Decision (2026-07-10): the three publishing tracks are DEFERRED until the first usable
-milestone (Phase 2 dashboard + Phase 3 jobs, targeting 1.0.0), so we do not cut empty 0.1.0
-releases and images of a non-functional scaffold. Only `ci.yml` runs until then. The
-controller image registry is confirmed as GHCR (`ghcr.io/matthewjenner/servercenter-controller`,
-GITHUB_TOKEN auth, no extra secrets). When enabling, add `release-ui.yml`, `release-agent.yml`,
-and `image-controller.yml` per the table above and re-verify all action versions.
+Decision (2026-07-10): publishing was initially deferred until ~1.0.0. UPDATED same day - the
+AGENT track is enabled now (`release-agent.yml`), because deploying node zero (Phase 1.5) needs
+the agent installable from a GitHub release. The UI (`release-ui.yml`) and controller image
+(`image-controller.yml`) tracks remain deferred until they are worth shipping. Registry for the
+controller image is confirmed GHCR (`ghcr.io/matthewjenner/servercenter-controller`,
+GITHUB_TOKEN auth) when that track lands.
+
+`release-agent.yml` specifics: runs on ubuntu-latest (native linux-x64), version-gated and
+idempotent (tag `agent-v<version>`; namespaced so UI/image tracks can coexist), builds/tests
+only agent-relevant projects (not the Windows UI), packages linux-x64 + linux-arm64 tarballs
+via `Scripts/publish-agent.sh`, and attaches them to the release. Actions pinned to verified
+latest (`actions/checkout@v7`, `actions/setup-dotnet@v5`). Tags are namespaced per track, so
+the product `VersionPrefix` still drives all of them but they release independently.
 
 ## 4. GitHub Actions versions
 

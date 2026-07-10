@@ -9,10 +9,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 1.5 (host as node zero) - IN PROGRESS. Phase 1 COMPLETE (protocol brain,
-  pump+reconnect, real gRPC transport, SQLite persistence, identity core, mTLS enforcement,
-  real-socket mTLS test). Phase 1.5a done: agent is a systemd service + generic Linux install
-  package (cross-compiled + packaged here). Remaining 1.5b: release-agent.yml GitHub workflow.
+- Phase: 1.5 (host as node zero) - COMPLETE (pending the user's smoke-test of installing node
+  zero on the real hypervisor). Agent is a systemd service + generic Linux install package;
+  `release-agent.yml` publishes the tarball to a GitHub release (linux-x64 + arm64, version-
+  gated). Phase 1 also complete. Next: Phase 2 (Avalonia dashboard).
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
@@ -83,10 +83,12 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: Phase 1.5b - the `release-agent.yml` GitHub workflow so the agent tarball installs
-  straight from a GitHub release (linux-x64, version-gated; un-defers the agent publish track).
-  Then the user can smoke-test installing node zero on the real hypervisor. After that: Phase 2
-  (Avalonia dashboard).
+- Next: Phase 2 (Avalonia live dashboard) - the headline pain point. Reads the controller's
+  AgentPresenceStore for the dual-truth view (agent-online now; VM-running shows Unknown until
+  libvirt in Phase 6). The controller needs a read API for the UI (presence snapshot). First
+  real UI work, so the Avalonia 12 shell fills in.
+  (Also open, when the user is ready: smoke-test installing node zero on the real hypervisor
+  from the first agent release.)
 
 ## Standing conventions (decided)
 
@@ -159,8 +161,11 @@ Windows, reuse before bespoke.
     linux-x64 tarball (verified: cross-compiles to a Linux ELF + packages here; ~73MB). node_kind
     threaded (AgentIdentity/Hello/ControllerHandshakeResult -> EnsureNode). The package is
     GENERIC (every Linux node uses it); node zero just sets NODE_KIND=host.
-  - [ ] 1.5b - `release-agent.yml` GitHub workflow so the tarball installs straight from a
-    GitHub release (the user wants this; un-defers the agent publish track from build-and-update.md).
+  - [x] 1.5b - `release-agent.yml`: version-gated, idempotent (tag `agent-v<version>`), runs on
+    ubuntu-latest, builds/tests only agent-relevant projects (not the Windows UI), packages
+    linux-x64 + linux-arm64 tarballs and attaches them to a GitHub release. Un-defers the agent
+    publish track (build-and-update.md updated). UI's Windows-only csproj props guarded by
+    `$(OS)` so the cross-platform ci.yml Linux leg builds the whole solution cleanly.
 - DoD: the same agent runs natively on the hypervisor host via systemd (installed from the
   package), enrolls, and reports host facts/health through the identical interfaces, recorded
   as a `host` node. No special host subsystem.
@@ -316,6 +321,11 @@ Windows, reuse before bespoke.
   SQLitePCLRaw.lib.e_sqlite3 2.1.11 (NU1903, GHSA-2m69-gcr7-jv3q). The 2.x line has no fix,
   so transitive-pinned the native lib to 3.53.3 (patched SQLite, ABI-compatible). Revisit
   when Microsoft.Data.Sqlite adopts SQLitePCLRaw 3.x. Documented in Directory.Packages.props.
+- 2026-07-10: Phase 1.5b - agent publish track enabled early (release-agent.yml) so node zero
+  installs from a GitHub release; runs on ubuntu (native linux-x64), version-gated, tag
+  namespaced `agent-v<version>` so UI/image tracks can coexist under one product version. Builds
+  only agent-relevant projects. UI's Windows-only csproj props ($(OS)-guarded) so ci.yml's Linux
+  leg builds the solution cleanly.
 - 2026-07-10: Phase 1.5a - agent runs as a Linux systemd service and ships as a GENERIC
   self-contained install package (same package for host + guests). Refactored to Generic Host +
   UseSystemd. Added node_kind (guest|host) as a reported LABEL only - NOT a special agent; host
