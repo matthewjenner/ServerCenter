@@ -9,6 +9,8 @@
   <ItemGroup>
     <ProjectReference Include="../../Contracts/ServerCenter.Contracts.csproj" />
     <ProjectReference Include="../ServerCenter.Core/ServerCenter.Core.csproj" />
+    <ProjectReference Include="../ServerCenter.Primitives/ServerCenter.Primitives.csproj" />
+    <ProjectReference Include="../ServerCenter.Capabilities/ServerCenter.Capabilities.csproj" />
   </ItemGroup>
 
 </Project>

@@ -9,10 +9,13 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 5 (SteamCMD game-server capability layer) - IN PROGRESS. 5a RCON; 5b declarative surface;
-  5c SteamCMD primitive; 5d ConfigGen + Stats + Shutdown; 5e SaveBackup + Readiness. All five
-  ICapability impls now exist. Only 5f pending: wire capabilities into the job spine + a
-  descriptor-driven stand-up flow (closes the Phase 5 DoD). See the Phase 5 tracker.
+- Phase: 5 (SteamCMD game-server capability layer) - DoD MET (5a-5f). Descriptor-driven server jobs
+  work end to end: store descriptor + instance -> controller resolves -> dispatches server.install
+  (anonymous SteamCMD) / server.config-apply (templates shipped inline, rendered on the agent) ->
+  runs on the agent -> persists. Proven over real gRPC. Remaining as later hardening (not blocking):
+  server.backup JOB wiring + a real S3 IObjectStore (the SaveBackup capability is done + Tier-1
+  proven); a DB-backed config-template store (today a templates dir on the controller); a2s/
+  log-scrape readiness; readiness feeding node status. Next: Phase 6 (libvirt) or Phase 7 (recipes).
 - Phase: 4 (Ubuntu updates as policy-driven jobs) - COMPLETE (4a+4b+4c+4d). Updates run as
   policy-driven jobs end to end: store a policy -> controller resolves it -> dispatches update.apply
   -> agent runs preflight + provider (apt/Plex) + reboot decision -> persists; the dashboard has an
@@ -28,8 +31,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (90 Core + 37 Agent + 45 Controller + 7 integration + 6 UI +
-  13 Capabilities = 198).
+  on); `dotnet test` green (90 Core + 41 Agent + 49 Controller + 8 integration + 6 UI +
+  13 Capabilities = 207).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -343,8 +346,17 @@ Windows, reuse before bespoke.
     fail loudly, not pretend). New seams: IFileSetArchiver (Core.Capabilities, real ZipFileSetArchiver
     Tier 2), IPortProbe (Core.Primitives, real TcpPortProbe). Fakes: FakeObjectStore (in-memory
     versioned) + FakePortProbe + FakeFileSetArchiver. Tier 1 (+6). All 5 ICapability impls now exist.
-  - [ ] 5f - wire capabilities into the job spine (server.install via SteamCMD / config-apply /
-    backup executors) + dispatch + a descriptor-driven stand-up flow. Integration test. DoD close.
+  - [x] 5f - descriptor-driven server jobs wired into the spine. Agent executors `server.install`
+    (SteamCMD EnsureApp from the descriptor's steamApp; convergent -> requeueable) + `server.config-apply`
+    (ConfigGen capability; templates shipped INLINE in the job params so rendering stays on the agent,
+    controller owns the data). Controller `ServerJobDispatcher` resolves instance -> pinned descriptor
+    (agent never sees it), builds params (install: SteamAppRequest; config-apply: files + resolved
+    template text + flattened instance params), dispatches; NotFound/NotConfigured outcomes. Endpoints
+    POST /jobs/server-install + /jobs/server-config-apply. Controller now refs Primitives+Capabilities;
+    IConfigTemplateSource registered as FileConfigTemplateSource(templatesRoot, default "templates",
+    Templates:Root). Wired into AgentWorker (SteamCmd + FileConfigWriter). Tier 1 (executors 4,
+    dispatcher 4) + real-gRPC end-to-end install integration test (+9). DEFERRED: server.backup JOB
+    wiring needs a real S3 IObjectStore (capability done); DB-backed template store; a2s readiness.
 - DoD: stand up an anonymous SteamCMD dedicated server driven by a descriptor; config is
   templated from instance params; readiness reflects game-level "accepting players" (not
   process-alive); save-backup writes to its own S3 path with optional RCON quiesce.
@@ -430,6 +442,23 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 5f - descriptor-driven server jobs close the Phase 5 DoD end to end. Same
+  controller-resolves / agent-executes split as the update plane: ServerJobDispatcher loads the
+  instance + its PINNED descriptor version and ships concrete params; the agent never sees the
+  descriptor. Config templates are shipped INLINE with the config-apply job (controller reads them
+  and puts the text in the params) so rendering stays decentralized on the agent while the controller
+  owns the template data - the interim template store is a directory on the controller
+  (FileConfigTemplateSource, Templates:Root), a DB-backed store is a later refinement (same path
+  descriptors/policies took). server.install + config-apply are convergent (SteamCMD ensure /
+  idempotent render) so both are requeueable. SCOPE: server.BACKUP job wiring was deferred - it needs
+  a real S3 IObjectStore (only the in-memory fake exists); the SaveBackup capability itself is done +
+  Tier-1 proven, so this is wiring + an AWS impl, not new design. Readiness is a status PROBE, not a
+  mutating job, so it has no executor (it will feed node status later). Controller gained refs to
+  Primitives + Capabilities (InstanceParamsResolver + FileConfigTemplateSource). Proto/domain JobState
+  clash hit again in the new integration test - qualified the domain side. Tier 1 + a real-gRPC
+  end-to-end install test (+9). Phase 5 DoD MET (descriptor-driven anonymous SteamCMD install + config
+  templated from instance params, both as dispatched jobs).
 
 - 2026-07-10: Phase 5e - SaveBackup + Readiness (completing all 5 ICapability impls). SaveBackup key
   layout: a STABLE instance-scoped key (saves/{instanceId}/saves.zip) rather than timestamped keys -

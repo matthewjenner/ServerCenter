@@ -1,7 +1,9 @@
+using ServerCenter.Capabilities;
 using ServerCenter.Controller.Endpoints;
 using ServerCenter.Controller.Grpc;
 using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
+using ServerCenter.Core.Capabilities;
 using ServerCenter.Core.Connection;
 using ServerCenter.Core.Identity;
 using ServerCenter.Core.Jobs;
@@ -13,7 +15,10 @@ namespace ServerCenter.Controller;
 public static class ControllerHost
 {
     public static void AddControllerServices(
-        this IServiceCollection services, ServerCenterDatabase database, bool requireClientCertificate)
+        this IServiceCollection services,
+        ServerCenterDatabase database,
+        bool requireClientCertificate,
+        string templatesRoot = "templates")
     {
         services.AddGrpc();
         services.AddSingleton(TimeProvider.System);
@@ -31,6 +36,14 @@ public static class ControllerHost
         // Update plane (Phase 4): the declarative policy store + policy-resolving dispatcher.
         services.AddSingleton<UpdatePolicyRepository>();
         services.AddSingleton<UpdateJobDispatcher>();
+
+        // Game-server plane (Phase 5): descriptor + instance stores, the descriptor-driven dispatcher,
+        // and the template source it ships to config-apply jobs (a templates dir on the controller;
+        // a DB-backed template store is a later refinement).
+        services.AddSingleton<GameDescriptorRepository>();
+        services.AddSingleton<ServerInstanceRepository>();
+        services.AddSingleton<ServerJobDispatcher>();
+        services.AddSingleton<IConfigTemplateSource>(new FileConfigTemplateSource(templatesRoot));
         // The sink delegates presence to AgentPresenceStore and persists job progress/results.
         services.AddSingleton<IControllerSessionSink, PersistingSessionSink>();
 
@@ -53,6 +66,7 @@ public static class ControllerHost
         app.MapEnrollment();
         app.MapJobs();
         app.MapUpdatePolicies();
+        app.MapServerJobs();
         app.MapGet("/", () => "ServerCenter Controller. AgentLink + FleetView gRPC + enrollment + jobs endpoints are mapped.");
     }
 }

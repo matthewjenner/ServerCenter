@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ServerCenter.Agent.Jobs;
 using ServerCenter.Agent.Linux;
 using ServerCenter.Agent.Windows;
+using ServerCenter.Capabilities;
 using ServerCenter.Core.Connection;
 using ServerCenter.Core.Jobs;
 using ServerCenter.Core.Platform;
@@ -46,7 +47,11 @@ public sealed class AgentWorker(
                 new IJobExecutor[]
                 {
                     new ServiceRestartExecutor(services),
-                    new UpdateApplyExecutor(updateProviders, [new NotifyPreflight()], services)
+                    new UpdateApplyExecutor(updateProviders, [new NotifyPreflight()], services),
+                    // Descriptor-driven game-server jobs (Phase 5). Backup wiring waits on a real S3
+                    // IObjectStore; install (SteamCMD) + config-apply need no extra infra.
+                    new ServerInstallExecutor(new SteamCmd(runner)),
+                    new ServerConfigApplyExecutor(new FileConfigWriter())
                 },
                 jobStore,
                 loggerFactory.CreateLogger<JobExecutingCommandHandler>());
