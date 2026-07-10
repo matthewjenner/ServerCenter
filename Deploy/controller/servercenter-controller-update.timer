@@ -1,0 +1,14 @@
+[Unit]
+Description=Periodic ServerCenter controller image update
+
+[Timer]
+# DEV cadence: pull frequently while iterating (daily is the eventual default). The controller is the
+# only tier that makes external web calls (GHCR pull); agents pull from it. Persistent catches up a
+# run missed while the host was off.
+# EARMARK (2026-07-10): make this interval a controller-managed setting instead of baked-in.
+OnBootSec=1min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

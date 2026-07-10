@@ -1,0 +1,8 @@
+[Unit]
+Description=ServerCenter agent self-update (pull from the controller)
+After=network-online.target servercenter-agent.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/servercenter-agent/servercenter-agent-update.sh

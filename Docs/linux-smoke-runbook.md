@@ -55,17 +55,13 @@ On each guest VM (same tarball; the VM keeps running - you are only adding a sys
 ```bash
 curl -L -O https://github.com/matthewjenner/ServerCenter/releases/download/agent-v<version>/servercenter-agent-<version>-linux-x64.tar.gz
 mkdir agent && tar -xzf servercenter-agent-<version>-linux-x64.tar.gz -C agent && cd agent
-sudo ./install.sh
-sudo sed -i \
-  -e 's|^SERVERCENTER_CONTROLLER=.*|SERVERCENTER_CONTROLLER=http://<host-lan-ip>:5080|' \
-  -e 's|^SERVERCENTER_AGENT_ID=.*|SERVERCENTER_AGENT_ID=<unique-id>|' \
-  /etc/servercenter-agent/agent.env
-sudo systemctl start servercenter-agent && journalctl -u servercenter-agent -f
+sudo ./install.sh --controller <host-lan-ip>            # or --controller http://<host>:5080
 ```
 
-`SERVERCENTER_AGENT_ID` must be UNIQUE per node (blank collides on `dev-agent` in the plaintext
-path); leave `SERVERCENTER_NODE_KIND=guest`. Verify: the controller logs `Agent <id> connected` and
-the node appears in the dashboard.
+The installer configures the env and starts the service. The node id defaults to the guest's
+hostname (unique); pass `--agent-id <id>` to override. Run `sudo ./install.sh` with no `--controller`
+and it prompts for the address. Verify: the controller logs `Agent <id> connected` and the node
+appears in the dashboard. Then `journalctl -u servercenter-agent -f`.
 
 ## 3. Dashboard (dual-truth)  [works today]
 
@@ -182,3 +178,8 @@ Copy `/data/backup.db` off-box. Test the restore into a scratch controller befor
    `virsh define` of a base image is done out of band. Step 8's handoff assumes the VM already boots.
 5. **Controller runs as root + plaintext in this bring-up** - acceptable for a trusted-LAN first
    smoke; tighten (mTLS, least-privilege socket access) before it is anything but a homelab.
+6. **Auto-update is plaintext-only + ungated** - the agent self-updater (`servercenter-agent-update
+   .timer`) pulls bundles from the controller over http (h2c); the https/mTLS path needs the agent's
+   client cert wired into the updater's curl. And it serves ANY caller - restricting `/agent/bundle`
+   to APPROVED agents is a retrofit once the pending->approve trust model lands. No rollback yet
+   (blue-green + watchdog is Phase 10).

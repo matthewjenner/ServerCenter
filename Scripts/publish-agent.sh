@@ -38,10 +38,22 @@ echo "==> Staging deployment assets"
 cp Deploy/servercenter-agent.service Deploy/servercenter-agent.env Deploy/install.sh Deploy/README.md "$stage/"
 chmod +x "$stage/install.sh"
 
-# Bundle the controller compose so `install.sh --with-controller` can stand up node zero's
-# controller from the tarball alone (pulls the published image - nothing copied from a workstation).
+# The installed version, so the self-updater can compare against what the controller serves.
+printf '%s\n' "$version" > "$stage/VERSION"
+
+# Self-update assets: the agent updater (pulls a newer bundle from the controller) + its timer.
+mkdir -p "$stage/update"
+cp Deploy/update/servercenter-agent-update.sh \
+   Deploy/update/servercenter-agent-update.service \
+   Deploy/update/servercenter-agent-update.timer "$stage/update/"
+chmod +x "$stage/update/servercenter-agent-update.sh"
+
+# Bundle the controller compose + its update timer so `install.sh --with-controller` can stand up
+# node zero's controller from the tarball alone (pulls the published image - nothing copied).
 mkdir -p "$stage/controller"
-cp Deploy/controller/docker-compose.yml "$stage/controller/"
+cp Deploy/controller/docker-compose.yml \
+   Deploy/controller/servercenter-controller-update.service \
+   Deploy/controller/servercenter-controller-update.timer "$stage/controller/"
 
 tarball="$out/servercenter-agent-$version-$rid.tar.gz"
 tar -czf "$tarball" -C "$stage" .

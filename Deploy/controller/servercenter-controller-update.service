@@ -1,0 +1,12 @@
+[Unit]
+Description=ServerCenter controller image update (pull + recreate)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Pull the newest published image, then recreate the container if it changed. The controller update
+# model is exactly "new image pull + recreate" (state lives in the controller-data volume).
+ExecStart=/usr/bin/docker compose -f /opt/servercenter-controller/docker-compose.yml pull
+ExecStart=/usr/bin/docker compose -f /opt/servercenter-controller/docker-compose.yml up -d

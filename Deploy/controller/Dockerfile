@@ -9,6 +9,15 @@ WORKDIR /src
 COPY . .
 RUN dotnet publish Src/ServerCenter.Controller/ServerCenter.Controller.csproj -c Release -o /app
 
+# Bake the agent self-contained bundles into the image so the controller can serve agent self-updates
+# (agents pull from the controller, never GitHub). Same packaging the GitHub release uses, so the
+# advertised version and the served payload always match the controller's own lockstep version.
+RUN bash Scripts/publish-agent.sh linux-x64 \
+    && bash Scripts/publish-agent.sh linux-arm64 \
+    && mkdir -p /agent-bundles \
+    && cp artifacts/agent/linux-x64/*.tar.gz   /agent-bundles/servercenter-agent-linux-x64.tar.gz \
+    && cp artifacts/agent/linux-arm64/*.tar.gz /agent-bundles/servercenter-agent-linux-arm64.tar.gz
+
 # ---- runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
@@ -22,10 +31,14 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app .
 
+# Agent self-update bundles served by GET /agent/bundle/{rid}.
+COPY --from=build /agent-bundles /app/agent-bundles
+
 # Precious state (SQLite DB) + config templates live on mounted volumes; libvirt is enabled since
 # the socket is mounted in. mTLS is on by default (Security__RequireClientCertificate unset = true).
 ENV Database__Path=/data/servercenter.db \
     Templates__Root=/templates \
+    AgentBundles__Root=/app/agent-bundles \
     Libvirt__Enabled=true
 
 # 5443 = mTLS (default); 5080 = plaintext h2c (bring-up / dev). Which one binds depends on
