@@ -9,10 +9,13 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 7 (provisioning + build recipes) - IN PROGRESS. 7a BuildRecipe surface; 7b idempotent script
-  runner; 7c the recipe.apply engine (composes packages -> SteamCMD -> config -> scripts -> systemd
-  unit, convergent, proven end-to-end over real gRPC). Only 7d pending: provisioning->managed handoff
-  + set node.libvirt_domain at provision time (closes the Phase 6 loop).
+- Phase: 7 (provisioning + build recipes) - DoD MET at the engine/handoff level (7a-7d). BuildRecipe
+  surface; idempotent script runner; recipe.apply engine (packages->SteamCMD->config->scripts->systemd
+  unit, convergent, proven end-to-end); provisioning->managed handoff (a node recorded 'provisioning'
+  with its libvirt_domain flips to 'managed' on its agent's first check-in, closing the Phase 6 loop).
+  REMAINING as Tier-3 real-VM work: cloud-init first boot + libvirt define/start of a base image (the
+  actual VM bring-up); ILibvirtHost has no Define yet. Next: Phase 8 (Windows agent) or the deferred
+  S3 IObjectStore (backup job + runbook).
 - Phase: 6 (libvirt: read + VM lifecycle) - DoD MET (6a+6b+6c). ILibvirtHost realized; dual-truth is
   REAL (VM-running from libvirt alongside agent-online); VM start/stop/restart run as CONTROLLER-driven
   jobs (execute on the controller via local libvirt, not pushed to an agent) with a dashboard control.
@@ -41,8 +44,8 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (102 Core + 51 Agent + 62 Controller + 9 integration + 8 UI +
-  13 Capabilities = 245).
+  on); `dotnet test` green (102 Core + 51 Agent + 65 Controller + 10 integration + 8 UI +
+  13 Capabilities = 249).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -438,9 +441,15 @@ Windows, reuse before bespoke.
     IPackageInstaller (Core) + FakePackageInstaller; IServiceController.ReloadAsync (Linux=daemon-reload,
     Windows/Fake=noop). Tier 1 (executor 4, unit renderer 2, dispatcher 2) + a real-gRPC end-to-end
     recipe.apply integration test (+9). DoD engine met.
-  - [ ] 7d - provisioning -> managed handoff (node.lifecycle: provisioning until first agent Hello,
-    then managed) + set node.libvirt_domain at provision time (closes the Phase 6 loop). Handoff logic
-    Tier 1; libvirt define + cloud-init first boot is Tier 3 (real VM).
+  - [x] 7d - provisioning -> managed handoff. `AgentNodeRepository.ProvisionNodeAsync` records a node
+    'provisioning' with its libvirt_domain BEFORE its agent exists (agent_id null); `MarkManagedOnCheckInAsync`
+    flips provisioning->managed + adopts the agent id (COALESCE preserves), called from AgentLinkService
+    on every check-in (no-op for a normal node - EnsureNode's ON CONFLICT DO NOTHING preserves a
+    provisioning row, then the flip). Key wrinkle: agent_id FK -> agent_identity, so the flip runs
+    AFTER EnsureAgent creates the identity. Domain survives the handoff -> VM truth + lifecycle jobs
+    work immediately (closes the Phase 6 loop). POST /nodes/provision. Tier 1 (repo 3) + a real-gRPC
+    handoff integration test (+1). NOTE: the actual VM bring-up (cloud-init first boot + libvirt
+    define/start of a base image) is Tier-3 real-VM; ILibvirtHost has no Define method yet.
 - DoD: base image + cloud-init + libvirt define/start brings up a generic managed-but-empty
   node; applying recipe vN with instance params yields a running server; re-applying to a
   half-built/drifted box converges (build = repair = rebuild). Full rebuild-from-nothing
@@ -503,6 +512,19 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-10: Phase 7d - the provisioning -> managed handoff closes Phase 7 (at the Tier-1/handoff
+  level). A node is recorded 'provisioning' with its libvirt_domain BEFORE its agent exists (agent_id
+  null), and flips to 'managed' adopting its agent on first check-in. The flip is a SEPARATE explicit
+  step (MarkManagedOnCheckIn), NOT EnsureNode, because EnsureNode is ON CONFLICT DO NOTHING - it must
+  not clobber a provisioning row's domain/lifecycle; so connect does EnsureAgent -> EnsureNode
+  (no-op for the pre-provisioned node) -> the flip. Ordering matters: agent_id has an FK to
+  agent_identity, so the flip must run AFTER EnsureAgent has created the identity row (it does).
+  Preserving libvirt_domain through the handoff is the point - it immediately makes VM-running truth
+  (6b) and VM-lifecycle jobs (6c) work for the newly-managed node, closing the Phase 6 loop. The real
+  VM bring-up (cloud-init first boot, libvirt DEFINE from XML + start) is Tier-3 and needs an
+  ILibvirtHost.Define the seam does not have yet - explicitly deferred to real-hardware work. Tier 1
+  + a real-gRPC handoff integration test (+4).
 
 - 2026-07-10: Phase 7c - the recipe.apply engine, which lands "late and cheap" exactly as the brief
   predicted: it is almost entirely COMPOSITION of primitives already built (package install, SteamCMD,

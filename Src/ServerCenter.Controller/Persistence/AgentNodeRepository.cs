@@ -49,6 +49,41 @@ public sealed class AgentNodeRepository(ServerCenterDatabase database)
         DisplayName: reader.GetString(4),
         LibvirtDomain: reader.IsDBNull(5) ? null : reader.GetString(5));
 
+    // Records a node the controller is about to bring up: lifecycle 'provisioning' with its libvirt
+    // domain, before its agent exists (agent_id null). Idempotent (re-provision is a no-op). The VM
+    // define + cloud-init that actually boots it is Tier-3 real-VM work; this is the controller record.
+    public async Task ProvisionNodeAsync(
+        string nodeId, string kind, string? libvirtDomain, string? osFamily, long createdAtUnixMs, CancellationToken ct)
+    {
+        await using var connection = await database.OpenConnectionAsync(ct);
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO node (id, kind, os_family, lifecycle, libvirt_domain, created_at) " +
+            "VALUES (@id, @kind, @os, 'provisioning', @domain, @created) " +
+            "ON CONFLICT(id) DO NOTHING;";
+        cmd.Parameters.AddWithValue("@id", nodeId);
+        cmd.Parameters.AddWithValue("@kind", kind);
+        cmd.Parameters.AddWithValue("@os", (object?)osFamily ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@domain", (object?)libvirtDomain ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@created", createdAtUnixMs);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    // The provisioning -> managed handoff (brief 3.13): on its agent's first check-in, a provisioning
+    // node flips to 'managed' and adopts its agent id. No-op for a node that is not provisioning
+    // (a normal agent's node is created 'managed' directly). COALESCE preserves an existing agent_id.
+    public async Task MarkManagedOnCheckInAsync(string nodeId, string agentId, CancellationToken ct)
+    {
+        await using var connection = await database.OpenConnectionAsync(ct);
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            "UPDATE node SET lifecycle = 'managed', agent_id = COALESCE(agent_id, @agent) " +
+            "WHERE id = @id AND lifecycle = 'provisioning';";
+        cmd.Parameters.AddWithValue("@id", nodeId);
+        cmd.Parameters.AddWithValue("@agent", agentId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     // Links a node to its libvirt domain (or clears it with null). Drives the VM-running truth in the
     // fleet view; set at provisioning time (Phase 7) or by an operator.
     public async Task SetLibvirtDomainAsync(string nodeId, string? libvirtDomain, CancellationToken ct)

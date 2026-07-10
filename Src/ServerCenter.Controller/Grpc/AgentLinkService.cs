@@ -67,6 +67,10 @@ public sealed class AgentLinkService(
             await agents.EnsureNodeAsync(handshake.AgentId, handshake.AgentId, handshake.NodeKind, "managed", now, ct);
         }
 
+        // Provisioning -> managed handoff (brief 3.13): a node pre-created in 'provisioning' (its VM
+        // defined + cloud-init'd) flips to 'managed' on its agent's first check-in. No-op otherwise.
+        await agents.MarkManagedOnCheckInAsync(handshake.AgentId, handshake.AgentId, ct);
+
         logger.LogInformation(
             "Agent {AgentId} connected (session {SessionId}, {ReconcileCount} jobs reconciled)",
             handshake.AgentId, handshake.SessionId, handshake.ReconcileActions.Count);
