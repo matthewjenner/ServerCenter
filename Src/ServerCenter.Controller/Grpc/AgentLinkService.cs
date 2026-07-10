@@ -17,6 +17,7 @@ public sealed class AgentLinkService(
     IControllerJobView jobs,
     IControllerSessionSink sink,
     AgentNodeRepository agents,
+    ConnectedAgents connected,
     AgentAuthorizer authorizer,
     AgentSecurityOptions security,
     TimeProvider clock,
@@ -70,12 +71,15 @@ public sealed class AgentLinkService(
             "Agent {AgentId} connected (session {SessionId}, {ReconcileCount} jobs reconciled)",
             handshake.AgentId, handshake.SessionId, handshake.ReconcileActions.Count);
 
+        // Make this stream reachable for command push (job dispatch) for as long as it is up.
+        connected.Register(handshake.AgentId, stream);
         try
         {
             await ControllerSessionPump.RunAsync(stream, handshake.AgentId, sink, ct);
         }
         finally
         {
+            connected.Unregister(handshake.AgentId, stream);
             logger.LogInformation("Agent {AgentId} disconnected", handshake.AgentId);
         }
     }

@@ -9,15 +9,16 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- Phase: 3 (first jobs) - IN PROGRESS. Phases 1, 1.5, 2 complete (dashboard visually smoked by
-  the user). Slice 3a done: the agent job execution engine. Remaining: controller dispatch (3b),
-  real Linux IServiceController (3c), UI job view (3d).
+- Phase: 3 (first jobs) - IN PROGRESS. Phases 1, 1.5, 2 complete. Slices 3a (agent execution) +
+  3b (controller dispatch + progress persistence) done: a job dispatched on the controller runs
+  on the agent and persists its result (proven end to end over real gRPC). Remaining: real Linux
+  IServiceController (3c), UI job view (3d).
 - Dev convenience: `Scripts/dev-stack.sh` (bash) launches controller + agent + dashboard for
   smoke-testing. Scripts are always bash per the house rule.
 - Key clarification (2026-07-10): the agent is ONE binary for host and guests. node_kind is
   just a reported label; host behavior is controller policy, not different code.
 - Build status: `dotnet build ServerCenter.slnx` clean (0 warnings, TreatWarningsAsErrors
-  on); `dotnet test` green (57 Core + 2 Agent + 29 Controller + 5 integration + 2 UI = 95).
+  on); `dotnet test` green (57 Core + 2 Agent + 33 Controller + 6 integration + 2 UI = 100).
   Plus `Scripts/publish-agent.sh linux-x64` cross-compiles + packages the self-contained agent
   tarball (verified: Linux ELF + install assets).
 - Phase 1 progress (see the Phase 1 entry below for the sub-step tracker):
@@ -84,12 +85,11 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   (release-ui / release-agent / image-controller) are specified in `build-and-update.md` and
   DEFERRED by decision (2026-07-10) until the first usable milestone (~1.0.0); registry for
   the controller image confirmed as GHCR. Only `ci.yml` runs until then.
-- Next: Phase 3b - controller-side job dispatch (connected-agent registry + JobDispatcher +
-  progress persistence), which makes a job triggerable end to end. Then 3c (real Linux service
-  control) and 3d (UI job view). After 3b there'll be something to smoke: trigger a job, watch
-  it run.
-  (Also open when the user is ready: installing node zero on the real hypervisor from the first
-  agent release.)
+- Next: Phase 3c (real Linux `IServiceController` via systemctl/DBus) so a dispatched job
+  actually restarts a service and reports Succeeded on a real Linux node; then 3d (UI job view).
+  After 3c/3d, Phase 3 is complete -> then the planned lessons-learned memory write + a
+  post-compact prompt to prep for compaction.
+  (Also open: installing node zero on the real hypervisor from the first agent release.)
 
 ## Standing conventions (decided)
 
@@ -204,10 +204,15 @@ Windows, reuse before bespoke.
     `IAgentCommandHandler.OnCommandAsync` now gets the transport (to stream up). Wired into
     AgentWorker (picks WindowsServiceController/LinuxServiceController by OS). Tier 1 tested
     (ServerCenter.Agent.Tests): service.restart succeeds; unknown type fails.
-  - [ ] 3b - controller dispatch: a connected-agent registry (agent id -> outbound sender,
-    registered in AgentLinkService), a JobDispatcher (create job at Queued in SQLite -> push
-    Command down the agent stream), and the controller sink persisting JobProgress/CommandResult
-    into job state + job_log. Then a job can be TRIGGERED end to end.
+  - [x] 3b - controller dispatch: ConnectedAgents registry (agent id -> live IControllerStream,
+    registered/unregistered in AgentLinkService), JobDispatcher (insert job at Queued -> push
+    Command down the stream; offline agent -> stays Queued), PersistingSessionSink (delegates
+    presence, persists JobProgress -> running/pct/log/ack and CommandResult -> terminal via
+    JobRepository.ApplyProgressAsync/UpdateStateAsync). Dev trigger: POST /jobs/service-restart.
+    Tier 1 tests (dispatcher, sink) + a real-gRPC integration test: dispatched service.restart
+    runs on the agent (fake IServiceController) and persists Succeeded. NOTE: on the Windows dev
+    stack the real service controller is a stub, so a dispatched job FAILS with NotImplemented
+    until 3c - the spine works, the executor does not yet.
   - [ ] 3c - real Linux `IServiceController` (DBus/busctl or systemctl) - Tier 2, user smokes
     on the Linux host.
   - [ ] 3d - UI job view: jobs list + live progress/log in the dashboard.
@@ -348,6 +353,13 @@ Windows, reuse before bespoke.
 - 2026-07-10: Dev launcher + scripts policy. `Scripts/dev-stack.sh` (bash) runs the plaintext
   dev stack. House rule reaffirmed: ALL scripts are bash run from Git Bash, never PowerShell
   (recorded in memory). Removed the initial .ps1.
+- 2026-07-10: Phase 3b - controller job dispatch. ConnectedAgents maps agent id -> live stream
+  (KeyValuePair-remove so a stale disconnect cannot evict a reconnect). PersistingSessionSink
+  replaced the presence-only sink: it delegates heartbeat/status to AgentPresenceStore AND
+  persists job progress/results to SQLite. ApplyProgressAsync flips queued->running + stamps
+  started_at, guarded on non-terminal so a late tick cannot revert. Dev trigger is POST
+  /jobs/service-restart (operator auth deferred, like FleetView). Node id == agent id in the
+  current 1:1 mapping. End-to-end proven with a real-gRPC in-process test + fake IServiceController.
 - 2026-07-10: Phase 3a - agent job execution. IAgentCommandHandler.OnCommandAsync now receives
   the transport so a job can stream JobProgress/CommandResult up while running. Execution is
   fire-and-forget from the read loop (does not block the pump); progress carries per-job seq for

@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../Src/ServerCenter.Controller/ServerCenter.Controller.csproj" />
+    <ProjectReference Include="../ServerCenter.TestFakes/ServerCenter.TestFakes.csproj" />
   </ItemGroup>
 
 </Project>

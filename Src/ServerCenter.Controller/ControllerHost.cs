@@ -25,7 +25,10 @@ public static class ControllerHost
         // Precious state: SQLite-backed. Live presence: in-memory (transient, not precious).
         services.AddSingleton<IControllerJobView, SqliteControllerJobView>();
         services.AddSingleton<AgentPresenceStore>();
-        services.AddSingleton<IControllerSessionSink>(sp => sp.GetRequiredService<AgentPresenceStore>());
+        services.AddSingleton<ConnectedAgents>();
+        services.AddSingleton<JobDispatcher>();
+        // The sink delegates presence to AgentPresenceStore and persists job progress/results.
+        services.AddSingleton<IControllerSessionSink, PersistingSessionSink>();
 
         // Controller-owned identity + connect-time authorization.
         services.AddSingleton<ControllerOwnedTrustProvider>();
@@ -43,6 +46,7 @@ public static class ControllerHost
         app.MapGrpcService<AgentLinkService>();
         app.MapGrpcService<FleetService>();
         app.MapEnrollment();
-        app.MapGet("/", () => "ServerCenter Controller. AgentLink + FleetView gRPC + enrollment endpoints are mapped.");
+        app.MapJobs();
+        app.MapGet("/", () => "ServerCenter Controller. AgentLink + FleetView gRPC + enrollment + jobs endpoints are mapped.");
     }
 }

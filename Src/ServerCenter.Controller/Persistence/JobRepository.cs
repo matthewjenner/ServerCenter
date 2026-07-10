@@ -94,6 +94,25 @@ public sealed class JobRepository(ServerCenterDatabase database)
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    // Applies a streamed progress tick: a queued job becomes running (stamping started_at), and
+    // progress pct/note update. Guarded on non-terminal so a late tick cannot revert a finished job.
+    public async Task ApplyProgressAsync(string jobId, int? pct, string? note, long nowUnixMs, CancellationToken ct)
+    {
+        await using var connection = await database.OpenConnectionAsync(ct);
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            "UPDATE job SET " +
+            "state = CASE WHEN state = 'queued' THEN 'running' ELSE state END, " +
+            "started_at = COALESCE(started_at, @now), " +
+            "progress_pct = @pct, progress_note = @note " +
+            "WHERE id = @id AND terminal_at IS NULL;";
+        cmd.Parameters.AddWithValue("@id", jobId);
+        cmd.Parameters.AddWithValue("@now", nowUnixMs);
+        cmd.Parameters.AddWithValue("@pct", (object?)pct ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@note", (object?)note ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     public async Task AppendLogAsync(
         string jobId, long seq, LogStream stream, string line, long tsUnixMs, CancellationToken ct)
     {

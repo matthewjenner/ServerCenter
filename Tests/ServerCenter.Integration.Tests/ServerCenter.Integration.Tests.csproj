@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="../../Src/ServerCenter.Controller/ServerCenter.Controller.csproj" />
     <ProjectReference Include="../../Src/ServerCenter.Agent/ServerCenter.Agent.csproj" />
+    <ProjectReference Include="../ServerCenter.TestFakes/ServerCenter.TestFakes.csproj" />
   </ItemGroup>
 
 </Project>
