@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Windows implementations of the Core platform interfaces (Phase 8), implemented against
+       the now-proven interfaces: SCM via System.ServiceProcess, WUA/PSWindowsUpdate for
+       updates (Phase 9). Kept on net10.0 (no Windows-only TFM yet) so the scaffold builds
+       cross-platform; the Windows-specific TFM is adopted when real SCM/WUA code lands. -->
+  <ItemGroup>
+    <ProjectReference Include="../ServerCenter.Core/ServerCenter.Core.csproj" />
+  </ItemGroup>
+
+</Project>

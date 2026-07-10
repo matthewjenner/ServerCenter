@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ServerCenter.Core/ServerCenter.Core.csproj" />
+    <ProjectReference Include="../ServerCenter.Primitives/ServerCenter.Primitives.csproj" />
+    <ProjectReference Include="../ServerCenter.Capabilities/ServerCenter.Capabilities.csproj" />
+  </ItemGroup>
+
+</Project>

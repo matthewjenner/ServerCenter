@@ -1,0 +1,26 @@
+<Project>
+
+  <!-- Common build settings for every project. Folders are Title Case (dotnet convention).
+       ASCII punctuation only, per the avoid-ai-artifacts house rule. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!--
+    Single source of truth for the product version, lockstep across controller / agent / UI.
+    Bump with Scripts/bump-version.sh; CI reads it and gates releases on the matching tag.
+    Decoupled from the wire compatibility version (protobuf envelope protocol_major/minor).
+    See Docs/build-and-update.md.
+  -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+</Project>

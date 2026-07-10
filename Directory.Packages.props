@@ -1,0 +1,50 @@
+<Project>
+
+  <!-- Central Package Management. Newest stable per prefer-latest-packages. Test assertions
+       use AwesomeAssertions (FluentAssertions >= 7 is a paid license). Avalonia is on 12.x:
+       the old 11.x pin was inherited from another project whose blocker (DataGrid lagging
+       12.x) is resolved - DataGrid now ships in lockstep. Keep the Avalonia packages on the
+       same version. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="gRPC / protobuf (the wire)">
+    <PackageVersion Include="Google.Protobuf" Version="3.35.1" />
+    <PackageVersion Include="Grpc.Core.Api" Version="2.80.0" />
+    <PackageVersion Include="Grpc.Net.Client" Version="2.80.0" />
+    <PackageVersion Include="Grpc.AspNetCore" Version="2.80.0" />
+    <PackageVersion Include="Grpc.Tools" Version="2.82.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Controller persistence / hosting / S3">
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.100.3" />
+    <!-- Security override (transitive-pinned). Microsoft.Data.Sqlite 10.0.9 drags in the
+         native lib SQLitePCLRaw.lib.e_sqlite3 2.1.11, which carries a high-severity SQLite
+         CVE (NU1903, GHSA-2m69-gcr7-jv3q); the 2.x line has no patched release. 3.53.3 is
+         pure-native (patched SQLite, ABI-compatible with the 2.1.11 managed wrapper), so we
+         bump only the native lib. Revisit when Microsoft.Data.Sqlite moves to SQLitePCLRaw 3.x. -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+  </ItemGroup>
+
+  <ItemGroup Label="UI (Avalonia 12.x)">
+    <PackageVersion Include="Avalonia" Version="12.1.0" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Auto-update (desktop UI)">
+    <PackageVersion Include="Velopack" Version="1.2.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Test stack">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="AwesomeAssertions" Version="9.4.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,24 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.{cs,csproj,props,targets,slnx}]
+indent_size = 4
+
+[*.{json,yml,yaml,axaml,xml,proto}]
+indent_size = 2
+
+[*.md]
+indent_size = 2
+trim_trailing_whitespace = false
+
+# C# house style. ASCII punctuation only (avoid-ai-artifacts). File-scoped namespaces.
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning

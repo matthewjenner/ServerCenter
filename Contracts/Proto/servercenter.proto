@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+// The versioned wire contract. See Docs/phase-0-contracts.md section 1.
+// Rules: never renumber or reuse a field tag; reserve removed tags. Major bump = breaking
+// (reject on mismatch). Minor bump = additive only. Unknown fields tolerated (proto3).
+package servercenter.v1;
+
+option csharp_namespace = "ServerCenter.Contracts.V1";
+
+// The single long-lived bidi RPC. The agent dials this on startup; it is the only
+// agent-initiated connection. Controller pushes commands down, agent pushes status up.
+service AgentLink {
+  rpc Connect(stream AgentMessage) returns (stream ControllerMessage);
+}
+
+message Envelope {
+  uint32 protocol_major = 1; // reject on mismatch
+  uint32 protocol_minor = 2; // additive
+  string message_id     = 3; // ulid, unique per message, for dedupe
+  string correlation_id = 4; // ties a reply/progress to a request; empty if none
+  int64  sent_unix_ms   = 5; // sender clock, advisory only
+}
+
+// -------- Agent -> Controller --------
+message AgentMessage {
+  Envelope envelope = 1;
+  oneof payload {
+    Hello           hello          = 10; // first message after connect
+    Heartbeat       heartbeat      = 11;
+    NodeStatus      status         = 12;
+    JobProgress     job_progress   = 13;
+    JobResyncReport job_resync     = 14; // reply to ResyncRequest
+    CommandResult   command_result = 15;
+  }
+}
+
+// -------- Controller -> Agent --------
+message ControllerMessage {
+  Envelope envelope = 1;
+  oneof payload {
+    HelloAck      hello_ack      = 10; // negotiated protocol + session
+    ResyncRequest resync_request = 11;
+    Command       command        = 12;
+    CancelJob     cancel_job     = 13;
+    Goodbye       goodbye        = 14; // typed close, e.g. VERSION_MISMATCH
+  }
+}
+
+message Hello {
+  string agent_id          = 1; // pinned controller-owned identity id
+  string agent_version     = 2;
+  string os_family         = 3; // linux | windows
+  string arch              = 4;
+  repeated string in_flight_job_ids = 5; // cheap first hint before full resync
+}
+
+message HelloAck {
+  uint32 negotiated_minor = 1;
+  string session_id       = 2;
+  bool   wants_resync     = 3; // if true, agent expects a ResyncRequest
+}
+
+message Heartbeat {
+  int64 agent_unix_ms = 1;
+}
+
+message NodeStatus {
+  ServiceHealth agent_health = 1;
+  ResourceSample resources   = 2;
+  bool reboot_pending        = 3;
+}
+
+message ResourceSample {
+  double cpu_pct       = 1;
+  double mem_used_pct  = 2;
+  double disk_used_pct = 3;
+  int64  uptime_secs   = 4;
+}
+
+enum ServiceHealth {
+  SERVICE_HEALTH_UNSPECIFIED = 0;
+  SERVICE_HEALTH_ACTIVE      = 1;
+  SERVICE_HEALTH_INACTIVE    = 2;
+  SERVICE_HEALTH_FAILED      = 3;
+  SERVICE_HEALTH_ACTIVATING  = 4;
+  SERVICE_HEALTH_UNKNOWN     = 5;
+}
+
+// -------- Jobs (see phase-0-contracts.md section 2) --------
+message Command {
+  string job_id      = 1; // controller-assigned ulid; persisted at 'queued' first
+  string type        = 2; // e.g. service.restart, update.apply, recipe.apply
+  string params_json = 3; // typed per job type; validated controller-side on enqueue
+  bool   cancellable = 4;
+}
+
+message CancelJob {
+  string job_id = 1;
+}
+
+message JobProgress {
+  string   job_id    = 1;
+  int64    seq       = 2;    // monotonic per job; controller acks a watermark
+  JobState state     = 3;
+  int32    pct       = 4;    // 0..100; -1 for indeterminate
+  string   note      = 5;
+  LogLine  log       = 6;    // optional log line carried with the progress tick
+}
+
+message LogLine {
+  LogStream stream = 1;
+  string    line   = 2;
+  int64     ts_unix_ms = 3;
+}
+
+enum LogStream {
+  LOG_STREAM_UNSPECIFIED = 0;
+  LOG_STREAM_STDOUT      = 1;
+  LOG_STREAM_STDERR      = 2;
+  LOG_STREAM_NOTE        = 3;
+}
+
+enum JobState {
+  JOB_STATE_UNSPECIFIED = 0;
+  JOB_STATE_QUEUED      = 1;
+  JOB_STATE_RUNNING     = 2;
+  JOB_STATE_SUCCEEDED   = 3;
+  JOB_STATE_FAILED      = 4;
+  JOB_STATE_TIMEDOUT    = 5;
+  JOB_STATE_CANCELLED   = 6;
+}
+
+message CommandResult {
+  string   job_id      = 1;
+  JobState final_state = 2;
+  string   fail_reason = 3; // empty unless failed/timedout
+}
+
+// -------- Resync handshake (built in Phase 1, before any real job) --------
+message ResyncRequest {
+  repeated string open_job_ids = 1; // ids the controller believes are non-terminal
+}
+
+message JobResyncReport {
+  repeated JobResyncEntry entries = 1;
+}
+
+message JobResyncEntry {
+  string           job_id        = 1;
+  ResyncLocalState local_state   = 2;
+  int64            last_seq      = 3; // highest progress seq the agent holds
+  JobState         known_state   = 4; // agent's view if terminal
+}
+
+enum ResyncLocalState {
+  RESYNC_LOCAL_STATE_UNSPECIFIED       = 0;
+  RESYNC_LOCAL_STATE_STILL_RUNNING     = 1;
+  RESYNC_LOCAL_STATE_FINISHED_SUCCEEDED = 2;
+  RESYNC_LOCAL_STATE_FINISHED_FAILED   = 3;
+  RESYNC_LOCAL_STATE_UNKNOWN           = 4; // agent lost its state (e.g. rebuilt)
+}
+
+message Goodbye {
+  GoodbyeReason reason  = 1;
+  string        message = 2;
+}
+
+enum GoodbyeReason {
+  GOODBYE_REASON_UNSPECIFIED     = 0;
+  GOODBYE_REASON_VERSION_MISMATCH = 1;
+  GOODBYE_REASON_REVOKED         = 2;
+  GOODBYE_REASON_SHUTTING_DOWN   = 3;
+}

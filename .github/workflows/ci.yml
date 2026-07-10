@@ -1,0 +1,47 @@
+name: CI
+
+# Build and test the whole solution on every push and PR to main. Non-publishing and safe
+# to run against a non-functional scaffold. The release / image tracks (see
+# Docs/build-and-update.md) are separate workflows, added when we enable publishing.
+#
+# Matrix covers Linux and Windows because ServerCenter is cross-platform by design: the
+# controller and Ubuntu agent run on Linux, the Windows agent and the operator UI on Windows.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Action versions verified against latest per the global rule (the @v4 pins in the
+      # sibling repos predate the Node 24 runner change). Re-verify on any edit.
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore ServerCenter.slnx
+
+      - name: Build
+        run: dotnet build ServerCenter.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test ServerCenter.slnx --no-build --configuration Release

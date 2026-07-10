@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Descriptor-driven capabilities (ICapability implementations). Primitive-backed and
+       plugin-backed capabilities land here from Phase 5; the folder exists now so the seam
+       has a home. -->
+  <ItemGroup>
+    <ProjectReference Include="../ServerCenter.Core/ServerCenter.Core.csproj" />
+    <ProjectReference Include="../ServerCenter.Primitives/ServerCenter.Primitives.csproj" />
+  </ItemGroup>
+
+</Project>

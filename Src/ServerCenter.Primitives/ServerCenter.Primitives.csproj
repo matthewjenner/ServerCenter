@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../ServerCenter.Core/ServerCenter.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The in-memory fakes that satisfy the testability constraint (phase-0-contracts.md
+       section 3): every external-effect seam ships a fake so Tier 1 drives the full system
+       with zero real infra. Shared across test projects. -->
+  <ItemGroup>
+    <ProjectReference Include="../../Src/ServerCenter.Core/ServerCenter.Core.csproj" />
+  </ItemGroup>
+
+</Project>

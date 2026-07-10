@@ -1,0 +1,37 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+
+# Rider / VS / VS Code
+.vs/
+.idea/
+*.user
+*.suo
+
+# Test / coverage
+[Tt]est[Rr]esults/
+*.trx
+coverage*.xml
+*.coverage
+
+# Local secrets / runtime config (NEVER commit; public repo)
+# S3 bucket names, AWS creds, agent certs/CA keys, connection strings live here.
+appsettings.*.Local.json
+secrets.json
+*.pfx
+*.key
+*.pem
+.env
+.env.*
+
+# SQLite local dev databases and snapshots
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+
+# OS cruft
+.DS_Store
+Thumbs.db

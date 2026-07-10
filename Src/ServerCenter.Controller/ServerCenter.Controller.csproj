@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="AWSSDK.S3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Contracts/ServerCenter.Contracts.csproj" />
+    <ProjectReference Include="../ServerCenter.Core/ServerCenter.Core.csproj" />
+  </ItemGroup>
+
+</Project>

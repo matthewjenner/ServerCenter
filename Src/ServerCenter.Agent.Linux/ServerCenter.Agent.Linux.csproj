@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Linux implementations of the Core platform interfaces: systemd/DBus service control,
+       apt update provider, /proc-based inspection. Ubuntu is implemented first (brief 3.13);
+       these are stubs against the proven interfaces until Phase 1+. -->
+  <ItemGroup>
+    <ProjectReference Include="../ServerCenter.Core/ServerCenter.Core.csproj" />
+  </ItemGroup>
+
+</Project>
