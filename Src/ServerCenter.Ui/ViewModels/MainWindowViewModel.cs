@@ -19,14 +19,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public MainWindowViewModel(
         DashboardViewModel fleet,
         JobsViewModel jobs,
-        ManageViewModel manage,
         ServersViewModel servers,
         Func<string, (IFleetClient Fleet, IJobClient Jobs, IAdminClient Admin)> clientFactory,
         ConnectionSettings settings)
     {
         Fleet = fleet;
         Jobs = jobs;
-        Manage = manage;
         Servers = servers;
         _clientFactory = clientFactory;
         _settings = settings;
@@ -36,8 +34,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public DashboardViewModel Fleet { get; }
 
     public JobsViewModel Jobs { get; }
-
-    public ManageViewModel Manage { get; }
 
     public ServersViewModel Servers { get; }
 
@@ -60,7 +56,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         (IFleetClient fleetClient, IJobClient jobClient, IAdminClient adminClient) = _clientFactory(address);
         Jobs.UseClient(jobClient);
-        Manage.UseClient(adminClient);
+        Fleet.UseClients(jobClient, adminClient);
         Servers.UseClient(adminClient);
         Servers.Rows.Clear();
         Fleet.Nodes.Clear();

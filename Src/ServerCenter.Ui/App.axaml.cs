@@ -20,10 +20,9 @@ public partial class App : Application
             string startAddress = settings.ResolveStartupAddress();
             DashboardViewModel fleet = new DashboardViewModel();
             JobsViewModel jobs = new JobsViewModel(new GrpcJobClient(startAddress));
-            ManageViewModel manage = new ManageViewModel(new HttpAdminClient(startAddress));
             ServersViewModel servers = new ServersViewModel(new HttpAdminClient(startAddress));
 
-            _main = new MainWindowViewModel(fleet, jobs, manage, servers, CreateClients, settings);
+            _main = new MainWindowViewModel(fleet, jobs, servers, CreateClients, settings);
             _main.ConnectCommand.Execute(null);   // initial connect using the saved/env/default address
 
             desktop.MainWindow = new MainWindow { DataContext = _main };

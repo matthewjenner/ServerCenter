@@ -16,12 +16,11 @@ public sealed class MainWindowViewModelTests
         try
         {
             List<string> addresses = new List<string>();
-            RecordingJobClient jobClient = new RecordingJobClient();
 
             DashboardViewModel fleet = new DashboardViewModel();
             fleet.Apply(FleetWith("stale-node"));   // a row left over from a previous controller
 
-            MainWindowViewModel vm = new MainWindowViewModel(fleet, Jobs(), Manage(), Servers(), Factory, new ConnectionSettings(settingsPath))
+            MainWindowViewModel vm = new MainWindowViewModel(fleet, Jobs(), Servers(), Factory, new ConnectionSettings(settingsPath))
             {
                 ControllerAddress = "  http://host:5080 "
             };
@@ -37,7 +36,7 @@ public sealed class MainWindowViewModelTests
             (IFleetClient Fleet, IJobClient Jobs, IAdminClient Admin) Factory(string address)
             {
                 addresses.Add(address);
-                return (new NoopFleetClient(), jobClient, new RecordingAdminClient());
+                return (new NoopFleetClient(), new RecordingJobClient(), new RecordingAdminClient());
             }
         }
         finally
@@ -47,7 +46,7 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task Connect_swaps_the_job_and_admin_clients_so_commands_hit_the_new_controller()
+    public async Task Connect_swaps_the_action_clients_so_fleet_actions_hit_the_new_controller()
     {
         string settingsPath = Path.Combine(Path.GetTempPath(), $"sc-ui-{Guid.NewGuid():N}.json");
         try
@@ -55,22 +54,24 @@ public sealed class MainWindowViewModelTests
             RecordingJobClient newJob = new RecordingJobClient();
             RecordingAdminClient newAdmin = new RecordingAdminClient();
 
+            DashboardViewModel fleet = new DashboardViewModel();
             MainWindowViewModel vm = new MainWindowViewModel(
-                new DashboardViewModel(), Jobs(), Manage(), Servers(),
+                fleet, Jobs(), Servers(),
                 _ => (new NoopFleetClient(), newJob, newAdmin), new ConnectionSettings(settingsPath))
             {
                 ControllerAddress = "http://host:5080"
             };
 
-            vm.ConnectCommand.Execute(null);
+            vm.ConnectCommand.Execute(null);   // wires Fleet.UseClients(newJob, newAdmin), clears Nodes
 
-            vm.Jobs.VmNodeId = "n1";
-            await vm.Jobs.VmActionCommand.ExecuteAsync("start");
+            fleet.Apply(FleetWith("n1"));
+            fleet.SelectedNode = fleet.Nodes.Single();
+
+            await fleet.VmActionCommand.ExecuteAsync("start");
             newJob.LastVmAction.Should().Be(("n1", "start"));       // routed to the swapped-in job client
 
-            vm.Manage.LinkNodeId = "n1";
-            vm.Manage.LinkDomain = "plex-vm";
-            await vm.Manage.LinkDomainCommand.ExecuteAsync(null);
+            fleet.LinkDomain = "plex-vm";
+            await fleet.LinkDomainCommand.ExecuteAsync(null);
             newAdmin.LastLink.Should().Be(("n1", "plex-vm"));       // routed to the swapped-in admin client
 
             vm.Dispose();
@@ -88,7 +89,7 @@ public sealed class MainWindowViewModelTests
         DashboardViewModel fleet = new DashboardViewModel();
 
         MainWindowViewModel vm = new MainWindowViewModel(
-            fleet, Jobs(), Manage(), Servers(), Factory, new ConnectionSettings(Path.Combine(Path.GetTempPath(), $"sc-ui-{Guid.NewGuid():N}.json")))
+            fleet, Jobs(), Servers(), Factory, new ConnectionSettings(Path.Combine(Path.GetTempPath(), $"sc-ui-{Guid.NewGuid():N}.json")))
         {
             ControllerAddress = "   "
         };
@@ -107,8 +108,6 @@ public sealed class MainWindowViewModelTests
     }
 
     private static JobsViewModel Jobs() => new(new RecordingJobClient());
-
-    private static ManageViewModel Manage() => new(new RecordingAdminClient());
 
     private static ServersViewModel Servers() => new(new RecordingAdminClient());
 

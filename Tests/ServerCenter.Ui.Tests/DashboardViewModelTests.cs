@@ -1,5 +1,7 @@
+using System.Runtime.CompilerServices;
 using AwesomeAssertions;
 using ServerCenter.Contracts.V1;
+using ServerCenter.Ui.Services;
 using ServerCenter.Ui.ViewModels;
 using Xunit;
 
@@ -45,6 +47,36 @@ public sealed class DashboardViewModelTests
         n1.AgentLivenessText.Should().Be("Stale");
     }
 
+    [Fact]
+    public async Task Restart_service_targets_the_selected_node_with_the_typed_unit()
+    {
+        RecordingJobClient jobs = new RecordingJobClient();
+        DashboardViewModel vm = new DashboardViewModel();
+        vm.UseClients(jobs, new NoopAdminClient());
+        vm.Apply(Snapshot(Node("plex-server", "plex", "guest", AgentLiveness.Online)));
+        vm.SelectedNode = vm.Nodes.Single();
+        vm.RestartUnit = " plexmediaserver.service ";
+
+        await vm.RestartServiceCommand.ExecuteAsync(null);
+
+        jobs.LastRestart.Should().Be(("plex-server", "plexmediaserver.service"));   // node from selection, trimmed unit
+        vm.ActionStatus.Should().Contain("restart dispatched");
+    }
+
+    [Fact]
+    public async Task Actions_require_a_selected_node()
+    {
+        RecordingJobClient jobs = new RecordingJobClient();
+        DashboardViewModel vm = new DashboardViewModel();
+        vm.UseClients(jobs, new NoopAdminClient());   // nothing selected
+        vm.RestartUnit = "x.service";
+
+        await vm.RestartServiceCommand.ExecuteAsync(null);
+
+        jobs.LastRestart.Should().BeNull();
+        vm.ActionStatus.Should().Contain("select a node");
+    }
+
     private static FleetSnapshot Snapshot(params NodeState[] nodes)
     {
         FleetSnapshot snapshot = new FleetSnapshot { GeneratedUnixMs = 1000 };
@@ -60,4 +92,40 @@ public sealed class DashboardViewModelTests
         AgentLiveness = liveness,
         VmState = VmState.Unknown
     };
+
+    private sealed class RecordingJobClient : IJobClient
+    {
+        public (string Agent, string Unit)? LastRestart { get; private set; }
+
+        public async IAsyncEnumerable<JobListSnapshot> Watch([EnumeratorCancellation] CancellationToken ct)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public Task<string> RestartServiceAsync(string agentId, string unit, CancellationToken ct)
+        {
+            LastRestart = (agentId, unit);
+            return Task.FromResult("job1234");
+        }
+
+        public Task<UpdateTriggerResult> TriggerUpdateAsync(
+            string agentId, string policyId, string? serviceUnit, CancellationToken ct) =>
+            Task.FromResult(new UpdateTriggerResult("Dispatched", "u1", string.Empty));
+
+        public Task<UpdateTriggerResult> TriggerVmActionAsync(string nodeId, string action, CancellationToken ct) =>
+            Task.FromResult(new UpdateTriggerResult("Dispatched", "vm1", string.Empty));
+    }
+
+    private sealed class NoopAdminClient : IAdminClient
+    {
+        public Task<string> LinkDomainAsync(string nodeId, string domain, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public Task<string> StoreAsync(string surface, string bodyJson, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public Task<string> ServerJobAsync(string kind, string agentId, string instanceId, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public Task<IReadOnlyList<ServerInstanceRow>> ListServerInstancesAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ServerInstanceRow>>([]);
+    }
 }
