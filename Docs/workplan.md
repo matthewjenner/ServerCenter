@@ -34,6 +34,17 @@ Decisions Log / Known Edges before starting the next phase (house rule:
     restart, update) - actions moved ONTO the card (no select-then-act). Servers + Jobs tabs; a
     persistent connection header with a saved controller-address setting; UI version in the title bar.
     UI runs from source (Velopack installer still the deferred fast-follow).
+  - >>> NEXT TASK (2026-07-11, BLOCKING all updates/service work): THE AGENT RUNS UNPRIVILEGED AND
+    CANNOT DO PRIVILEGED WORK. apt update jobs FAIL on every node - `E: Could not open lock file
+    /var/lib/apt/lists/lock (13: Permission denied)` + `Read-only file system (30)`. Root cause:
+    Deploy/servercenter-agent.service runs `User=servercenter` with `NoNewPrivileges=true` +
+    `ProtectSystem=strict`, so the agent cannot write /var or escalate. But the agent's WHOLE JOB is to
+    manage the node (apt, systemctl, SteamCMD -> /opt, reboot, write configs). Only VM jobs work because
+    they run on the CONTROLLER via libvirt, not on the agent. FIX (do first next session): run the agent
+    as ROOT (User=root; drop ProtectSystem=strict + NoNewPrivileges - note NoNewPrivileges also blocks
+    sudo, so a sudoers workaround needs it gone too) - the pragmatic infra-agent choice - then re-add
+    targeted hardening (ReadWritePaths/capabilities) later. It ships in the agent bundle, so landing it
+    needs a version bump + reinstall/auto-update. See [[agent-privilege-gap]].
   - STILL OPEN: mTLS token-mint endpoint (plaintext bring-up for now); the pending->approve trust model
     (decided, not built - see [[trust-onboarding-model]]); absolute-value telemetry is DONE; manual
     VM-link UI was dropped from the card (auto-link covers same-named domains; add back if names differ).
