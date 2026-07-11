@@ -26,67 +26,79 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Width="480" Margin="8" Padding="14" CornerRadius="8" BorderBrush="#3a3a3a" BorderThickness="1">
-                  <StackPanel Spacing="8">
+                <Border Width="480" Height="300" Margin="8" Padding="14" CornerRadius="8" BorderBrush="#3a3a3a" BorderThickness="1">
+                  <DockPanel LastChildFill="True">
 
-                    <!-- header: badges | name | VM controls -->
-                    <Grid ColumnDefinitions="Auto,*,Auto">
-                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <Border Background="#2563eb" CornerRadius="10" Padding="8,2">
-                          <TextBlock Text="{Binding Version}" Foreground="White" FontSize="11" />
-                        </Border>
-                        <Border Background="#f59e0b" CornerRadius="6" Padding="6,2" IsVisible="{Binding RebootPending}">
-                          <TextBlock Text="Reboot" Foreground="Black" FontSize="11" />
-                        </Border>
+                    <!-- bottom (docked): divider + service/update actions + status -->
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="6">
+                      <Border Height="1" Background="#3a3a3a" Margin="0,6,0,6" />
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ComboBox Width="170" PlaceholderText="service" ItemsSource="{Binding Services}"
+                                  SelectedItem="{Binding SelectedService, Mode=TwoWay}" />
+                        <Button Content="Restart" Command="{Binding RestartServiceCommand}" />
+                        <ComboBox Width="120" PlaceholderText="policy" ItemsSource="{Binding Policies}"
+                                  SelectedItem="{Binding SelectedPolicy, Mode=TwoWay}" />
+                        <Button Content="Update" Command="{Binding RunUpdateCommand}" />
                       </StackPanel>
-                      <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="15" FontWeight="Bold"
-                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
-                      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
-                                  IsVisible="{Binding IsGuest}">
-                        <Button Content="Start" Command="{Binding VmActionCommand}" CommandParameter="start" />
-                        <Button Content="Stop" Command="{Binding VmActionCommand}" CommandParameter="stop" />
-                        <Button Content="Restart" Command="{Binding VmActionCommand}" CommandParameter="restart" />
-                      </StackPanel>
-                    </Grid>
-
-                    <!-- sub-header: kind / os / dual-truth / last seen -->
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Border Background="#374151" CornerRadius="6" Padding="6,2">
-                        <TextBlock Text="{Binding Kind}" Foreground="White" FontSize="11" />
-                      </Border>
-                      <Border Background="#374151" CornerRadius="6" Padding="6,2">
-                        <TextBlock Text="{Binding Os}" Foreground="White" FontSize="11" />
-                      </Border>
-                      <TextBlock Text="{Binding AgentLivenessText, StringFormat='Agent {0}'}" VerticalAlignment="Center" FontSize="12" />
-                      <TextBlock Text="{Binding VmStateText, StringFormat='VM {0}'}" VerticalAlignment="Center" FontSize="12" />
-                      <TextBlock Text="{Binding LastSeen}" VerticalAlignment="Center" FontSize="12" Foreground="#9ca3af" />
+                      <TextBlock Text="{Binding ActionStatus}" Foreground="#8fbcff" FontSize="12" />
                     </StackPanel>
 
-                    <!-- resource bars (percent bar + absolute total) -->
-                    <Grid ColumnDefinitions="46,*,150" RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
-                      <TextBlock Grid.Row="0" Grid.Column="0" Text="CPU" VerticalAlignment="Center" FontSize="12" />
-                      <ProgressBar Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding CpuPct}" Height="12" VerticalAlignment="Center" />
-                      <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding CpuText}" FontSize="12" HorizontalAlignment="Right" />
-                      <TextBlock Grid.Row="1" Grid.Column="0" Text="Mem" VerticalAlignment="Center" FontSize="12" />
-                      <ProgressBar Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding MemPct}" Height="12" VerticalAlignment="Center" />
-                      <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding MemText}" FontSize="12" HorizontalAlignment="Right" />
-                      <TextBlock Grid.Row="2" Grid.Column="0" Text="Disk" VerticalAlignment="Center" FontSize="12" />
-                      <ProgressBar Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding DiskPct}" Height="12" VerticalAlignment="Center" />
-                      <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding DiskText}" FontSize="12" HorizontalAlignment="Right" />
-                    </Grid>
+                    <!-- fill (top): header + status pills + resource bars -->
+                    <StackPanel Spacing="8" VerticalAlignment="Top">
 
-                    <!-- actions: service restart + update -->
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <ComboBox Width="170" PlaceholderText="service" ItemsSource="{Binding Services}"
-                                SelectedItem="{Binding SelectedService, Mode=TwoWay}" />
-                      <Button Content="Restart" Command="{Binding RestartServiceCommand}" />
-                      <ComboBox Width="120" PlaceholderText="policy" ItemsSource="{Binding Policies}"
-                                SelectedItem="{Binding SelectedPolicy, Mode=TwoWay}" />
-                      <Button Content="Update" Command="{Binding RunUpdateCommand}" />
+                      <!-- header: badges | name | state-aware VM controls -->
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                          <Border Background="#2563eb" CornerRadius="10" Padding="8,2">
+                            <TextBlock Text="{Binding Version}" Foreground="White" FontSize="11" />
+                          </Border>
+                          <Border Background="#f59e0b" CornerRadius="6" Padding="6,2" IsVisible="{Binding RebootPending}">
+                            <TextBlock Text="Reboot" Foreground="Black" FontSize="11" />
+                          </Border>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="15" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                          <Button Content="Start" Command="{Binding VmActionCommand}" CommandParameter="start" IsVisible="{Binding CanStartVm}" />
+                          <Button Content="Stop" Command="{Binding VmActionCommand}" CommandParameter="stop" IsVisible="{Binding CanStopVm}" />
+                          <Button Content="Restart" Command="{Binding VmActionCommand}" CommandParameter="restart" IsVisible="{Binding CanStopVm}" />
+                        </StackPanel>
+                      </Grid>
+
+                      <!-- status pills: kind / os / agent / vm / last seen -->
+                      <WrapPanel Orientation="Horizontal">
+                        <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
+                          <TextBlock Text="{Binding Kind}" Foreground="White" FontSize="11" />
+                        </Border>
+                        <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
+                          <TextBlock Text="{Binding Os}" Foreground="White" FontSize="11" />
+                        </Border>
+                        <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
+                          <TextBlock Text="{Binding AgentLivenessText, StringFormat='Agent {0}'}" Foreground="White" FontSize="11" />
+                        </Border>
+                        <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
+                          <TextBlock Text="{Binding VmStateText, StringFormat='VM {0}'}" Foreground="White" FontSize="11" />
+                        </Border>
+                        <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
+                          <TextBlock Text="{Binding LastSeen}" Foreground="White" FontSize="11" />
+                        </Border>
+                      </WrapPanel>
+
+                      <!-- resource bars (percent bar + absolute total) -->
+                      <Grid ColumnDefinitions="46,*,150" RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="CPU" VerticalAlignment="Center" FontSize="12" />
+                        <ProgressBar Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding CpuPct}" Height="12" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding CpuText}" FontSize="12" HorizontalAlignment="Right" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Mem" VerticalAlignment="Center" FontSize="12" />
+                        <ProgressBar Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding MemPct}" Height="12" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding MemText}" FontSize="12" HorizontalAlignment="Right" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Disk" VerticalAlignment="Center" FontSize="12" />
+                        <ProgressBar Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding DiskPct}" Height="12" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding DiskText}" FontSize="12" HorizontalAlignment="Right" />
+                      </Grid>
+
                     </StackPanel>
-
-                    <TextBlock Text="{Binding ActionStatus}" Foreground="#8fbcff" FontSize="12" />
-                  </StackPanel>
+                  </DockPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

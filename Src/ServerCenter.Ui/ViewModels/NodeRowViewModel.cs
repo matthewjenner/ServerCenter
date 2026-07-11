@@ -18,9 +18,16 @@ public sealed partial class NodeRowViewModel : ObservableObject
     public string NodeId { get; }
 
     [ObservableProperty] private string _displayName = string.Empty;
-    [ObservableProperty] private string _kind = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsGuest), nameof(CanStartVm), nameof(CanStopVm))]
+    private string _kind = string.Empty;
+
     [ObservableProperty] private string _agentLivenessText = string.Empty;
-    [ObservableProperty] private string _vmStateText = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStartVm), nameof(CanStopVm))]
+    private string _vmStateText = string.Empty;
     [ObservableProperty] private string _lastSeen = string.Empty;
     [ObservableProperty] private string _version = string.Empty;
     [ObservableProperty] private string _os = string.Empty;
@@ -52,6 +59,12 @@ public sealed partial class NodeRowViewModel : ObservableObject
     public ObservableCollection<string> Policies { get; }
 
     public bool IsGuest => Kind == "guest";
+
+    // State-aware VM controls: Start only when off, Stop/Restart only when on (nothing when Unknown /
+    // for the host). Recomputed when Kind or VmStateText change (NotifyPropertyChangedFor above).
+    public bool CanStartVm => IsGuest && VmStateText == "Stopped";
+
+    public bool CanStopVm => IsGuest && VmStateText == "Running";
 
     public void Update(NodeState node, long generatedUnixMs)
     {

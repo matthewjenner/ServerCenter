@@ -84,6 +84,31 @@ public sealed class NodeRowViewModelTests
         card.ActionStatus.Should().Contain("pick a policy");
     }
 
+    [Theory]
+    [InlineData(VmState.Running, false, true)]   // on: Stop/Restart only
+    [InlineData(VmState.Stopped, true, false)]   // off: Start only
+    [InlineData(VmState.Unknown, false, false)]  // unknown: neither
+    public void Vm_controls_are_state_aware_for_guests(VmState state, bool canStart, bool canStop)
+    {
+        NodeRowViewModel card = new(
+            new NodeState { NodeId = "g", DisplayName = "g", Kind = "guest", VmState = state },
+            1000, new FakeJobClient(), new FakeAdminClient(), []);
+
+        card.CanStartVm.Should().Be(canStart);
+        card.CanStopVm.Should().Be(canStop);
+    }
+
+    [Fact]
+    public void The_host_never_shows_vm_controls()
+    {
+        NodeRowViewModel card = new(
+            new NodeState { NodeId = "h", DisplayName = "h", Kind = "host", VmState = VmState.Running },
+            1000, new FakeJobClient(), new FakeAdminClient(), []);
+
+        card.CanStartVm.Should().BeFalse();
+        card.CanStopVm.Should().BeFalse();
+    }
+
     private static NodeRowViewModel Card(string id, string kind, IJobClient jobs, IAdminClient admin) =>
         new(new NodeState { NodeId = id, DisplayName = id, Kind = kind }, 1000, jobs, admin, []);
 
