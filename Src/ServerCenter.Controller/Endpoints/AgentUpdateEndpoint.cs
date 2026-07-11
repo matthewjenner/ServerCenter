@@ -1,4 +1,4 @@
-using System.Reflection;
+using ServerCenter.Controller.Services;
 
 namespace ServerCenter.Controller.Endpoints;
 
@@ -14,13 +14,11 @@ public static class AgentUpdateEndpoint
 {
     private static readonly string[] SupportedRids = ["linux-x64", "linux-arm64"];
 
-    private static readonly string Version = ResolveVersion();
-
     public static void MapAgentUpdates(this WebApplication app)
     {
         string bundlesRoot = app.Configuration["AgentBundles:Root"] ?? "/app/agent-bundles";
 
-        app.MapGet("/agent/version", () => Results.Ok(new AgentVersionResponse(Version)));
+        app.MapGet("/agent/version", () => Results.Ok(new AgentVersionResponse(ControllerVersion.Current)));
 
         app.MapGet("/agent/bundle/{rid}", (string rid) =>
         {
@@ -35,15 +33,6 @@ public static class AgentUpdateEndpoint
                 ? Results.File(path, "application/gzip", $"servercenter-agent-{rid}.tar.gz")
                 : Results.NotFound();
         });
-    }
-
-    // The clean semver from the assembly's informational version (strip any "+build" metadata).
-    private static string ResolveVersion()
-    {
-        string informational = typeof(AgentUpdateEndpoint).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
-        int plus = informational.IndexOf('+');
-        return plus >= 0 ? informational[..plus] : informational;
     }
 }
 

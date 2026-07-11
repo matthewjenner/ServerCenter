@@ -24,7 +24,11 @@ public sealed class FleetSnapshotBuilder(
         long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
         IReadOnlyList<NodeRow> rows = await nodes.ListNodesAsync(ct);
 
-        FleetSnapshot snapshot = new FleetSnapshot { GeneratedUnixMs = now };
+        FleetSnapshot snapshot = new FleetSnapshot
+        {
+            GeneratedUnixMs = now,
+            ControllerVersion = ControllerVersion.Current
+        };
         foreach (NodeRow row in rows)
         {
             NodeState state = new NodeState

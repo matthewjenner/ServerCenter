@@ -53,7 +53,10 @@ public sealed partial class DashboardViewModel : ObservableObject
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         Apply(snapshot);
-                        ConnectionStatus = $"Connected - {snapshot.Nodes.Count} node(s)";
+                        string controller = string.IsNullOrEmpty(snapshot.ControllerVersion)
+                            ? string.Empty
+                            : $" - controller {snapshot.ControllerVersion}";
+                        ConnectionStatus = $"Connected - {snapshot.Nodes.Count} node(s){controller}";
                     });
                 }
             }
