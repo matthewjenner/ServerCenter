@@ -232,9 +232,10 @@ Then reinstall from the new release (steps 1-2).
 
 ## Known gaps / recommended follow-ups (surfaced by this runbook)
 
-1. **No bootstrap-token mint endpoint** - so the mTLS `/enroll` flow has no operator step to create a
-   token; the smoke uses plaintext h2c. FIX: a small `POST /admin/bootstrap-tokens` calling the trust
-   provider's issue-token. Until then, mTLS on :5443 is not operable end to end.
+1. **Bootstrap-token mint endpoint DONE (2026-07-11, v0.1.12).** `POST /enroll-token` (operator) mints a
+   one-time, hashed, TTL-clamped token via the trust provider; the UI Settings tab ("Enroll a new node")
+   drives it. So `/enroll` now has an operator step. The remaining transport gap is flipping the default
+   from plaintext h2c to https/mTLS on :5443 - enrollment itself is operable end to end.
 2. **Operator API + UI DONE (2026-07-10).** `POST/GET /game-descriptors`, `/build-recipes`,
    `/server-instances` exist (steps 7-8, no more `sqlite3`); the dashboard's **Manage** panel drives
    them (link domain, paste + store a definition, trigger install/config-apply/recipe-apply); and a

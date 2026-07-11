@@ -52,9 +52,21 @@ Decisions Log / Known Edges before starting the next phase (house rule:
     refresh); the upgrade's exit code decides the job, and a successful run whose refresh had errors
     surfaces `updated (some repos failed to refresh: ...)` in the job Detail. There is no apt flag to
     skip one bad repo mid-run - this is the right layer to be tolerant.
-  - STILL OPEN: mTLS token-mint endpoint (plaintext bring-up for now); the pending->approve trust model
-    (decided, not built - see [[trust-onboarding-model]]); absolute-value telemetry is DONE; manual
-    VM-link UI was dropped from the card (auto-link covers same-named domains; add back if names differ).
+  - DONE (2026-07-11, v0.1.12): (a) TOKEN-MINT endpoint - `POST /enroll-token` (operator) exposes the
+    existing ControllerOwnedTrustProvider.CreateBootstrapTokenAsync (one-time, hashed, TTL-clamped
+    token), closing the last end-to-end gap so `/enroll` finally has an operator step. (b) SETTINGS TAB -
+    the controller URL + Connect moved off the always-visible header (now a slim status strip) into a
+    Settings tab that also mints enrollment tokens and manages update policies ("profiles"); the "Store
+    policy" affordance moved here out of the Servers tab.
+  - STILL OPEN: mTLS is still plaintext h2c in the bring-up (enroll works, but the transport isn't
+    switched to https/mTLS by default yet); the pending->approve trust model (decided, not built - see
+    [[trust-onboarding-model]]); absolute-value telemetry is DONE; manual VM-link UI was dropped from the
+    card (auto-link covers same-named domains; add back if names differ).
+  - NEXT UI DIRECTION (decided 2026-07-11 with user): the Servers tab becomes a GAME-SERVER SECTION
+    nested under its host node - a ServerInstance already binds NodeId + descriptor/recipe/policy, so
+    surface RCON console / config editor / SteamCMD install / service-restart per instance, generic over
+    the descriptor's declared capabilities (data-over-code). Its own design pass, after this slice. See
+    [[game-server-section-direction]].
 
 - Phase: 7 (provisioning + build recipes) - DoD MET at the engine/handoff level (7a-7d). BuildRecipe
   surface; idempotent script runner; recipe.apply engine (packages->SteamCMD->config->scripts->systemd
@@ -69,11 +81,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   loopback bind is unreachable in a container / to remote guests; the agent validates the server by
   CA-chain not hostname, so cert subject stays localhost). Ordered smoke checklist:
   `Docs/linux-smoke-runbook.md`.
-- END-TO-END GAPS surfaced by the packaging (small, clearly-scoped; blocking a fully-HTTP real run):
-  (1) NO bootstrap-token mint endpoint -> mTLS `/enroll` has no operator step (plaintext for now);
-  (2) NO store endpoints for game descriptors / build recipes / server instances -> P5/P7 setup needs
-  direct sqlite3 seeding. Both are ~1-file raw-body endpoints mirroring POST /update-policies. See the
-  runbook "Known gaps". These, not new phases, are the near-term end-to-end enablers.
+- END-TO-END GAPS surfaced by the packaging - BOTH NOW CLOSED: (1) bootstrap-token mint endpoint DONE
+  (`POST /enroll-token`, v0.1.12) so `/enroll` has an operator step; (2) store endpoints for game
+  descriptors / build recipes / server instances DONE (operator-API arc). Both mirror POST
+  /update-policies. Remaining transport work: flip the default from plaintext h2c to https/mTLS.
 - PRIORITY (decided 2026-07-10, user): get a STABLE LINUX platform working END TO END before any new
   feature phase. ALL Windows work is DEFERRED - Phase 8 (Windows agent), Phase 9 (Windows updates),
   and the WindowsServiceController stub stay parked (Windows VMs are for a rare game or two). The S3
@@ -583,6 +594,17 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-11: TOKEN-MINT ENDPOINT + SETTINGS TAB (v0.1.12, one bundled slice per user). (a) `POST
+  /enroll-token` exposes the already-existing ControllerOwnedTrustProvider.CreateBootstrapTokenAsync as
+  an operator endpoint (one-time hashed token, TTL defaulted to 60min and clamped to <=24h); auth still
+  deferred, same plaintext-operator posture as the other endpoints. Round-trip proven by an integration
+  test (mint -> enroll -> cert bundle). This closes the last "no operator enroll step" end-to-end gap.
+  (b) A Settings tab: the controller URL + Connect moved off the always-visible header (now a slim
+  status strip showing address + connection state) into Settings, which also mints enrollment tokens and
+  manages update policies; "Store policy" moved here out of the Servers tab. Also DECIDED with the user:
+  the Servers tab will become a game-server SECTION nested under nodes ([[game-server-section-direction]]),
+  and the pending->approve trust gate ([[trust-onboarding-model]]) holds until after that.
 
 - 2026-07-11: `apt-get update` IS BEST-EFFORT (v0.1.11). On real hardware, one broken third-party repo
   (a stale ExpressVPN `mirror+file:` source with no Release file) made `apt-get update` exit 100, and

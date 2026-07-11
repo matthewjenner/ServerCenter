@@ -20,12 +20,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         DashboardViewModel fleet,
         JobsViewModel jobs,
         ServersViewModel servers,
+        SettingsViewModel settingsTab,
         Func<string, (IFleetClient Fleet, IJobClient Jobs, IAdminClient Admin)> clientFactory,
         ConnectionSettings settings)
     {
         Fleet = fleet;
         Jobs = jobs;
         Servers = servers;
+        Settings = settingsTab;
         _clientFactory = clientFactory;
         _settings = settings;
         _controllerAddress = settings.ResolveStartupAddress();
@@ -36,6 +38,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public JobsViewModel Jobs { get; }
 
     public ServersViewModel Servers { get; }
+
+    public SettingsViewModel Settings { get; }
 
     // Connect or reconnect to ControllerAddress: cancel the current streams, point both clients at
     // the new address, clear the now-stale rows, restart the watch loops, and persist the address.
@@ -58,6 +62,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Jobs.UseClient(jobClient);
         Fleet.UseClients(jobClient, adminClient);
         Servers.UseClient(adminClient);
+        Settings.UseClient(adminClient);
         Servers.Rows.Clear();
         Fleet.Nodes.Clear();
         Jobs.Jobs.Clear();

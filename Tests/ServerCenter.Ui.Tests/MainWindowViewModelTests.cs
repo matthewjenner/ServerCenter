@@ -20,7 +20,7 @@ public sealed class MainWindowViewModelTests
             DashboardViewModel fleet = new DashboardViewModel();
             fleet.Apply(FleetWith("stale-node"));   // a row left over from a previous controller
 
-            MainWindowViewModel vm = new MainWindowViewModel(fleet, Jobs(), Servers(), Factory, new ConnectionSettings(settingsPath))
+            MainWindowViewModel vm = new MainWindowViewModel(fleet, Jobs(), Servers(), Settings(), Factory, new ConnectionSettings(settingsPath))
             {
                 ControllerAddress = "  http://host:5080 "
             };
@@ -56,7 +56,7 @@ public sealed class MainWindowViewModelTests
 
             DashboardViewModel fleet = new DashboardViewModel();
             MainWindowViewModel vm = new MainWindowViewModel(
-                fleet, Jobs(), Servers(),
+                fleet, Jobs(), Servers(), Settings(),
                 _ => (new NoopFleetClient(), newJob, newAdmin), new ConnectionSettings(settingsPath))
             {
                 ControllerAddress = "http://host:5080"
@@ -85,7 +85,7 @@ public sealed class MainWindowViewModelTests
         DashboardViewModel fleet = new DashboardViewModel();
 
         MainWindowViewModel vm = new MainWindowViewModel(
-            fleet, Jobs(), Servers(), Factory, new ConnectionSettings(Path.Combine(Path.GetTempPath(), $"sc-ui-{Guid.NewGuid():N}.json")))
+            fleet, Jobs(), Servers(), Settings(), Factory, new ConnectionSettings(Path.Combine(Path.GetTempPath(), $"sc-ui-{Guid.NewGuid():N}.json")))
         {
             ControllerAddress = "   "
         };
@@ -106,6 +106,8 @@ public sealed class MainWindowViewModelTests
     private static JobsViewModel Jobs() => new(new RecordingJobClient());
 
     private static ServersViewModel Servers() => new(new RecordingAdminClient());
+
+    private static SettingsViewModel Settings() => new();
 
     private static FleetSnapshot FleetWith(string nodeId)
     {
@@ -170,5 +172,8 @@ public sealed class MainWindowViewModelTests
 
         public Task<IReadOnlyList<string>> ListPolicyIdsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct) =>
+            Task.FromResult(new EnrollmentTokenResult("tok", displayName, 0));
     }
 }

@@ -70,6 +70,25 @@ public sealed class HttpAdminClient : IAdminClient
         return policies?.Select(p => p.Id).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList() ?? [];
     }
 
+    public async Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct)
+    {
+        string requestJson = JsonSerializer.Serialize(new { displayName, ttlMinutes });
+        using StringContent content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+        using HttpResponseMessage response = await _http.PostAsync("/enroll-token", content, ct);
+        string body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"{(int)response.StatusCode}: {body}");
+        }
+
+        MintedToken? minted = JsonSerializer.Deserialize<MintedToken>(body, JsonSerializerOptions.Web);
+        return minted is null
+            ? throw new HttpRequestException("empty token response")
+            : new EnrollmentTokenResult(minted.Token, minted.DisplayName, minted.ExpiresAtUnixMs);
+    }
+
+    private sealed record MintedToken(string Token, string DisplayName, long ExpiresAtUnixMs, int TtlMinutes);
+
     private async Task<IReadOnlyList<string>> GetStringListAsync(string path, CancellationToken ct)
     {
         using HttpResponseMessage response = await _http.GetAsync(path, ct);
