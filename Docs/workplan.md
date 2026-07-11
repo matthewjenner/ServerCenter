@@ -34,17 +34,16 @@ Decisions Log / Known Edges before starting the next phase (house rule:
     restart, update) - actions moved ONTO the card (no select-then-act). Servers + Jobs tabs; a
     persistent connection header with a saved controller-address setting; UI version in the title bar.
     UI runs from source (Velopack installer still the deferred fast-follow).
-  - >>> NEXT TASK (2026-07-11, BLOCKING all updates/service work): THE AGENT RUNS UNPRIVILEGED AND
-    CANNOT DO PRIVILEGED WORK. apt update jobs FAIL on every node - `E: Could not open lock file
-    /var/lib/apt/lists/lock (13: Permission denied)` + `Read-only file system (30)`. Root cause:
-    Deploy/servercenter-agent.service runs `User=servercenter` with `NoNewPrivileges=true` +
-    `ProtectSystem=strict`, so the agent cannot write /var or escalate. But the agent's WHOLE JOB is to
-    manage the node (apt, systemctl, SteamCMD -> /opt, reboot, write configs). Only VM jobs work because
-    they run on the CONTROLLER via libvirt, not on the agent. FIX (do first next session): run the agent
-    as ROOT (User=root; drop ProtectSystem=strict + NoNewPrivileges - note NoNewPrivileges also blocks
-    sudo, so a sudoers workaround needs it gone too) - the pragmatic infra-agent choice - then re-add
-    targeted hardening (ReadWritePaths/capabilities) later. It ships in the agent bundle, so landing it
-    needs a version bump + reinstall/auto-update. See [[agent-privilege-gap]].
+  - FIXED (2026-07-11, v0.1.10): THE AGENT NOW RUNS AS ROOT. apt/systemctl/reboot jobs were failing on
+    every node (`Could not open lock file .../lock (13: Permission denied)` + `Read-only file system
+    (30)`) because Deploy/servercenter-agent.service ran `User=servercenter` with `NoNewPrivileges=true`
+    + `ProtectSystem=strict` - an unprivileged, read-only-/var posture that fundamentally conflicts with
+    the agent's job (manage the node: apt, systemctl, SteamCMD -> /opt, reboot, write configs). Fix:
+    dropped User/Group + NoNewPrivileges + ProtectSystem/ProtectHome/PrivateTmp from the unit (runs as
+    root, the standard infra-agent posture); removed the `servercenter` useradd + chowns from install.sh
+    and the updater. The updater already swaps the unit + daemon-reloads, so this lands on live nodes via
+    auto-update. Targeted hardening (ReadWritePaths/capabilities) can be layered back later. See
+    [[agent-privilege-gap]].
   - STILL OPEN: mTLS token-mint endpoint (plaintext bring-up for now); the pending->approve trust model
     (decided, not built - see [[trust-onboarding-model]]); absolute-value telemetry is DONE; manual
     VM-link UI was dropped from the card (auto-link covers same-named domains; add back if names differ).
@@ -576,6 +575,16 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-11: AGENT RUNS AS ROOT (v0.1.10). Found on live hardware: apt/systemctl/reboot jobs failed on
+  every node - the hardened, unprivileged systemd unit (`User=servercenter`, `NoNewPrivileges=true`,
+  `ProtectSystem=strict`) gave the agent no write access to /var and no way to escalate, which is
+  fundamentally incompatible with its job (manage the node). Decided the agent runs as root - the
+  standard infra/config-mgmt-agent posture (Ansible et al.) - dropping User/Group + NoNewPrivileges +
+  ProtectSystem/ProtectHome/PrivateTmp from Deploy/servercenter-agent.service, and the `servercenter`
+  useradd + chowns from install.sh and the updater. Lands on live nodes via auto-update (the updater
+  already swaps the unit + daemon-reloads). Targeted hardening (ReadWritePaths/CapabilityBoundingSet)
+  is a later refinement, not a blocker. See [[agent-privilege-gap]].
 
 - 2026-07-11: POST-PHASE-7 PRODUCT HARDENING (many slices, driven by real-hardware testing; versions
   0.1.1 -> 0.1.9). Theme: turn the working control plane into a usable product. (1) DEPLOY: turnkey

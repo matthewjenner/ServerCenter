@@ -121,11 +121,8 @@ if [[ "$with_controller" == true ]]; then
     fi
 fi
 
-# Dedicated unprivileged system user.
-if ! id -u servercenter >/dev/null 2>&1; then
-    useradd --system --home-dir "$state_dir" --shell /usr/sbin/nologin servercenter
-fi
-
+# The agent runs as root (it manages the node: apt, systemctl, SteamCMD, reboot). No dedicated
+# unprivileged user - the hardened/unprivileged posture blocked apt and service control.
 mkdir -p "$install_dir" "$state_dir/identity" "$config_dir"
 
 # Binary (published self-contained; no .NET runtime required on the node).
@@ -147,8 +144,6 @@ set_env_key "$config_dir/agent.env" SERVERCENTER_CONTROLLER "$controller_address
 set_env_key "$config_dir/agent.env" SERVERCENTER_NODE_KIND "$node_kind"
 set_env_key "$config_dir/agent.env" SERVERCENTER_AGENT_ID "$agent_id"
 chmod 600 "$config_dir/agent.env"
-
-chown -R servercenter:servercenter "$install_dir" "$state_dir"
 
 cp -f "$script_dir/servercenter-agent.service" /etc/systemd/system/
 

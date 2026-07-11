@@ -252,3 +252,7 @@ Then reinstall from the new release (steps 1-2).
    client cert wired into the updater's curl. And it serves ANY caller - restricting `/agent/bundle`
    to APPROVED agents is a retrofit once the pending->approve trust model lands. No rollback yet
    (blue-green + watchdog is Phase 10).
+7. **The agent runs as root** (v0.1.10) - it manages the node (apt, systemctl, SteamCMD -> /opt,
+   reboot, configs), so it needs privilege + a writable filesystem; the earlier unprivileged/hardened
+   unit broke every apt/service job. Standard infra-agent posture. Targeted hardening
+   (`ReadWritePaths=`, a specific `CapabilityBoundingSet=`) is a later refinement, not done here.

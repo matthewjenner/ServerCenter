@@ -6,21 +6,22 @@ Wants=network-online.target
 
 [Service]
 Type=notify
-User=servercenter
-Group=servercenter
+# Runs as root by design. The agent IS the node's management plane: apt update/upgrade,
+# systemctl service control, SteamCMD installs under /opt, config writes, host reboot - all
+# need privilege and a writable filesystem. This is the standard infra/config-mgmt agent
+# posture (Ansible, cloud agents). Do NOT re-add NoNewPrivileges / ProtectSystem=strict here:
+# they made apt fail with "Permission denied" on the lock + "Read-only file system" on /var,
+# and NoNewPrivileges also blocks any sudo/setuid path. Targeted hardening (ReadWritePaths,
+# specific CapabilityBoundingSet) can be layered back later if wanted.
 WorkingDirectory=/opt/servercenter-agent
 ExecStart=/opt/servercenter-agent/ServerCenter.Agent
 EnvironmentFile=/etc/servercenter-agent/agent.env
 Restart=on-failure
 RestartSec=5
 
-# Hardening: the agent needs to reach the controller and write only its identity dir.
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-PrivateTmp=true
+# The enrolled cert + key live under the state dir (SERVERCENTER_CERT_DIR points here);
+# as root this is /var/lib/servercenter-agent.
 StateDirectory=servercenter-agent
-# The enrolled cert + key live under the state dir (SERVERCENTER_CERT_DIR points here).
 
 [Install]
 WantedBy=multi-user.target

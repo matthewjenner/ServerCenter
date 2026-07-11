@@ -54,7 +54,6 @@ chmod +x "$install_dir/ServerCenter.Agent"
 cp -f "$tmp/update/servercenter-agent-update.sh" "$install_dir/servercenter-agent-update.sh"
 chmod +x "$install_dir/servercenter-agent-update.sh"
 printf '%s\n' "$remote" > "$version_file"
-chown -R servercenter:servercenter "$install_dir"
 
 cp -f "$tmp/servercenter-agent.service" /etc/systemd/system/
 systemctl daemon-reload
