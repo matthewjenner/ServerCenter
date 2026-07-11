@@ -63,16 +63,12 @@ public sealed class MainWindowViewModelTests
             };
 
             vm.ConnectCommand.Execute(null);   // wires Fleet.UseClients(newJob, newAdmin), clears Nodes
+            fleet.Apply(FleetWith("n1"));       // a card is created with the swapped-in clients
 
-            fleet.Apply(FleetWith("n1"));
-            fleet.SelectedNode = fleet.Nodes.Single();
-
-            await fleet.VmActionCommand.ExecuteAsync("start");
-            newJob.LastVmAction.Should().Be(("n1", "start"));       // routed to the swapped-in job client
-
-            fleet.LinkDomain = "plex-vm";
-            await fleet.LinkDomainCommand.ExecuteAsync(null);
-            newAdmin.LastLink.Should().Be(("n1", "plex-vm"));       // routed to the swapped-in admin client
+            NodeRowViewModel card = fleet.Nodes.Single();
+            await card.VmActionCommand.ExecuteAsync("start");
+            newJob.LastVmAction.Should().Be(("n1", "start"));   // job client swap reached the card
+            newAdmin.LastServicesNode.Should().Be("n1");        // admin client swap (card loaded its services)
 
             vm.Dispose();
         }
@@ -152,13 +148,9 @@ public sealed class MainWindowViewModelTests
 
     private sealed class RecordingAdminClient : IAdminClient
     {
-        public (string Node, string Domain)? LastLink { get; private set; }
+        public string? LastServicesNode { get; private set; }
 
-        public Task<string> LinkDomainAsync(string nodeId, string domain, CancellationToken ct)
-        {
-            LastLink = (nodeId, domain);
-            return Task.FromResult(string.Empty);
-        }
+        public Task<string> LinkDomainAsync(string nodeId, string domain, CancellationToken ct) => Task.FromResult(string.Empty);
 
         public Task<string> StoreAsync(string surface, string bodyJson, CancellationToken ct) => Task.FromResult(string.Empty);
 
@@ -167,8 +159,11 @@ public sealed class MainWindowViewModelTests
         public Task<IReadOnlyList<ServerInstanceRow>> ListServerInstancesAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<ServerInstanceRow>>([]);
 
-        public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct)
+        {
+            LastServicesNode = nodeId;
+            return Task.FromResult<IReadOnlyList<string>>([]);
+        }
 
         public Task<IReadOnlyList<string>> ListLibvirtDomainsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<string>>([]);

@@ -7,12 +7,12 @@ using Xunit;
 
 namespace ServerCenter.Ui.Tests;
 
-// The dashboard's snapshot reconciliation (add / update / remove). Apply() is UI-thread-agnostic
-// so it is directly testable without an Avalonia runtime.
+// The Fleet tab's snapshot reconciliation (add / update / remove cards) and the shared policy load.
+// Per-card actions are covered in NodeRowViewModelTests. Apply() is UI-thread-agnostic (testable).
 public sealed class DashboardViewModelTests
 {
     [Fact]
-    public void Apply_adds_a_row_per_node_with_dual_truth_text()
+    public void Apply_adds_a_card_per_node_with_dual_truth_text()
     {
         DashboardViewModel vm = new DashboardViewModel();
 
@@ -25,18 +25,18 @@ public sealed class DashboardViewModelTests
         host.DisplayName.Should().Be("host-1");
         host.Kind.Should().Be("host");
         host.AgentLivenessText.Should().Be("Online");
-        host.VmStateText.Should().Be("Unknown"); // dual-truth: no libvirt yet
+        host.VmStateText.Should().Be("Unknown");   // dual-truth: no libvirt yet
+        host.IsGuest.Should().BeFalse();            // host: no VM controls
     }
 
     [Fact]
-    public void Apply_updates_existing_rows_and_removes_ones_no_longer_present()
+    public void Apply_updates_existing_cards_and_removes_ones_no_longer_present()
     {
         DashboardViewModel vm = new DashboardViewModel();
         vm.Apply(Snapshot(
             Node("n1", "a", "guest", AgentLiveness.Online),
             Node("n2", "b", "guest", AgentLiveness.Online)));
 
-        // n1 renamed + now stale; n2 gone; n3 new.
         vm.Apply(Snapshot(
             Node("n1", "a-renamed", "guest", AgentLiveness.Stale),
             Node("n3", "c", "guest", AgentLiveness.Online)));
@@ -48,33 +48,14 @@ public sealed class DashboardViewModelTests
     }
 
     [Fact]
-    public async Task Restart_service_targets_the_selected_node_with_the_typed_unit()
+    public void UseClients_loads_the_shared_policy_list()
     {
-        RecordingJobClient jobs = new RecordingJobClient();
+        NoopAdminClient admin = new NoopAdminClient { Policies = ["apt", "plex"] };
         DashboardViewModel vm = new DashboardViewModel();
-        vm.UseClients(jobs, new NoopAdminClient());
-        vm.Apply(Snapshot(Node("plex-server", "plex", "guest", AgentLiveness.Online)));
-        vm.SelectedNode = vm.Nodes.Single();
-        vm.RestartUnit = " plexmediaserver.service ";
 
-        await vm.RestartServiceCommand.ExecuteAsync(null);
+        vm.UseClients(new NoopJobClient(), admin);   // fires the (synchronous, faked) policy load
 
-        jobs.LastRestart.Should().Be(("plex-server", "plexmediaserver.service"));   // node from selection, trimmed unit
-        vm.ActionStatus.Should().Contain("restart dispatched");
-    }
-
-    [Fact]
-    public async Task Actions_require_a_selected_node()
-    {
-        RecordingJobClient jobs = new RecordingJobClient();
-        DashboardViewModel vm = new DashboardViewModel();
-        vm.UseClients(jobs, new NoopAdminClient());   // nothing selected
-        vm.RestartUnit = "x.service";
-
-        await vm.RestartServiceCommand.ExecuteAsync(null);
-
-        jobs.LastRestart.Should().BeNull();
-        vm.ActionStatus.Should().Contain("select a node");
+        vm.Policies.Should().BeEquivalentTo(["apt", "plex"]);
     }
 
     private static FleetSnapshot Snapshot(params NodeState[] nodes)
@@ -93,57 +74,26 @@ public sealed class DashboardViewModelTests
         VmState = VmState.Unknown
     };
 
-    private sealed class RecordingJobClient : IJobClient
+    private sealed class NoopJobClient : IJobClient
     {
-        public (string Agent, string Unit)? LastRestart { get; private set; }
-
         public async IAsyncEnumerable<JobListSnapshot> Watch([EnumeratorCancellation] CancellationToken ct)
         {
             await Task.CompletedTask;
             yield break;
         }
 
-        public Task<string> RestartServiceAsync(string agentId, string unit, CancellationToken ct)
-        {
-            LastRestart = (agentId, unit);
-            return Task.FromResult("job1234");
-        }
+        public Task<string> RestartServiceAsync(string agentId, string unit, CancellationToken ct) => Task.FromResult(string.Empty);
 
-        public Task<UpdateTriggerResult> TriggerUpdateAsync(
-            string agentId, string policyId, string? serviceUnit, CancellationToken ct) =>
-            Task.FromResult(new UpdateTriggerResult("Dispatched", "u1", string.Empty));
+        public Task<UpdateTriggerResult> TriggerUpdateAsync(string agentId, string policyId, string? serviceUnit, CancellationToken ct) =>
+            Task.FromResult(new UpdateTriggerResult("Dispatched", string.Empty, string.Empty));
 
         public Task<UpdateTriggerResult> TriggerVmActionAsync(string nodeId, string action, CancellationToken ct) =>
-            Task.FromResult(new UpdateTriggerResult("Dispatched", "vm1", string.Empty));
-    }
-
-    [Fact]
-    public void Selecting_a_node_loads_its_services_domains_and_policies()
-    {
-        NoopAdminClient admin = new NoopAdminClient
-        {
-            Services = ["nginx.service", "plexmediaserver.service"],
-            Domains = ["web-server", "plex-vm"],
-            Policies = ["apt-nightly"]
-        };
-        DashboardViewModel vm = new DashboardViewModel();
-        vm.UseClients(new RecordingJobClient(), admin);
-        vm.Apply(Snapshot(Node("web-server", "web", "guest", AgentLiveness.Online)));
-
-        vm.SelectedNode = vm.Nodes.Single();   // triggers the (synchronous, faked) picker load
-
-        admin.LastServicesNode.Should().Be("web-server");
-        vm.Services.Should().BeEquivalentTo(["nginx.service", "plexmediaserver.service"]);
-        vm.Domains.Should().BeEquivalentTo(["web-server", "plex-vm"]);
-        vm.Policies.Should().BeEquivalentTo(["apt-nightly"]);
+            Task.FromResult(new UpdateTriggerResult("Dispatched", string.Empty, string.Empty));
     }
 
     private sealed class NoopAdminClient : IAdminClient
     {
-        public IReadOnlyList<string> Services { get; set; } = [];
-        public IReadOnlyList<string> Domains { get; set; } = [];
         public IReadOnlyList<string> Policies { get; set; } = [];
-        public string? LastServicesNode { get; private set; }
 
         public Task<string> LinkDomainAsync(string nodeId, string domain, CancellationToken ct) => Task.FromResult(string.Empty);
 
@@ -154,13 +104,11 @@ public sealed class DashboardViewModelTests
         public Task<IReadOnlyList<ServerInstanceRow>> ListServerInstancesAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<ServerInstanceRow>>([]);
 
-        public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct)
-        {
-            LastServicesNode = nodeId;
-            return Task.FromResult(Services);
-        }
+        public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
 
-        public Task<IReadOnlyList<string>> ListLibvirtDomainsAsync(CancellationToken ct) => Task.FromResult(Domains);
+        public Task<IReadOnlyList<string>> ListLibvirtDomainsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
 
         public Task<IReadOnlyList<string>> ListPolicyIdsAsync(CancellationToken ct) => Task.FromResult(Policies);
     }

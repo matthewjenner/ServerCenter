@@ -112,6 +112,17 @@ public sealed class DeclarativeStoreEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_default_apt_policy_is_seeded_on_startup()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient client = _factory.CreateClient();
+
+        string listed = await client.GetStringAsync("/update-policies", ct);
+
+        listed.Should().Contain("\"id\":\"apt\"");   // the picker is never empty out of the box
+    }
+
+    [Fact]
     public async Task Update_policy_round_trips_through_store_and_list()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;

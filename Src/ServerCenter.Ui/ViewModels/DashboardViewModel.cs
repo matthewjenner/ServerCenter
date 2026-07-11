@@ -1,85 +1,33 @@
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using ServerCenter.Contracts.V1;
 using ServerCenter.Ui.Services;
 
 namespace ServerCenter.Ui.ViewModels;
 
-// The Fleet tab: the live node grid (dual-truth) plus selection-driven actions on the SELECTED node -
-// restart a service, run an update policy, drive the VM, link a libvirt domain. Actions target the
-// selected row (no hand-typed ids). Apply() is pure and UI-thread-agnostic (testable); RunAsync()
-// marshals snapshots onto the UI thread and reconnects on failure. The action clients are swapped on
-// reconnect via UseClients (the fleet watch client arrives through RunAsync).
+// The Fleet tab: a live card per node (dual-truth + resource bars). Actions live ON each card
+// (NodeRowViewModel), so this view-model just owns the node list, the fleet watch, and the shared
+// fleet-wide policy list handed to every card. Apply() is pure/testable; RunAsync() marshals snapshots
+// onto the UI thread and reconnects on failure. Action clients arrive via UseClients (the fleet watch
+// client comes through RunAsync) and are handed to each card as it is created.
 public sealed partial class DashboardViewModel : ObservableObject
 {
     private IJobClient? _jobs;
     private IAdminClient? _admin;
 
     [ObservableProperty] private string _connectionStatus = "Connecting...";
-    [ObservableProperty] private NodeRowViewModel? _selectedNode;
-    [ObservableProperty] private string _actionStatus = string.Empty;
-
-    [ObservableProperty] private string _restartUnit = string.Empty;
-    [ObservableProperty] private string _updatePolicyId = string.Empty;
-    [ObservableProperty] private string _updateServiceUnit = string.Empty;
-    [ObservableProperty] private string _linkDomain = string.Empty;
 
     public ObservableCollection<NodeRowViewModel> Nodes { get; } = [];
 
-    // Picker sources, refreshed when the selection changes: the node's services, and the (global)
-    // libvirt domains + update-policy ids.
-    public ObservableCollection<string> Services { get; } = [];
-
-    public ObservableCollection<string> Domains { get; } = [];
-
+    // The defined update-policy ids, shared by every card's Update picker (loaded once on connect).
     public ObservableCollection<string> Policies { get; } = [];
 
     public void UseClients(IJobClient jobs, IAdminClient admin)
     {
         _jobs = jobs;
         _admin = admin;
-    }
-
-    // When the selection changes, refresh the pickers for it (best effort - failures leave them empty).
-    partial void OnSelectedNodeChanged(NodeRowViewModel? value) => _ = LoadForSelectionAsync(value);
-
-    private async Task LoadForSelectionAsync(NodeRowViewModel? node)
-    {
-        RestartUnit = string.Empty;         // reset the pickers when the node changes
-        UpdateServiceUnit = string.Empty;
-        LinkDomain = string.Empty;
-        UpdatePolicyId = string.Empty;
-        Services.Clear();
-        Domains.Clear();
-        Policies.Clear();
-        if (_admin is null)
-        {
-            return;
-        }
-
-        await LoadIntoAsync(Domains, _admin.ListLibvirtDomainsAsync);
-        await LoadIntoAsync(Policies, _admin.ListPolicyIdsAsync);
-        if (node is not null)
-        {
-            await LoadIntoAsync(Services, ct => _admin.ListServicesAsync(node.NodeId, ct));
-        }
-    }
-
-    private static async Task LoadIntoAsync(ObservableCollection<string> target, Func<CancellationToken, Task<IReadOnlyList<string>>> fetch)
-    {
-        try
-        {
-            foreach (string item in await fetch(CancellationToken.None))
-            {
-                target.Add(item);
-            }
-        }
-        catch
-        {
-            // best effort - leave empty
-        }
+        _ = LoadPoliciesAsync();
     }
 
     public void Apply(FleetSnapshot snapshot)
@@ -91,7 +39,7 @@ public sealed partial class DashboardViewModel : ObservableObject
             NodeRowViewModel? existing = Nodes.FirstOrDefault(n => n.NodeId == node.NodeId);
             if (existing is null)
             {
-                Nodes.Add(new NodeRowViewModel(node, snapshot.GeneratedUnixMs));
+                Nodes.Add(new NodeRowViewModel(node, snapshot.GeneratedUnixMs, _jobs, _admin, Policies));
             }
             else
             {
@@ -146,118 +94,26 @@ public sealed partial class DashboardViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private async Task RestartServiceAsync()
+    private async Task LoadPoliciesAsync()
     {
-        if (!TrySelected(out NodeRowViewModel node) || _jobs is null)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(RestartUnit))
-        {
-            ActionStatus = "enter a unit";
-            return;
-        }
-
-        try
-        {
-            string jobId = await _jobs.RestartServiceAsync(node.NodeId, RestartUnit.Trim(), CancellationToken.None);
-            ActionStatus = $"restart dispatched {Short(jobId)}";
-        }
-        catch (Exception ex)
-        {
-            ActionStatus = $"error: {ex.Message}";
-        }
-    }
-
-    [RelayCommand]
-    private async Task RunUpdateAsync()
-    {
-        if (!TrySelected(out NodeRowViewModel node) || _jobs is null)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(UpdatePolicyId))
-        {
-            ActionStatus = "enter a policy id";
-            return;
-        }
-
-        try
-        {
-            UpdateTriggerResult result = await _jobs.TriggerUpdateAsync(
-                node.NodeId, UpdatePolicyId.Trim(),
-                string.IsNullOrWhiteSpace(UpdateServiceUnit) ? null : UpdateServiceUnit.Trim(), CancellationToken.None);
-            ActionStatus = Describe("update", result);
-        }
-        catch (Exception ex)
-        {
-            ActionStatus = $"error: {ex.Message}";
-        }
-    }
-
-    [RelayCommand]
-    private async Task VmActionAsync(string? action)
-    {
-        if (!TrySelected(out NodeRowViewModel node) || _jobs is null || string.IsNullOrWhiteSpace(action))
+        if (_admin is null)
         {
             return;
         }
 
         try
         {
-            UpdateTriggerResult result = await _jobs.TriggerVmActionAsync(node.NodeId, action, CancellationToken.None);
-            ActionStatus = Describe(action, result);
+            // Called from Connect on the UI thread; the await resumes on the UI sync context.
+            IReadOnlyList<string> ids = await _admin.ListPolicyIdsAsync(CancellationToken.None);
+            Policies.Clear();
+            foreach (string id in ids)
+            {
+                Policies.Add(id);
+            }
         }
-        catch (Exception ex)
+        catch
         {
-            ActionStatus = $"error: {ex.Message}";
+            // best effort - the pickers stay empty
         }
     }
-
-    [RelayCommand]
-    private async Task LinkDomainAsync()
-    {
-        if (!TrySelected(out NodeRowViewModel node) || _admin is null)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(LinkDomain))
-        {
-            ActionStatus = "enter a domain";
-            return;
-        }
-
-        try
-        {
-            await _admin.LinkDomainAsync(node.NodeId, LinkDomain.Trim(), CancellationToken.None);
-            ActionStatus = $"linked {node.NodeId} -> {LinkDomain.Trim()}";
-        }
-        catch (Exception ex)
-        {
-            ActionStatus = $"error: {ex.Message}";
-        }
-    }
-
-    private bool TrySelected(out NodeRowViewModel node)
-    {
-        node = SelectedNode!;
-        if (SelectedNode is null)
-        {
-            ActionStatus = "select a node first";
-            return false;
-        }
-
-        return true;
-    }
-
-    private static string Describe(string verb, UpdateTriggerResult result) =>
-        result is { Outcome: "Dispatched", JobId: { } jobId }
-            ? $"{verb} dispatched {Short(jobId)}"
-            : $"{result.Outcome}: {result.Reason}";
-
-    private static string Short(string value) => value.Length > 8 ? value[..8] : value;
 }

@@ -59,6 +59,9 @@ public class Program
         // Idempotent no-op after the bootstrap above (the DI instance is the same database).
         await app.Services.GetRequiredService<ServerCenterDatabase>().InitializeAsync(CancellationToken.None);
         await app.Services.GetRequiredService<ControllerOwnedTrustProvider>().EnsureCaAsync(CancellationToken.None);
+        await DefaultPolicies.EnsureAsync(
+            app.Services.GetRequiredService<UpdatePolicyRepository>(),
+            app.Services.GetRequiredService<TimeProvider>(), CancellationToken.None);
 
         app.MapControllerEndpoints();
 
