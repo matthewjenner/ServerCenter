@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using ServerCenter.Agent.Linux;
+using ServerCenter.Core.Jobs;
 using ServerCenter.Core.Platform;
 using ServerCenter.TestFakes;
 using Xunit;
@@ -79,13 +80,37 @@ public sealed class AptUpdateProviderTests
     }
 
     [Fact]
-    public async Task Apply_fails_when_apt_get_update_fails()
+    public async Task Apply_continues_past_a_failed_refresh_and_succeeds_with_a_warning()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        // apt-get update fails on one broken repo (exit 100) but the upgrade still succeeds. A single
+        // bad third-party source must not fail the whole node's patch - we press on and warn.
+        FakeProcessRunner runner = new FakeProcessRunner
+        {
+            Respond = (file, args) => file == "apt-get" && args[0] == "update"
+                ? new ProcessResult(100, string.Empty, "E: The repository 'mirror+file:/x any-version Release' does not have a Release file.")
+                : new ProcessResult(0, string.Empty, string.Empty)
+        };
+        RecordingJobSink sink = new RecordingJobSink();
+
+        UpdateOutcome outcome = await new AptUpdateProvider(runner)
+            .ApplyAsync(new UpdatePlan([], AllowReboot: false), sink, ct);
+
+        outcome.Success.Should().BeTrue();
+        // The upgrade actually ran, and the refresh failure surfaced as a warning, not a hard failure.
+        runner.Invocations.Should().Contain(i => i.Args.Count == 2 && i.Args[0] == "upgrade");
+        sink.Logs.Should().Contain(l => l.Stream == LogStream.Stderr && l.Line.Contains("does not have a Release file"));
+        sink.Progresses.Should().Contain(p => p.Note != null && p.Note.Contains("some repos failed to refresh"));
+    }
+
+    [Fact]
+    public async Task Apply_fails_when_the_upgrade_itself_fails()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         FakeProcessRunner runner = new FakeProcessRunner
         {
-            Respond = (file, args) => file == "apt-get" && args[0] == "update"
-                ? new ProcessResult(100, string.Empty, "could not resolve archive host")
+            Respond = (file, args) => file == "apt-get" && args[0] == "upgrade"
+                ? new ProcessResult(100, string.Empty, "E: Unable to fetch some archives")
                 : new ProcessResult(0, string.Empty, string.Empty)
         };
 
@@ -93,7 +118,7 @@ public sealed class AptUpdateProviderTests
             .ApplyAsync(new UpdatePlan([], AllowReboot: false), new RecordingJobSink(), ct);
 
         outcome.Success.Should().BeFalse();
-        outcome.FailReason.Should().Contain("apt-get update failed");
+        outcome.FailReason.Should().Contain("apt-get failed");
     }
 
     [Fact]

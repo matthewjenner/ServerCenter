@@ -19,18 +19,27 @@ public sealed class AptUpdateProvider(IProcessRunner runner) : IUpdateProvider
 
     public async Task<IReadOnlyList<AvailableUpdate>> CheckAsync(CancellationToken ct)
     {
-        await RunOrThrowAsync("apt-get", ["update"], ct);
+        // Best-effort refresh: a single broken third-party repo must not stop us listing what CAN be
+        // upgraded from the repos that did refresh (see ApplyAsync for the reasoning).
+        await runner.RunAsync("apt-get", ["update"], NonInteractive, ct);
         ProcessResult listing = await runner.RunAsync("apt", ["list", "--upgradable"], NonInteractive, ct);
         return ParseUpgradable(listing.StandardOutput);
     }
 
     public async Task<UpdateOutcome> ApplyAsync(UpdatePlan plan, IJobSink sink, CancellationToken ct)
     {
+        // apt-get update is BEST-EFFORT. A single misconfigured/unreachable third-party repo (no
+        // Release file, dead mirror) makes it exit non-zero, but every OTHER repo still refreshed.
+        // Aborting here would let one bad source block patching the whole node - so we record the
+        // failure as a warning and press on to the upgrade, which uses whatever indices DID refresh.
+        // The upgrade's exit code is what decides the job.
         sink.Log(LogStream.Note, "apt-get update");
         ProcessResult refresh = await runner.RunAsync("apt-get", ["update"], NonInteractive, ct);
+        string? refreshWarning = null;
         if (refresh.ExitCode != 0)
         {
-            return new UpdateOutcome(Success: false, RebootRequired: false, $"apt-get update failed: {refresh.StandardError}");
+            refreshWarning = FirstLine(refresh.StandardError);
+            sink.Log(LogStream.Stderr, $"apt-get update reported errors (continuing anyway): {refresh.StandardError.Trim()}");
         }
 
         // Targeted upgrade when packages are named; a full upgrade when the plan is open-ended.
@@ -46,8 +55,23 @@ public sealed class AptUpdateProvider(IProcessRunner runner) : IUpdateProvider
         }
 
         bool rebootRequired = await RebootRequiredAsync(ct);
-        sink.Progress(100, rebootRequired ? "updated; reboot required" : "updated");
+        sink.Progress(100, UpdatedNote(rebootRequired, refreshWarning));
         return new UpdateOutcome(Success: true, rebootRequired, FailReason: null);
+    }
+
+    // The success note, surfaced as the job Detail. When a repo failed to refresh we still succeeded,
+    // but say so (with the first apt error line) so the operator can go fix that source if they care.
+    private static string UpdatedNote(bool rebootRequired, string? refreshWarning)
+    {
+        string core = rebootRequired ? "updated; reboot required" : "updated";
+        return refreshWarning is null ? core : $"{core} (some repos failed to refresh: {refreshWarning})";
+    }
+
+    private static string FirstLine(string text)
+    {
+        string trimmed = text.Trim();
+        int newline = trimmed.IndexOf('\n');
+        return newline < 0 ? trimmed : trimmed[..newline].Trim();
     }
 
     // apt sets the reboot-required flag file when a package (e.g. the kernel) needs a restart. `test`
@@ -56,16 +80,6 @@ public sealed class AptUpdateProvider(IProcessRunner runner) : IUpdateProvider
     {
         ProcessResult result = await runner.RunAsync("test", ["-f", RebootRequiredFlag], ct);
         return result.ExitCode == 0;
-    }
-
-    private async Task RunOrThrowAsync(string file, IReadOnlyList<string> args, CancellationToken ct)
-    {
-        ProcessResult result = await runner.RunAsync(file, args, NonInteractive, ct);
-        if (result.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"{file} {string.Join(' ', args)} failed (exit {result.ExitCode}): {result.StandardError}");
-        }
     }
 
     // Parses `apt list --upgradable` lines, e.g.

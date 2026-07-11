@@ -44,6 +44,14 @@ Decisions Log / Known Edges before starting the next phase (house rule:
     and the updater. The updater already swaps the unit + daemon-reloads, so this lands on live nodes via
     auto-update. Targeted hardening (ReadWritePaths/capabilities) can be layered back later. See
     [[agent-privilege-gap]].
+  - FIXED (2026-07-11, v0.1.11): `apt-get update` is now BEST-EFFORT. One misconfigured/unreachable
+    third-party repo (torrent-desktop's stale ExpressVPN `mirror+file:` source, "does not have a Release
+    file") made `apt-get update` exit 100, and the provider ABORTED before ever running the upgrade -
+    so the whole node went unpatched and the job showed a misleading `Failed`. Now AptUpdateProvider logs
+    the refresh error as a warning and presses on to `apt-get upgrade` (using whatever indices DID
+    refresh); the upgrade's exit code decides the job, and a successful run whose refresh had errors
+    surfaces `updated (some repos failed to refresh: ...)` in the job Detail. There is no apt flag to
+    skip one bad repo mid-run - this is the right layer to be tolerant.
   - STILL OPEN: mTLS token-mint endpoint (plaintext bring-up for now); the pending->approve trust model
     (decided, not built - see [[trust-onboarding-model]]); absolute-value telemetry is DONE; manual
     VM-link UI was dropped from the card (auto-link covers same-named domains; add back if names differ).
@@ -575,6 +583,15 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-11: `apt-get update` IS BEST-EFFORT (v0.1.11). On real hardware, one broken third-party repo
+  (a stale ExpressVPN `mirror+file:` source with no Release file) made `apt-get update` exit 100, and
+  AptUpdateProvider aborted the job BEFORE the upgrade - leaving the node unpatched under a misleading
+  `Failed`. There is no apt flag to ignore a single bad repo for one run, so the provider is the right
+  place to be tolerant: log the refresh error as a warning, continue to `apt-get upgrade` from the
+  indices that DID refresh, and let the upgrade's exit code decide the job. Success with a failed
+  refresh reports `updated (some repos failed to refresh: ...)` in the job Detail. Node-level cleanup
+  (removing the dead source) is optional and left to the operator. See [[apt-update-best-effort]].
 
 - 2026-07-11: AGENT RUNS AS ROOT (v0.1.10). Found on live hardware: apt/systemctl/reboot jobs failed on
   every node - the hardened, unprivileged systemd unit (`User=servercenter`, `NoNewPrivileges=true`,
