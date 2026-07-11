@@ -28,6 +28,9 @@ public sealed partial class NodeRowViewModel : ObservableObject
     [ObservableProperty] private double _cpuPct;
     [ObservableProperty] private double _memPct;
     [ObservableProperty] private double _diskPct;
+    [ObservableProperty] private string _cpuText = string.Empty;
+    [ObservableProperty] private string _memText = string.Empty;
+    [ObservableProperty] private string _diskText = string.Empty;
 
     [ObservableProperty] private string? _selectedService;
     [ObservableProperty] private string? _selectedPolicy;
@@ -64,9 +67,34 @@ public sealed partial class NodeRowViewModel : ObservableObject
             ? "-"
             : string.IsNullOrEmpty(node.Arch) ? node.OsFamily : $"{node.OsFamily} {node.Arch}";
         RebootPending = node.RebootPending;
-        CpuPct = node.Resources?.CpuPct ?? 0;
-        MemPct = node.Resources?.MemUsedPct ?? 0;
-        DiskPct = node.Resources?.DiskUsedPct ?? 0;
+
+        ResourceSample? r = node.Resources;
+        CpuPct = r?.CpuPct ?? 0;
+        MemPct = r?.MemUsedPct ?? 0;
+        DiskPct = r?.DiskUsedPct ?? 0;
+        CpuText = r is { CpuCores: > 0 } ? $"{CpuPct:0}%  {r.CpuCores} cores" : $"{CpuPct:0}%";
+        MemText = r is { MemTotalBytes: > 0 } ? $"{Bytes(r.MemUsedBytes)} / {Bytes(r.MemTotalBytes)}" : $"{MemPct:0}%";
+        DiskText = r is { DiskTotalBytes: > 0 } ? $"{Bytes(r.DiskUsedBytes)} / {Bytes(r.DiskTotalBytes)}" : $"{DiskPct:0}%";
+    }
+
+    // Human byte size (binary, matching how these tools show RAM/disk).
+    private static string Bytes(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "0";
+        }
+
+        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        double value = bytes;
+        int unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.#} {units[unit]}";
     }
 
     [RelayCommand]

@@ -42,7 +42,12 @@ public sealed class SystemInfoStatusSource(ISystemInfo systemInfo) : IAgentStatu
                 CpuPct = sample.CpuPct,
                 MemUsedPct = sample.MemUsedPct,
                 DiskUsedPct = sample.DiskUsedPct,
-                UptimeSecs = facts.UptimeSecs
+                UptimeSecs = facts.UptimeSecs,
+                MemTotalBytes = sample.MemTotalBytes,
+                MemUsedBytes = sample.MemUsedBytes,
+                DiskTotalBytes = sample.DiskTotalBytes,
+                DiskUsedBytes = sample.DiskUsedBytes,
+                CpuCores = sample.CpuCores
             }
         };
         status.Services.AddRange(_services);

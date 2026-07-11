@@ -9,6 +9,35 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
+- LATEST (2026-07-11) - post-Phase-7 PRODUCT HARDENING. The real hardware is LIVE and self-managing:
+  the hypervisor (node zero) + 4 guests (plex/satisfactory/web/torrent), all on the same auto-updating
+  version. Delivered on top of Phases 0-7 (version 0.1.9):
+  - DEPLOY: agent installs from its GitHub release; controller is a GHCR image. `install.sh
+    --with-controller` stands up node zero (controller container + host agent) in ONE command; guests
+    use `install.sh --controller <host-or-url>` (auto-configures + starts, no env hand-editing).
+  - AUTO-UPDATE (interim, pre-Phase-10, no rollback): CONTROLLER-DISTRIBUTED. The controller bakes agent
+    bundles into its image + serves GET /agent/version + /agent/bundle/{rid}; each node's
+    servercenter-agent-update.timer pulls a newer bundle FROM THE CONTROLLER (never GitHub) and
+    swaps+restarts; the controller self-updates via docker compose pull. Cadence ~5min (dev), earmarked
+    to become a controller-managed setting. See [[build-and-update-model]].
+  - DIAGNOSTICS: agent reports its REAL version (assembly, not the old hardcode), os/arch,
+    reboot-pending, and live CPU/mem/disk WITH absolute totals (mem/disk bytes, cpu cores) via
+    ISystemInfo/LinuxSystemInfo. Surfaced in NodeState + the UI; controller version shown too.
+  - OPERATOR API + UI: store/list endpoints for game-descriptors, build-recipes, server-instances, and
+    GET /update-policies - RESOLVES the "sqlite3 seeding" gap. A default `apt` update policy is seeded
+    on startup so the policy picker is never empty.
+  - DISCOVERY/AUTOMATION (the "stop typing opaque ids" arc): agent enumerates systemd services -> GET
+    /nodes/{id}/services -> UI service picker; libvirt VM AUTO-LINK (LibvirtAutoLinker matches unlinked
+    guest nodes to same-named domains every 30s) + GET /libvirt-domains override; policy dropdown.
+  - UI is now a CARD-based dashboard (was table -> tabs -> cards): Fleet tab = a responsive card grid
+    (WrapPanel), one card per node, with per-card actions (VM start/stop/restart on guests, service
+    restart, update) - actions moved ONTO the card (no select-then-act). Servers + Jobs tabs; a
+    persistent connection header with a saved controller-address setting; UI version in the title bar.
+    UI runs from source (Velopack installer still the deferred fast-follow).
+  - STILL OPEN: mTLS token-mint endpoint (plaintext bring-up for now); the pending->approve trust model
+    (decided, not built - see [[trust-onboarding-model]]); absolute-value telemetry is DONE; manual
+    VM-link UI was dropped from the card (auto-link covers same-named domains; add back if names differ).
+
 - Phase: 7 (provisioning + build recipes) - DoD MET at the engine/handoff level (7a-7d). BuildRecipe
   surface; idempotent script runner; recipe.apply engine (packages->SteamCMD->config->scripts->systemd
   unit, convergent, proven end-to-end); provisioning->managed handoff (a node recorded 'provisioning'
@@ -536,6 +565,20 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-11: POST-PHASE-7 PRODUCT HARDENING (many slices, driven by real-hardware testing; versions
+  0.1.1 -> 0.1.9). Theme: turn the working control plane into a usable product. (1) DEPLOY: turnkey
+  `install.sh --with-controller` (node zero in one command) + `--controller` flag for guests; controller
+  as GHCR image. (2) AUTO-UPDATE: controller-distributed (agents pull bundles FROM the controller, never
+  GitHub; controller bakes the bundles into its image + serves /agent/version + /agent/bundle/{rid};
+  systemd timers on each node) - interim, no rollback (Phase 10 is the real blue-green). (3) DIAGNOSTICS:
+  real agent version + os/arch + reboot-pending + live CPU/mem/disk with absolute totals (ISystemInfo ->
+  LinuxSystemInfo). (4) OPERATOR API+UI: store/list endpoints for every declarative surface (no more
+  sqlite3), default `apt` policy seeded. (5) DISCOVERY: service enumeration -> UI picker, libvirt VM
+  auto-link by name, policy dropdown. (6) UI redesign: table -> tabs -> CARD grid with per-card actions
+  (actions moved onto the card; the select-then-act model was removed as bad UX per user). DECIDED but
+  NOT built: pending->approve trust gate ([[trust-onboarding-model]]). Version-bump rule established:
+  bump on every shippable change without asking ([[version-bump-rule]]).
 
 - 2026-07-10: CONTROLLER IMAGE UN-DEFERRED (user: the hypervisor is a separate machine and will NOT
   pull source). The compose I first wrote used `build: context: ../..` - wrong, it needs the source

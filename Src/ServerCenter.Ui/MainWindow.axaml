@@ -62,17 +62,17 @@
                       <TextBlock Text="{Binding LastSeen}" VerticalAlignment="Center" FontSize="12" Foreground="#9ca3af" />
                     </StackPanel>
 
-                    <!-- resource bars -->
-                    <Grid ColumnDefinitions="46,*,44" RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+                    <!-- resource bars (percent bar + absolute total) -->
+                    <Grid ColumnDefinitions="46,*,150" RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
                       <TextBlock Grid.Row="0" Grid.Column="0" Text="CPU" VerticalAlignment="Center" FontSize="12" />
                       <ProgressBar Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding CpuPct}" Height="12" VerticalAlignment="Center" />
-                      <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding CpuPct, StringFormat='{}{0:0}%'}" FontSize="12" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding CpuText}" FontSize="12" HorizontalAlignment="Right" />
                       <TextBlock Grid.Row="1" Grid.Column="0" Text="Mem" VerticalAlignment="Center" FontSize="12" />
                       <ProgressBar Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding MemPct}" Height="12" VerticalAlignment="Center" />
-                      <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding MemPct, StringFormat='{}{0:0}%'}" FontSize="12" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding MemText}" FontSize="12" HorizontalAlignment="Right" />
                       <TextBlock Grid.Row="2" Grid.Column="0" Text="Disk" VerticalAlignment="Center" FontSize="12" />
                       <ProgressBar Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding DiskPct}" Height="12" VerticalAlignment="Center" />
-                      <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding DiskPct, StringFormat='{}{0:0}%'}" FontSize="12" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding DiskText}" FontSize="12" HorizontalAlignment="Right" />
                     </Grid>
 
                     <!-- actions: service restart + update -->

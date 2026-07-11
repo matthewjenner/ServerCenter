@@ -73,10 +73,16 @@ message NodeStatus {
 }
 
 message ResourceSample {
-  double cpu_pct       = 1;
-  double mem_used_pct  = 2;
-  double disk_used_pct = 3;
-  int64  uptime_secs   = 4;
+  double cpu_pct          = 1;
+  double mem_used_pct     = 2;
+  double disk_used_pct    = 3;
+  int64  uptime_secs      = 4;
+  // Absolute values behind the percentages, for the operator UI (additive; 0 from an older agent).
+  int64  mem_total_bytes  = 5;
+  int64  mem_used_bytes   = 6;
+  int64  disk_total_bytes = 7;
+  int64  disk_used_bytes  = 8;
+  int32  cpu_cores        = 9;
 }
 
 enum ServiceHealth {

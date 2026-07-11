@@ -51,10 +51,17 @@ public sealed class LinuxSystemInfo(IProcessRunner runner) : ISystemInfo
         (long idle2, long total2) = ParseCpuTotals(await ReadFileOrEmptyAsync("/proc/stat", ct));
         double cpuPct = CpuPct(idle1, total1, idle2, total2);
 
-        double memPct = ParseMemUsedPct(await ReadFileOrEmptyAsync("/proc/meminfo", ct));
-        double diskPct = RootDiskUsedPct();
+        string meminfo = await ReadFileOrEmptyAsync("/proc/meminfo", ct);
+        long memTotal = ParseMemKbToBytes(meminfo, "MemTotal:");
+        long memAvailable = ParseMemKbToBytes(meminfo, "MemAvailable:");
+        long memUsed = Math.Max(0, memTotal - memAvailable);
+        double memPct = memTotal > 0 ? Math.Clamp(100.0 * memUsed / memTotal, 0, 100) : 0;
 
-        return new ResourceSample(cpuPct, memPct, diskPct);
+        (long diskTotal, long diskUsed) = RootDiskBytes();
+        double diskPct = diskTotal > 0 ? Math.Clamp(100.0 * diskUsed / diskTotal, 0, 100) : 0;
+
+        return new ResourceSample(
+            cpuPct, memPct, diskPct, memTotal, memUsed, diskTotal, diskUsed, Environment.ProcessorCount);
     }
 
     public Task<bool> RebootPendingAsync(CancellationToken ct) => Task.FromResult(File.Exists(RebootRequiredPath));
@@ -133,6 +140,20 @@ public sealed class LinuxSystemInfo(IProcessRunner runner) : ISystemInfo
         return Math.Clamp(used, 0, 100);
     }
 
+    // The value (in bytes) of a /proc/meminfo key like "MemTotal:" - meminfo reports kB.
+    public static long ParseMemKbToBytes(string procMeminfo, string key)
+    {
+        foreach (string line in procMeminfo.Split('\n'))
+        {
+            if (line.StartsWith(key, StringComparison.Ordinal))
+            {
+                return FirstNumber(line) * 1024;
+            }
+        }
+
+        return 0;
+    }
+
     public static long ParseUptimeSecs(string procUptime)
     {
         string first = procUptime.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
@@ -154,22 +175,21 @@ public sealed class LinuxSystemInfo(IProcessRunner runner) : ISystemInfo
         return 0;
     }
 
-    private static double RootDiskUsedPct()
+    private static (long Total, long Used) RootDiskBytes()
     {
         try
         {
             DriveInfo root = new DriveInfo("/");
             if (!root.IsReady || root.TotalSize <= 0)
             {
-                return 0;
+                return (0, 0);
             }
 
-            double used = 100.0 * (root.TotalSize - root.TotalFreeSpace) / root.TotalSize;
-            return Math.Clamp(used, 0, 100);
+            return (root.TotalSize, root.TotalSize - root.TotalFreeSpace);
         }
         catch (IOException)
         {
-            return 0;
+            return (0, 0);
         }
     }
 

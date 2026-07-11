@@ -15,4 +15,12 @@ public interface ISystemInfo
 
 public sealed record SystemFacts(string OsFamily, string OsVersion, string Arch, string Kernel, long UptimeSecs);
 
-public sealed record ResourceSample(double CpuPct, double MemUsedPct, double DiskUsedPct);
+public sealed record ResourceSample(
+    double CpuPct,
+    double MemUsedPct,
+    double DiskUsedPct,
+    long MemTotalBytes = 0,
+    long MemUsedBytes = 0,
+    long DiskTotalBytes = 0,
+    long DiskUsedBytes = 0,
+    int CpuCores = 0);

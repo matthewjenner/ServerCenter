@@ -47,6 +47,16 @@ public sealed class LinuxSystemInfoTests
     }
 
     [Fact]
+    public void Parses_meminfo_key_from_kb_to_bytes()
+    {
+        string meminfo = "MemTotal:        2048 kB\nMemAvailable:     512 kB\n";
+
+        LinuxSystemInfo.ParseMemKbToBytes(meminfo, "MemTotal:").Should().Be(2048L * 1024);
+        LinuxSystemInfo.ParseMemKbToBytes(meminfo, "MemAvailable:").Should().Be(512L * 1024);
+        LinuxSystemInfo.ParseMemKbToBytes(meminfo, "Missing:").Should().Be(0);
+    }
+
+    [Fact]
     public void Parses_service_unit_names_from_list_units()
     {
         string output =
