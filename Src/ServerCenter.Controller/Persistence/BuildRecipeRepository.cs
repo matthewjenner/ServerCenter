@@ -42,4 +42,24 @@ public sealed class BuildRecipeRepository(ServerCenterDatabase database)
         string? body = (string?)await cmd.ExecuteScalarAsync(ct);
         return body is null ? null : BuildRecipeSerializer.Deserialize(body);
     }
+
+    // The latest revision of each recipe id, for the operator list view.
+    public async Task<IReadOnlyList<BuildRecipe>> ListLatestAsync(CancellationToken ct)
+    {
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
+        cmd.CommandText =
+            "SELECT body_json FROM build_recipe br " +
+            "WHERE version = (SELECT MAX(version) FROM build_recipe WHERE id = br.id) " +
+            "ORDER BY id;";
+
+        List<BuildRecipe> list = new List<BuildRecipe>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(BuildRecipeSerializer.Deserialize(reader.GetString(0)));
+        }
+
+        return list;
+    }
 }

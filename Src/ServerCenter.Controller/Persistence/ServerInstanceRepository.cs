@@ -42,6 +42,22 @@ public sealed class ServerInstanceRepository(ServerCenterDatabase database)
         return await reader.ReadAsync(ct) ? Map(reader) : null;
     }
 
+    public async Task<IReadOnlyList<ServerInstance>> ListAllAsync(CancellationToken ct)
+    {
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT {Columns} FROM server_instance ORDER BY created_at;";
+
+        List<ServerInstance> instances = new List<ServerInstance>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            instances.Add(Map(reader));
+        }
+
+        return instances;
+    }
+
     public async Task<IReadOnlyList<ServerInstance>> ListByNodeAsync(string nodeId, CancellationToken ct)
     {
         await using SqliteConnection connection = await database.OpenConnectionAsync(ct);

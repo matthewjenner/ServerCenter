@@ -17,10 +17,13 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             ConnectionSettings settings = new ConnectionSettings();
+            string startAddress = settings.ResolveStartupAddress();
             DashboardViewModel fleet = new DashboardViewModel();
-            JobsViewModel jobs = new JobsViewModel(new GrpcJobClient(settings.ResolveStartupAddress()));
+            JobsViewModel jobs = new JobsViewModel(new GrpcJobClient(startAddress));
+            ManageViewModel manage = new ManageViewModel(new HttpAdminClient(startAddress));
+            ServersViewModel servers = new ServersViewModel(new HttpAdminClient(startAddress));
 
-            _main = new MainWindowViewModel(fleet, jobs, CreateClients, settings);
+            _main = new MainWindowViewModel(fleet, jobs, manage, servers, CreateClients, settings);
             _main.ConnectCommand.Execute(null);   // initial connect using the saved/env/default address
 
             desktop.MainWindow = new MainWindow { DataContext = _main };
@@ -30,6 +33,6 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static (IFleetClient Fleet, IJobClient Jobs) CreateClients(string address) =>
-        (new GrpcFleetClient(address), new GrpcJobClient(address));
+    private static (IFleetClient Fleet, IJobClient Jobs, IAdminClient Admin) CreateClients(string address) =>
+        (new GrpcFleetClient(address), new GrpcJobClient(address), new HttpAdminClient(address));
 }

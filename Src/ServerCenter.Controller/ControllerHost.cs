@@ -89,6 +89,9 @@ public static class ControllerHost
         app.MapUpdatePolicies();
         app.MapServerJobs();
         app.MapNodes();
+        app.MapGameDescriptors();
+        app.MapBuildRecipes();
+        app.MapServerInstances();
         app.MapAgentUpdates();
         app.MapGet("/", () => "ServerCenter Controller. AgentLink + FleetView gRPC + enrollment + jobs endpoints are mapped.");
     }

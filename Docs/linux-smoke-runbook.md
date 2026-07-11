@@ -118,16 +118,20 @@ and the job shows Succeeded.
 ## 7. Game server - Phase 5  [needs seeding]
 
 `server.install` (SteamCMD) and `server.config-apply` dispatch from a stored **game descriptor** + a
-**server instance**. There is no HTTP endpoint to store those yet (see Known gaps), so seed them into
-SQLite directly for now (the `body_json` must match `GameDescriptorSerializer`; keep it minimal):
+**server instance**. Store them via the operator endpoints (no more `sqlite3` seeding). The descriptor
+body is the canonical `GameDescriptorSerializer` shape; the instance is plain JSON (`instanceParamsJson`
+is an opaque string), and `created_at` is stamped server-side:
 
 ```bash
-docker exec servercenter-controller sqlite3 /data/servercenter.db \
-  "INSERT INTO game_descriptor(id,version,body_json,created_at) VALUES
-   ('cs2-dedicated',3,'{\"id\":\"cs2-dedicated\",\"version\":3,\"steamApp\":{\"appId\":730,\"installDir\":\"/opt/cs2\"}}',0);
-   INSERT INTO server_instance(id,node_id,descriptor_id,descriptor_version,instance_params_json,created_at) VALUES
-   ('srv-cs2','<guestNodeId>','cs2-dedicated',3,'{\"name\":\"ffa\",\"ports\":{\"game\":27015}}',0);"
+curl --http2-prior-knowledge -sX POST http://<host>:5080/game-descriptors \
+  -H 'content-type: application/json' \
+  -d '{"id":"cs2-dedicated","version":3,"steamApp":{"appId":730,"installDir":"/opt/cs2"}}'
 
+curl --http2-prior-knowledge -sX POST http://<host>:5080/server-instances \
+  -H 'content-type: application/json' \
+  -d '{"id":"srv-cs2","nodeId":"<guestNodeId>","descriptorId":"cs2-dedicated","descriptorVersion":3,"instanceParamsJson":"{\"name\":\"ffa\",\"ports\":{\"game\":27015}}"}'
+
+# List what is defined:  curl --http2-prior-knowledge -s http://<host>:5080/game-descriptors
 curl --http2-prior-knowledge -sX POST http://<host>:5080/jobs/server-install \
   -H 'content-type: application/json' -d '{"agentId":"<guestAgentId>","instanceId":"srv-cs2"}'
 ```
@@ -140,8 +144,8 @@ declare `configGen` + a template on the controller under `templates/`).
 
 Full build-from-a-recipe stands a server up from nothing:
 
-- Seed a `build_recipe` (matching `BuildRecipeSerializer`) + a `server_instance` pinning
-  `recipe_id`/`recipe_version` (same `sqlite3` approach as step 7).
+- Store a recipe: `POST /build-recipes` (canonical `BuildRecipeSerializer` body) + a server instance
+  (`POST /server-instances`) pinning `recipeId`/`recipeVersion` (same endpoints as step 7).
 - Dispatch: `POST /jobs/recipe-apply {agentId, instanceId}`.
 - Verify (on the guest): base packages installed, SteamCMD app present, config written, scripts run,
   the systemd unit written + enabled + started; job Succeeded. **Re-run it** to prove convergence
@@ -231,9 +235,12 @@ Then reinstall from the new release (steps 1-2).
 1. **No bootstrap-token mint endpoint** - so the mTLS `/enroll` flow has no operator step to create a
    token; the smoke uses plaintext h2c. FIX: a small `POST /admin/bootstrap-tokens` calling the trust
    provider's issue-token. Until then, mTLS on :5443 is not operable end to end.
-2. **No store endpoints for descriptors / recipes / instances** - P5/P7 setup needs direct `sqlite3`
-   seeding (steps 7-8). FIX: raw-body `POST /game-descriptors`, `/build-recipes`, `/server-instances`
-   mirroring `POST /update-policies`. This is the biggest ergonomics gap for a real run.
+2. **Operator API + UI DONE (2026-07-10).** `POST/GET /game-descriptors`, `/build-recipes`,
+   `/server-instances` exist (steps 7-8, no more `sqlite3`); the dashboard's **Manage** panel drives
+   them (link domain, paste + store a definition, trigger install/config-apply/recipe-apply); and a
+   **Servers** read view lists what is defined (instance + descriptor/recipe/policy bindings, secrets
+   omitted), refreshed on connect / on demand. Remaining polish only: richer forms (nested fields
+   instead of paste-JSON).
 3. **Server TLS cert subject is `localhost`** - fine today because the agent validates by CA chain,
    not hostname (no SAN check). If hostname pinning is ever added, make the subject configurable.
 4. **VM bring-up is Tier-3 / not automated** - `ILibvirtHost` has no `Define`; cloud-init first boot +

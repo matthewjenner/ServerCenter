@@ -10,7 +10,7 @@ namespace ServerCenter.Ui.ViewModels;
 // factory is injected so this stays testable without real gRPC.
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
-    private readonly Func<string, (IFleetClient Fleet, IJobClient Jobs)> _clientFactory;
+    private readonly Func<string, (IFleetClient Fleet, IJobClient Jobs, IAdminClient Admin)> _clientFactory;
     private readonly ConnectionSettings _settings;
     private CancellationTokenSource? _cts;
 
@@ -19,11 +19,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public MainWindowViewModel(
         DashboardViewModel fleet,
         JobsViewModel jobs,
-        Func<string, (IFleetClient Fleet, IJobClient Jobs)> clientFactory,
+        ManageViewModel manage,
+        ServersViewModel servers,
+        Func<string, (IFleetClient Fleet, IJobClient Jobs, IAdminClient Admin)> clientFactory,
         ConnectionSettings settings)
     {
         Fleet = fleet;
         Jobs = jobs;
+        Manage = manage;
+        Servers = servers;
         _clientFactory = clientFactory;
         _settings = settings;
         _controllerAddress = settings.ResolveStartupAddress();
@@ -32,6 +36,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public DashboardViewModel Fleet { get; }
 
     public JobsViewModel Jobs { get; }
+
+    public ManageViewModel Manage { get; }
+
+    public ServersViewModel Servers { get; }
 
     // Connect or reconnect to ControllerAddress: cancel the current streams, point both clients at
     // the new address, clear the now-stale rows, restart the watch loops, and persist the address.
@@ -50,8 +58,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _cts = new CancellationTokenSource();
         CancellationToken ct = _cts.Token;
 
-        (IFleetClient fleetClient, IJobClient jobClient) = _clientFactory(address);
+        (IFleetClient fleetClient, IJobClient jobClient, IAdminClient adminClient) = _clientFactory(address);
         Jobs.UseClient(jobClient);
+        Manage.UseClient(adminClient);
+        Servers.UseClient(adminClient);
+        Servers.Rows.Clear();
         Fleet.Nodes.Clear();
         Jobs.Jobs.Clear();
         Fleet.ConnectionStatus = $"Connecting to {address}...";
@@ -59,6 +70,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _ = Fleet.RunAsync(fleetClient, ct);
         _ = Jobs.RunAsync(ct);
+        Servers.RefreshCommand.Execute(null);   // point-in-time read of what is defined
     }
 
     public void Dispose()

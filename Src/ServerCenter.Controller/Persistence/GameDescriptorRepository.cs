@@ -42,4 +42,24 @@ public sealed class GameDescriptorRepository(ServerCenterDatabase database)
         string? body = (string?)await cmd.ExecuteScalarAsync(ct);
         return body is null ? null : GameDescriptorSerializer.Deserialize(body);
     }
+
+    // The latest revision of each descriptor id, for the operator list view.
+    public async Task<IReadOnlyList<GameDescriptor>> ListLatestAsync(CancellationToken ct)
+    {
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
+        cmd.CommandText =
+            "SELECT body_json FROM game_descriptor gd " +
+            "WHERE version = (SELECT MAX(version) FROM game_descriptor WHERE id = gd.id) " +
+            "ORDER BY id;";
+
+        List<GameDescriptor> list = new List<GameDescriptor>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(GameDescriptorSerializer.Deserialize(reader.GetString(0)));
+        }
+
+        return list;
+    }
 }

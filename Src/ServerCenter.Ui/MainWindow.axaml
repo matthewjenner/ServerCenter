@@ -2,8 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ServerCenter.Ui.MainWindow"
         Title="ServerCenter"
-        Width="1100" Height="780">
-  <Grid Margin="12" RowDefinitions="Auto,2*,Auto,Auto,Auto,Auto,3*">
+        Width="1100" Height="980">
+  <Grid Margin="12" RowDefinitions="Auto,2*,Auto,1*,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,2*">
 
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="4,4,4,8">
       <TextBlock Text="Controller" VerticalAlignment="Center" />
@@ -28,16 +28,34 @@
       </DataGrid.Columns>
     </DataGrid>
 
-    <TextBlock Grid.Row="2" Margin="4,14,4,6" FontSize="14" FontWeight="Bold" Text="Jobs" />
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" Margin="4,14,4,6">
+      <TextBlock FontSize="14" FontWeight="Bold" Text="Servers" VerticalAlignment="Center" />
+      <Button Content="Refresh" Command="{Binding Servers.RefreshCommand}" />
+      <TextBlock Text="{Binding Servers.Status}" VerticalAlignment="Center" />
+    </StackPanel>
 
-    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+    <DataGrid Grid.Row="3"
+              ItemsSource="{Binding Servers.Rows}"
+              IsReadOnly="True" AutoGenerateColumns="False" GridLinesVisibility="Horizontal">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Instance" Binding="{Binding Id}" Width="2*" />
+        <DataGridTextColumn Header="Node" Binding="{Binding Node}" Width="*" />
+        <DataGridTextColumn Header="Descriptor" Binding="{Binding Descriptor}" Width="*" />
+        <DataGridTextColumn Header="Recipe" Binding="{Binding Recipe}" Width="*" />
+        <DataGridTextColumn Header="Policy" Binding="{Binding Policy}" Width="*" />
+      </DataGrid.Columns>
+    </DataGrid>
+
+    <TextBlock Grid.Row="4" Margin="4,14,4,6" FontSize="14" FontWeight="Bold" Text="Jobs" />
+
+    <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
       <TextBox PlaceholderText="agent id" Text="{Binding Jobs.RestartAgentId}" Width="180" />
       <TextBox PlaceholderText="unit (e.g. plex.service)" Text="{Binding Jobs.RestartUnit}" Width="240" />
       <Button Content="Restart service" Command="{Binding Jobs.RestartCommand}" />
       <TextBlock Text="{Binding Jobs.TriggerStatus}" VerticalAlignment="Center" />
     </StackPanel>
 
-    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+    <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
       <TextBox PlaceholderText="agent id" Text="{Binding Jobs.UpdateAgentId}" Width="180" />
       <TextBox PlaceholderText="policy id (e.g. plex-nightly)" Text="{Binding Jobs.UpdatePolicyId}" Width="240" />
       <TextBox PlaceholderText="service unit (optional)" Text="{Binding Jobs.UpdateServiceUnit}" Width="200" />
@@ -45,7 +63,7 @@
       <TextBlock Text="{Binding Jobs.UpdateStatus}" VerticalAlignment="Center" />
     </StackPanel>
 
-    <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+    <StackPanel Grid.Row="7" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
       <TextBox PlaceholderText="node id (VM)" Text="{Binding Jobs.VmNodeId}" Width="180" />
       <Button Content="Start" Command="{Binding Jobs.VmActionCommand}" CommandParameter="start" />
       <Button Content="Stop" Command="{Binding Jobs.VmActionCommand}" CommandParameter="stop" />
@@ -53,7 +71,37 @@
       <TextBlock Text="{Binding Jobs.VmStatus}" VerticalAlignment="Center" />
     </StackPanel>
 
-    <DataGrid Grid.Row="6"
+    <TextBlock Grid.Row="8" Margin="4,14,4,6" FontSize="14" FontWeight="Bold" Text="Manage" />
+
+    <StackPanel Grid.Row="9" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+      <TextBox PlaceholderText="node id" Text="{Binding Manage.LinkNodeId}" Width="180" />
+      <TextBox PlaceholderText="libvirt domain" Text="{Binding Manage.LinkDomain}" Width="200" />
+      <Button Content="Link VM domain" Command="{Binding Manage.LinkDomainCommand}" />
+      <TextBlock Text="{Binding Manage.LinkStatus}" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="10" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+      <TextBox PlaceholderText="paste a descriptor / recipe / instance JSON"
+               Text="{Binding Manage.DefinitionJson}" Width="430" Height="64"
+               AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top" />
+      <StackPanel Orientation="Vertical" Spacing="4">
+        <Button Content="Store descriptor" Command="{Binding Manage.StoreCommand}" CommandParameter="game-descriptors" />
+        <Button Content="Store recipe" Command="{Binding Manage.StoreCommand}" CommandParameter="build-recipes" />
+        <Button Content="Store instance" Command="{Binding Manage.StoreCommand}" CommandParameter="server-instances" />
+      </StackPanel>
+      <TextBlock Text="{Binding Manage.DefinitionStatus}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="11" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+      <TextBox PlaceholderText="agent id" Text="{Binding Manage.ServerAgentId}" Width="180" />
+      <TextBox PlaceholderText="instance id" Text="{Binding Manage.ServerInstanceId}" Width="200" />
+      <Button Content="Install" Command="{Binding Manage.ServerJobCommand}" CommandParameter="server-install" />
+      <Button Content="Config apply" Command="{Binding Manage.ServerJobCommand}" CommandParameter="server-config-apply" />
+      <Button Content="Recipe apply" Command="{Binding Manage.ServerJobCommand}" CommandParameter="recipe-apply" />
+      <TextBlock Text="{Binding Manage.ServerStatus}" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <DataGrid Grid.Row="12"
               ItemsSource="{Binding Jobs.Jobs}"
               IsReadOnly="True" AutoGenerateColumns="False" GridLinesVisibility="Horizontal">
       <DataGrid.Columns>
