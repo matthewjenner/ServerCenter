@@ -7,7 +7,7 @@ truth.
 
 > Status: early and Linux-first. Phases 0-7 are complete (control plane, jobs, identity/mTLS,
 > declarative update policies + game descriptors + build recipes, VM lifecycle). Windows agent
-> support and S3 backup are intentionally deferred. Version `0.1.12`.
+> support and S3 backup are intentionally deferred. Version `0.1.13`.
 
 ## What it is
 
@@ -59,13 +59,17 @@ from the GitHub release + the public controller image):
 
 ```bash
 # On the hypervisor (node zero): stand up the controller AND install the host agent in one command.
-curl -L -O https://github.com/matthewjenner/ServerCenter/releases/download/agent-v0.1.12/servercenter-agent-0.1.12-linux-x64.tar.gz
-mkdir agent && tar -xzf servercenter-agent-0.1.12-linux-x64.tar.gz -C agent && cd agent
+curl -L -O https://github.com/matthewjenner/ServerCenter/releases/download/agent-v0.1.13/servercenter-agent-0.1.13-linux-x64.tar.gz
+mkdir agent && tar -xzf servercenter-agent-0.1.13-linux-x64.tar.gz -C agent && cd agent
 sudo ./install.sh --with-controller
 ```
 
 Then install the agent on each guest with plain `sudo ./install.sh`. Full instructions, including
 the mTLS variant, are in **[Deploy/README.md](Deploy/README.md)**.
+
+**Operator UI (Windows):** download and run the Setup from the latest `ui-v*`
+[release](https://github.com/matthewjenner/ServerCenter/releases); it self-updates from future
+releases (Velopack). Point it at your controller in the Settings tab.
 
 **Build and run from source** (developers): see **[Docs/dev-environment.md](Docs/dev-environment.md)**.
 

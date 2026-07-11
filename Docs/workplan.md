@@ -33,7 +33,10 @@ Decisions Log / Known Edges before starting the next phase (house rule:
     (WrapPanel), one card per node, with per-card actions (VM start/stop/restart on guests, service
     restart, update) - actions moved ONTO the card (no select-then-act). Servers + Jobs tabs; a
     persistent connection header with a saved controller-address setting; UI version in the title bar.
-    UI runs from source (Velopack installer still the deferred fast-follow).
+    UI ships as a VELOPACK release (v0.1.13): release-ui.yml packs a self-contained win-x64 build with
+    `vpk pack` and publishes it as a `ui-v<version>` GitHub release; the installed app self-updates via
+    UpdateService (Velopack GithubSource) with an in-app "update available" banner. No longer run-from-
+    source-only. See [[build-and-update-model]].
   - FIXED (2026-07-11, v0.1.10): THE AGENT NOW RUNS AS ROOT. apt/systemctl/reboot jobs were failing on
     every node (`Could not open lock file .../lock (13: Permission denied)` + `Read-only file system
     (30)`) because Deploy/servercenter-agent.service ran `User=servercenter` with `NoNewPrivileges=true`
@@ -594,6 +597,29 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-11: UI VELOPACK AUTO-UPDATE SHIPPED (v0.1.13). The operator UI no longer has to run from
+  source. release-ui.yml (windows-latest, version-gated, tag `ui-v<version>`) publishes a self-contained
+  win-x64 build packed with `vpk pack --packId ServerCenter`; the installed app self-updates via a new
+  UpdateService (Velopack UpdateManager over GithubSource, hourly poll, best-effort) surfaced as an
+  in-app banner (UpdateBannerViewModel; Install disabled in dev where IsInstalled is false). Mirrors the
+  sibling Avalonia apps (Klakr/FleaTrackr). The Velopack bootstrap (`VelopackApp.Build().Run()` + package)
+  was already present; this adds the release pipeline + the check/apply/UI. `ui-v*` tags are distinct from
+  `agent-v*`/`controller-v*` so releases never collide, and Velopack ignores the non-UI releases (no
+  RELEASES/.nupkg assets). 0.1.13 is the bootstrap release - install it once, then it auto-updates.
+  Action pins reuse the repo's verified checkout@v7 / setup-dotnet@v5. See [[build-and-update-model]].
+
+- 2026-07-11: SETTINGS-TAB UX PASS (v0.1.13, from live user feedback). (1) TTL field was a TextBox bound
+  to an int, so clearing it threw a raw InvalidCastException into the UI -> switched to a NumericUpDown
+  (decimal?, 1-1440, FormatString "0 'min'"); the mint command falls back to 60. (2) Added hover
+  TOOLTIPS across fields (Settings, Fleet card pickers/VM buttons, Servers store/action buttons) plus a
+  small round "i" info badge (Window style `Border.info`) with richer help on section headers. (3) A
+  COPY button on the minted token (clipboard via a `Copy_Click` code-behind handler reading the button's
+  Tag - Avalonia 12's clipboard SetTextAsync is an extension in Avalonia.Input.Platform.ClipboardExtensions).
+  (4) Update-policy editor made learnable: a "Load example" button inserts a valid starter policy, and
+  the defined-policy chips are now buttons that LOAD that policy's JSON into the editor to view/clone
+  (new IAdminClient.ListPoliciesAsync returns full bodies). FOLLOW-UP (noted, not built): a guided
+  form-builder for policies (dropdowns for how/when/reboot generating the JSON) instead of raw JSON.
 
 - 2026-07-11: TOKEN-MINT ENDPOINT + SETTINGS TAB (v0.1.12, one bundled slice per user). (a) `POST
   /enroll-token` exposes the already-existing ControllerOwnedTrustProvider.CreateBootstrapTokenAsync as

@@ -1,0 +1,99 @@
+name: Release UI
+
+# Builds and publishes the Windows operator UI as a Velopack release on every push to main.
+# Idempotent and version-gated: if the release for the current VersionPrefix already exists, the
+# job exits clean. So: bump the version with Scripts/bump-version.sh -> commit -> push -> release.
+# A commit without a version bump just runs the no-op path.
+#
+# Runs on Windows (self-contained win-x64 build, then `vpk pack`). The installed app self-updates
+# from these releases via UpdateService (Velopack GithubSource). Tag: ui-v<version>, distinct from
+# the agent-v / controller-v releases so they never collide; Velopack only reads UI releases (they
+# are the ones carrying the RELEASES / .nupkg assets).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release-ui:
+    runs-on: windows-latest
+    steps:
+      # Action versions verified against latest per the global rule (Node 24 runners).
+      - uses: actions/checkout@v7
+
+      - name: Read version from Directory.Build.props
+        id: version
+        run: |
+          v=$(grep -oE '<VersionPrefix>[^<]+</VersionPrefix>' Directory.Build.props \
+              | sed -E 's|</?VersionPrefix>||g' \
+              | tr -d '[:space:]')
+          if [[ -z "$v" ]]; then
+              echo "Could not read VersionPrefix from Directory.Build.props" >&2
+              exit 1
+          fi
+          echo "VERSION=$v"     >> "$GITHUB_OUTPUT"
+          echo "TAG=ui-v$v"     >> "$GITHUB_OUTPUT"
+          echo "UI version: $v"
+
+      - name: Check whether this release already exists
+        id: tag-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.version.outputs.TAG }}"
+          if gh release view "$tag" --json tagName >/dev/null 2>&1; then
+              echo "Release $tag already exists - nothing to do."
+              echo "SKIP=true"  >> "$GITHUB_OUTPUT"
+          else
+              echo "SKIP=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only install the SDK if we are actually going to build/publish this version.
+      - uses: actions/setup-dotnet@v5
+        if: steps.tag-check.outputs.SKIP == 'false'
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test (UI)
+        if: steps.tag-check.outputs.SKIP == 'false'
+        run: dotnet test Tests/ServerCenter.Ui.Tests --configuration Release
+
+      - name: Publish (win-x64, self-contained)
+        if: steps.tag-check.outputs.SKIP == 'false'
+        run: |
+          dotnet publish Src/ServerCenter.Ui/ServerCenter.Ui.csproj \
+              --configuration Release \
+              --runtime win-x64 \
+              --self-contained true \
+              --output publish
+
+      - name: Install Velopack CLI
+        if: steps.tag-check.outputs.SKIP == 'false'
+        run: dotnet tool install -g vpk --version 1.2.0
+
+      - name: Pack with Velopack
+        if: steps.tag-check.outputs.SKIP == 'false'
+        run: |
+          vpk pack \
+              --packId ServerCenter \
+              --packVersion "${{ steps.version.outputs.VERSION }}" \
+              --packDir publish \
+              --mainExe ServerCenter.Ui.exe \
+              --packTitle "ServerCenter"
+
+      - name: Create GitHub Release
+        if: steps.tag-check.outputs.SKIP == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.TAG }}" Releases/* \
+              --title "UI ${{ steps.version.outputs.VERSION }}" \
+              --notes "ServerCenter operator UI (Windows). Download and run the Setup exe; it self-updates from future releases."

@@ -3,17 +3,48 @@
         x:Class="ServerCenter.Ui.MainWindow"
         Title="ServerCenter"
         Width="1100" Height="760">
-  <Grid Margin="12" RowDefinitions="Auto,*">
+
+  <Window.Styles>
+    <!-- Small round "i" badge that carries a ToolTip.Tip; hover for field help. -->
+    <Style Selector="Border.info">
+      <Setter Property="Background" Value="#374151" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.info > TextBlock">
+      <Setter Property="Foreground" Value="#c7ccd1" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontStyle" Value="Italic" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </Window.Styles>
+
+  <Grid Margin="12" RowDefinitions="Auto,Auto,*">
+
+    <!-- Self-update banner: appears when a newer UI release is available (Velopack). -->
+    <Border Grid.Row="0" IsVisible="{Binding Update.IsAvailable}" Background="#1e40af" CornerRadius="6"
+            Padding="10,6" Margin="0,0,0,8">
+      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <TextBlock Text="{Binding Update.Message}" Foreground="White" VerticalAlignment="Center" TextWrapping="Wrap" />
+        <Button Content="Install and restart" Command="{Binding Update.InstallCommand}" IsEnabled="{Binding Update.CanInstall}"
+                ToolTip.Tip="Download the update and restart into the new version." />
+        <Button Content="Later" Command="{Binding Update.SkipCommand}"
+                ToolTip.Tip="Hide this until a newer version is released." />
+      </StackPanel>
+    </Border>
 
     <!-- Slim status strip (always visible); the editable address + Connect live in the Settings tab. -->
-    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="4,4,4,10" VerticalAlignment="Center">
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="4,4,4,10" VerticalAlignment="Center">
       <Border Background="#374151" CornerRadius="6" Padding="8,2">
         <TextBlock Text="{Binding ControllerAddress}" Foreground="White" FontSize="12" />
       </Border>
       <TextBlock FontSize="13" Text="{Binding Fleet.ConnectionStatus}" VerticalAlignment="Center" Foreground="#8fbcff" />
     </StackPanel>
 
-    <TabControl Grid.Row="1">
+    <TabControl Grid.Row="2">
 
       <!-- ===================== FLEET ===================== -->
       <TabItem Header="Fleet">
@@ -34,11 +65,15 @@
                       <Border Height="1" Background="#3a3a3a" Margin="0,6,0,6" />
                       <StackPanel Orientation="Horizontal" Spacing="6">
                         <ComboBox Width="170" PlaceholderText="service" ItemsSource="{Binding Services}"
-                                  SelectedItem="{Binding SelectedService, Mode=TwoWay}" />
-                        <Button Content="Restart" Command="{Binding RestartServiceCommand}" />
+                                  SelectedItem="{Binding SelectedService, Mode=TwoWay}"
+                                  ToolTip.Tip="A systemd service on this node (from its last heartbeat)." />
+                        <Button Content="Restart" Command="{Binding RestartServiceCommand}"
+                                ToolTip.Tip="Restart the selected systemd service on this node." />
                         <ComboBox Width="120" PlaceholderText="policy" ItemsSource="{Binding Policies}"
-                                  SelectedItem="{Binding SelectedPolicy, Mode=TwoWay}" />
-                        <Button Content="Update" Command="{Binding RunUpdateCommand}" />
+                                  SelectedItem="{Binding SelectedPolicy, Mode=TwoWay}"
+                                  ToolTip.Tip="The update policy (profile) to run. Manage these in Settings." />
+                        <Button Content="Update" Command="{Binding RunUpdateCommand}"
+                                ToolTip.Tip="Run the selected update policy on this node now." />
                       </StackPanel>
                       <TextBlock Text="{Binding ActionStatus}" Foreground="#8fbcff" FontSize="12" />
                     </StackPanel>
@@ -59,9 +94,12 @@
                         <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="15" FontWeight="Bold"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                          <Button Content="Start" Command="{Binding VmActionCommand}" CommandParameter="start" IsVisible="{Binding CanStartVm}" />
-                          <Button Content="Stop" Command="{Binding VmActionCommand}" CommandParameter="stop" IsVisible="{Binding CanStopVm}" />
-                          <Button Content="Restart" Command="{Binding VmActionCommand}" CommandParameter="restart" IsVisible="{Binding CanStopVm}" />
+                          <Button Content="Start" Command="{Binding VmActionCommand}" CommandParameter="start" IsVisible="{Binding CanStartVm}"
+                                  ToolTip.Tip="Start this guest VM (controller drives libvirt)." />
+                          <Button Content="Stop" Command="{Binding VmActionCommand}" CommandParameter="stop" IsVisible="{Binding CanStopVm}"
+                                  ToolTip.Tip="Shut down this guest VM." />
+                          <Button Content="Restart" Command="{Binding VmActionCommand}" CommandParameter="restart" IsVisible="{Binding CanStopVm}"
+                                  ToolTip.Tip="Restart this guest VM." />
                         </StackPanel>
                       </Grid>
 
@@ -132,19 +170,26 @@
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBlock FontWeight="Bold" VerticalAlignment="Center"
                            Text="{Binding Servers.SelectedServer.Id, StringFormat='Actions - {0}'}" />
-                <Button Content="Install" Command="{Binding Servers.ServerJobCommand}" CommandParameter="server-install" />
-                <Button Content="Config apply" Command="{Binding Servers.ServerJobCommand}" CommandParameter="server-config-apply" />
-                <Button Content="Recipe apply" Command="{Binding Servers.ServerJobCommand}" CommandParameter="recipe-apply" />
+                <Button Content="Install" Command="{Binding Servers.ServerJobCommand}" CommandParameter="server-install"
+                        ToolTip.Tip="Install/refresh the selected server via SteamCMD on its node." />
+                <Button Content="Config apply" Command="{Binding Servers.ServerJobCommand}" CommandParameter="server-config-apply"
+                        ToolTip.Tip="Render the descriptor's config templates with this instance's params." />
+                <Button Content="Recipe apply" Command="{Binding Servers.ServerJobCommand}" CommandParameter="recipe-apply"
+                        ToolTip.Tip="Run the convergent build recipe for the selected server." />
                 <TextBlock Text="{Binding Servers.ActionStatus}" VerticalAlignment="Center" Foreground="#8fbcff" />
               </StackPanel>
               <TextBlock Text="Define (paste a descriptor / recipe / instance JSON):" Margin="0,4,0,0" />
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBox Width="560" Height="72" AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalContentAlignment="Top" Text="{Binding Servers.DefinitionJson}" />
+                         VerticalContentAlignment="Top" Text="{Binding Servers.DefinitionJson}"
+                         ToolTip.Tip="Paste a game-descriptor, build-recipe, or server-instance JSON, then use the matching Store button." />
                 <StackPanel Orientation="Vertical" Spacing="4">
-                  <Button Content="Store descriptor" Command="{Binding Servers.StoreCommand}" CommandParameter="game-descriptors" />
-                  <Button Content="Store recipe" Command="{Binding Servers.StoreCommand}" CommandParameter="build-recipes" />
-                  <Button Content="Store instance" Command="{Binding Servers.StoreCommand}" CommandParameter="server-instances" />
+                  <Button Content="Store descriptor" Command="{Binding Servers.StoreCommand}" CommandParameter="game-descriptors"
+                          ToolTip.Tip="Store the pasted JSON as a game capability descriptor (the game 'class')." />
+                  <Button Content="Store recipe" Command="{Binding Servers.StoreCommand}" CommandParameter="build-recipes"
+                          ToolTip.Tip="Store the pasted JSON as an idempotent build recipe." />
+                  <Button Content="Store instance" Command="{Binding Servers.StoreCommand}" CommandParameter="server-instances"
+                          ToolTip.Tip="Store the pasted JSON as a server instance (a descriptor/recipe/policy bound to a node)." />
                 </StackPanel>
                 <TextBlock Text="{Binding Servers.DefinitionStatus}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300" />
               </StackPanel>
@@ -160,11 +205,17 @@
 
             <!-- Connection -->
             <StackPanel Spacing="6">
-              <TextBlock Text="Connection" FontSize="15" FontWeight="Bold" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="Connection" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                <Border Classes="info" ToolTip.Tip="The controller's base URL. Use http://host:5080 for the plaintext (h2c) bring-up, or https://host:5443 once mTLS is on. Saved and reused on next launch.">
+                  <TextBlock Text="i" />
+                </Border>
+              </StackPanel>
               <TextBlock Text="The controller this app talks to. Saved for next launch." Foreground="#9aa0a6" FontSize="12" />
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBox Width="340" Text="{Binding ControllerAddress}" PlaceholderText="http://host:5080" />
-                <Button Content="Connect" Command="{Binding ConnectCommand}" />
+                <TextBox Width="340" Text="{Binding ControllerAddress}" PlaceholderText="http://host:5080"
+                         ToolTip.Tip="Controller base URL, e.g. http://192.168.1.10:5080" />
+                <Button Content="Connect" Command="{Binding ConnectCommand}" ToolTip.Tip="Reconnect to this address and reload the fleet." />
                 <TextBlock Text="{Binding Fleet.ConnectionStatus}" VerticalAlignment="Center" Foreground="#8fbcff" />
               </StackPanel>
             </StackPanel>
@@ -173,16 +224,29 @@
 
             <!-- Enrollment token -->
             <StackPanel Spacing="6">
-              <TextBlock Text="Enroll a new node" FontSize="15" FontWeight="Bold" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="Enroll a new node" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                <Border Classes="info" ToolTip.Tip="A bootstrap token authorizes ONE node to enroll and receive its identity/certificate. It is one-time and expires; the controller stores only its hash. Deliver it to the node out-of-band (paste into the installer, or via cloud-init / SSH).">
+                  <TextBlock Text="i" />
+                </Border>
+              </StackPanel>
               <TextBlock TextWrapping="Wrap" Foreground="#9aa0a6" FontSize="12"
                          Text="Mint a one-time bootstrap token, then run the agent installer on the new node with it. The controller keeps only the token's hash; copy it now - it is shown once." />
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBox Width="200" Text="{Binding Settings.NewNodeName}" PlaceholderText="node name (e.g. plex-server)" />
-                <TextBox Width="90" Text="{Binding Settings.TokenTtlMinutes}" PlaceholderText="TTL min" />
-                <Button Content="Mint token" Command="{Binding Settings.MintTokenCommand}" />
+                <TextBox Width="220" Text="{Binding Settings.NewNodeName}" PlaceholderText="node name (e.g. plex-server)"
+                         ToolTip.Tip="A friendly label for the node this token enrolls (shown in the fleet)." />
+                <NumericUpDown Width="150" Minimum="1" Maximum="1440" Increment="15" FormatString="0 'min'"
+                               Value="{Binding Settings.TokenTtlMinutes}"
+                               ToolTip.Tip="How long the token stays valid, in minutes (1-1440). Default 60." />
+                <Button Content="Mint token" Command="{Binding Settings.MintTokenCommand}"
+                        ToolTip.Tip="Generate the one-time token to paste into the new node's installer." />
               </StackPanel>
-              <TextBox Text="{Binding Settings.MintedToken}" IsReadOnly="True" FontFamily="Consolas,monospace"
-                       PlaceholderText="the minted token appears here" />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <TextBox Grid.Column="0" Text="{Binding Settings.MintedToken}" IsReadOnly="True" FontFamily="Consolas,monospace"
+                         PlaceholderText="the minted token appears here" />
+                <Button Grid.Column="1" Content="Copy" Click="Copy_Click" Tag="{Binding Settings.MintedToken}"
+                        ToolTip.Tip="Copy the token to the clipboard." />
+              </Grid>
               <TextBlock Text="{Binding Settings.MintStatus}" Foreground="#8fbcff" FontSize="12" TextWrapping="Wrap" />
             </StackPanel>
 
@@ -190,9 +254,14 @@
 
             <!-- Update policies (profiles) -->
             <StackPanel Spacing="6">
-              <TextBlock Text="Update policies" FontSize="15" FontWeight="Bold" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="Update policies" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                <Border Classes="info" ToolTip.Tip="An update policy is a reusable 'profile' the fleet cards pick from. Fields: what.provider (apt | plex | wu); how (in-place | stop-update-start | drain-then-update); when.mode (manual | window - window adds cron + windowMinutes); reboot (never | if-required | always-after | prompt); preflight (notify | snapshot-first | drain-players-via-rcon | quiesce); approval (auto | require-confirmation).">
+                  <TextBlock Text="i" />
+                </Border>
+              </StackPanel>
               <TextBlock TextWrapping="Wrap" Foreground="#9aa0a6" FontSize="12"
-                         Text="Reusable update profiles the fleet cards pick from - what to update (channel/packages), when (window), and the reboot rule. Stored on the controller and versioned." />
+                         Text="Reusable update profiles the fleet cards pick from - what to update, when, and the reboot rule. New here? Click a defined policy below to load it, or Load example, then edit and Store." />
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBlock Text="Defined:" VerticalAlignment="Center" Foreground="#9aa0a6" />
                 <ItemsControl ItemsSource="{Binding Settings.Policies}">
@@ -201,19 +270,25 @@
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
+                      <Button Command="{Binding $parent[ItemsControl].DataContext.Settings.LoadPolicyCommand}" CommandParameter="{Binding}"
+                              Background="#374151" Padding="6,2" Margin="0,0,6,0" BorderThickness="0"
+                              ToolTip.Tip="Load this policy into the editor to view or clone it.">
                         <TextBlock Text="{Binding}" Foreground="White" FontSize="11" />
-                      </Border>
+                      </Button>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Content="Refresh" Command="{Binding Settings.RefreshPoliciesCommand}" />
+                <Button Content="Load example" Command="{Binding Settings.LoadExampleCommand}"
+                        ToolTip.Tip="Fill the editor with a valid starter policy you can edit." />
+                <Button Content="Refresh" Command="{Binding Settings.RefreshPoliciesCommand}"
+                        ToolTip.Tip="Re-read the policies defined on the controller." />
               </StackPanel>
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBox Width="480" Height="90" AcceptsReturn="True" TextWrapping="Wrap"
+                <TextBox Width="480" Height="120" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,monospace"
                          VerticalContentAlignment="Top" Text="{Binding Settings.PolicyJson}"
-                         PlaceholderText="paste an update-policy JSON to store a new revision" />
-                <Button Content="Store policy" Command="{Binding Settings.StorePolicyCommand}" VerticalAlignment="Top" />
+                         PlaceholderText="Load example or click a policy above to start, then edit the JSON here" />
+                <Button Content="Store policy" Command="{Binding Settings.StorePolicyCommand}" VerticalAlignment="Top"
+                        ToolTip.Tip="Save this JSON as a new policy revision on the controller." />
               </StackPanel>
               <TextBlock Text="{Binding Settings.PolicyStatus}" Foreground="#8fbcff" FontSize="12" TextWrapping="Wrap" />
             </StackPanel>

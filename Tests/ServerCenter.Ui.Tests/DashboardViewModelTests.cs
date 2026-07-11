@@ -114,5 +114,8 @@ public sealed class DashboardViewModelTests
 
         public Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct) =>
             Task.FromResult(new EnrollmentTokenResult("tok", displayName, 0));
+
+        public Task<IReadOnlyList<PolicyDoc>> ListPoliciesAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<PolicyDoc>>([]);
     }
 }

@@ -68,9 +68,10 @@ then treat it as real.
   `docker compose pull && docker compose up -d`. First time, set the GHCR package visibility to public
   in GitHub -> Packages (public repo), or `docker login ghcr.io` on the hypervisor. Program binds
   `ListenAnyIP` so the container is reachable from remote agents.
-- **UI: run from source** on your workstation (`Scripts/run.sh ui`) - it has the code. A UI release
-  track (Velopack or a self-contained zip, `ui-v<version>`) is not built yet; add it if you need to run
-  the UI on a machine without source.
+- **UI: install the Velopack release** (`ui-v<version>` on GitHub Releases) on any Windows machine - it
+  self-updates from later releases. Dev still runs from source (`Scripts/run.sh ui`); Velopack is a
+  no-op in dev, so the update banner appears but Install is disabled (the app isn't "installed").
+  Release pipeline: `release-ui.yml` publishes a self-contained win-x64 build packed with `vpk pack`.
 
 **Turnkey node zero:** the agent tarball also bundles the controller compose, so on the hypervisor
 `sudo ./install.sh --with-controller` stands up the controller container (pulling the published

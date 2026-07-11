@@ -22,12 +22,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ServersViewModel servers,
         SettingsViewModel settingsTab,
         Func<string, (IFleetClient Fleet, IJobClient Jobs, IAdminClient Admin)> clientFactory,
-        ConnectionSettings settings)
+        ConnectionSettings settings,
+        UpdateBannerViewModel? update = null)
     {
         Fleet = fleet;
         Jobs = jobs;
         Servers = servers;
         Settings = settingsTab;
+        Update = update ?? new UpdateBannerViewModel();
         _clientFactory = clientFactory;
         _settings = settings;
         _controllerAddress = settings.ResolveStartupAddress();
@@ -40,6 +42,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public ServersViewModel Servers { get; }
 
     public SettingsViewModel Settings { get; }
+
+    // Self-update banner (Velopack). Disabled no-op instance when no update service is supplied.
+    public UpdateBannerViewModel Update { get; }
 
     // Connect or reconnect to ControllerAddress: cancel the current streams, point both clients at
     // the new address, clear the now-stale rows, restart the watch loops, and persist the address.

@@ -26,6 +26,10 @@ public interface IAdminClient
     // The defined update-policy ids, for the update policy picker.
     Task<IReadOnlyList<string>> ListPolicyIdsAsync(CancellationToken ct);
 
+    // The defined update policies with their full JSON bodies, so the Settings editor can load one to
+    // read or clone (a pre-made starting point instead of authoring JSON from scratch).
+    Task<IReadOnlyList<PolicyDoc>> ListPoliciesAsync(CancellationToken ct);
+
     // Operator action: mint a one-time bootstrap token for a new node. Returns the plaintext token
     // (delivered to the node out-of-band); ttlMinutes is clamped server-side.
     Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct);
@@ -34,6 +38,9 @@ public interface IAdminClient
 // The minted bootstrap token + when it expires (unix ms). The token is shown once for the operator
 // to copy; the controller only keeps its hash.
 public sealed record EnrollmentTokenResult(string Token, string DisplayName, long ExpiresAtUnixMs);
+
+// A defined update policy's id and its full JSON body, for loading into the editor.
+public sealed record PolicyDoc(string Id, string Json);
 
 // A server instance as shown in the read view: its node + the descriptor/recipe/policy it is bound to.
 // Deliberately omits instanceParamsJson (holds secrets like rcon passwords).

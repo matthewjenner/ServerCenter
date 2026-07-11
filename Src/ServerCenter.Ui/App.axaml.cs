@@ -9,6 +9,7 @@ namespace ServerCenter.Ui;
 public partial class App : Application
 {
     private MainWindowViewModel? _main;
+    private UpdateService? _updates;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -23,11 +24,18 @@ public partial class App : Application
             ServersViewModel servers = new ServersViewModel(new HttpAdminClient(startAddress));
             SettingsViewModel settingsTab = new SettingsViewModel();
 
-            _main = new MainWindowViewModel(fleet, jobs, servers, settingsTab, CreateClients, settings);
+            _updates = new UpdateService();
+            UpdateBannerViewModel updateBanner = new UpdateBannerViewModel(_updates);
+
+            _main = new MainWindowViewModel(fleet, jobs, servers, settingsTab, CreateClients, settings, updateBanner);
             _main.ConnectCommand.Execute(null);   // initial connect using the saved/env/default address
 
             desktop.MainWindow = new MainWindow { DataContext = _main };
-            desktop.ShutdownRequested += (_, _) => _main.Dispose();
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                _main.Dispose();
+                _updates?.Dispose();
+            };
         }
 
         base.OnFrameworkInitializationCompleted();

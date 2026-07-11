@@ -70,6 +70,27 @@ public sealed class HttpAdminClient : IAdminClient
         return policies?.Select(p => p.Id).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList() ?? [];
     }
 
+    public async Task<IReadOnlyList<PolicyDoc>> ListPoliciesAsync(CancellationToken ct)
+    {
+        // GET /update-policies returns the full policy objects; keep each one's raw JSON so the editor
+        // can load it verbatim, and read its id for the label.
+        using HttpResponseMessage response = await _http.GetAsync("/update-policies", ct);
+        response.EnsureSuccessStatusCode();
+        await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
+        using JsonDocument doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        List<PolicyDoc> docs = new List<PolicyDoc>();
+        foreach (JsonElement element in doc.RootElement.EnumerateArray())
+        {
+            string id = element.TryGetProperty("id", out JsonElement idEl) ? idEl.GetString() ?? string.Empty : string.Empty;
+            if (!string.IsNullOrEmpty(id))
+            {
+                docs.Add(new PolicyDoc(id, element.GetRawText()));
+            }
+        }
+
+        return docs;
+    }
+
     public async Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct)
     {
         string requestJson = JsonSerializer.Serialize(new { displayName, ttlMinutes });
