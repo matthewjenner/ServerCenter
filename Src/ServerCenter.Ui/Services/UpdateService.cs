@@ -15,7 +15,11 @@ public sealed class UpdateService : IDisposable
 {
     private const string GitHubRepoUrl = "https://github.com/matthewjenner/ServerCenter";
     private static readonly TimeSpan StartupDelay = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan PollInterval = TimeSpan.FromHours(1);
+
+    // DEV cadence: 5 minutes, so a freshly published ui-v* release is picked up quickly while
+    // iterating (mirrors the agent/controller auto-update dev cadence). EARMARKED to become a
+    // user/controller-managed setting (with a saner default like hourly/daily) rather than a constant.
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
 
     private readonly UpdateManager? _manager;
     private readonly CancellationTokenSource _cts = new();

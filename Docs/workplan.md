@@ -598,11 +598,23 @@ Windows, reuse before bespoke.
 
 ## Decisions Log
 
+- 2026-07-11: WINDOW/APP STATE PERSISTENCE (v0.1.14, QoL). The UI now remembers window size, location,
+  maximized state, and the selected tab across restarts, alongside the controller address - all in the
+  one merged `%APPDATA%\ServerCenter\settings.json`. ConnectionSettings became the single settings
+  store: every write MERGES (saving the address no longer clobbers window geometry and vice-versa);
+  added UiWindowState + LoadWindow/SaveWindow. Restore/save live in MainWindow code-behind (view
+  concern): size restored before show, position/maximized/tab in Opened. OFF-SCREEN GUARD (user-flagged
+  trap): a window closed while MINIMIZED reports bogus position (-1 / -32000); on close we skip
+  capturing geometry when minimized (keep the last good values, update only the tab), and on both save
+  and restore a position is only used if it lands on a connected screen (Screens.All) - so an unplugged
+  monitor or a minimized-close can never strand the window off-screen. Round-trip + merge covered by
+  ConnectionSettingsTests. (Also the intended side effect: a fresh version to exercise UI auto-update.)
+
 - 2026-07-11: UI VELOPACK AUTO-UPDATE SHIPPED (v0.1.13). The operator UI no longer has to run from
   source. release-ui.yml (windows-latest, version-gated, tag `ui-v<version>`) publishes a self-contained
   win-x64 build packed with `vpk pack --packId ServerCenter`; the installed app self-updates via a new
-  UpdateService (Velopack UpdateManager over GithubSource, hourly poll, best-effort) surfaced as an
-  in-app banner (UpdateBannerViewModel; Install disabled in dev where IsInstalled is false). Mirrors the
+  UpdateService (Velopack UpdateManager over GithubSource, 5-min DEV poll - earmarked to become a
+  user/controller-managed setting with a saner default - best-effort) surfaced as an in-app banner (UpdateBannerViewModel; Install disabled in dev where IsInstalled is false). Mirrors the
   sibling Avalonia apps (Klakr/FleaTrackr). The Velopack bootstrap (`VelopackApp.Build().Run()` + package)
   was already present; this adds the release pipeline + the check/apply/UI. `ui-v*` tags are distinct from
   `agent-v*`/`controller-v*` so releases never collide, and Velopack ignores the non-UI releases (no

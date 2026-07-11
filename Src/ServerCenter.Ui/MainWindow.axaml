@@ -44,7 +44,7 @@
       <TextBlock FontSize="13" Text="{Binding Fleet.ConnectionStatus}" VerticalAlignment="Center" Foreground="#8fbcff" />
     </StackPanel>
 
-    <TabControl Grid.Row="2">
+    <TabControl Grid.Row="2" x:Name="Tabs">
 
       <!-- ===================== FLEET ===================== -->
       <TabItem Header="Fleet">

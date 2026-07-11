@@ -30,7 +30,9 @@ public partial class App : Application
             _main = new MainWindowViewModel(fleet, jobs, servers, settingsTab, CreateClients, settings, updateBanner);
             _main.ConnectCommand.Execute(null);   // initial connect using the saved/env/default address
 
-            desktop.MainWindow = new MainWindow { DataContext = _main };
+            MainWindow window = new MainWindow { DataContext = _main };
+            window.AttachSettings(settings);   // restore saved size/position/tab, save them on close
+            desktop.MainWindow = window;
             desktop.ShutdownRequested += (_, _) =>
             {
                 _main.Dispose();
