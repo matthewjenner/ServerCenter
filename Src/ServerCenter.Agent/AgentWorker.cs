@@ -66,7 +66,7 @@ public sealed class AgentWorker(
 
             // Real telemetry on Linux (CPU/mem/disk/uptime/reboot); the zero-valued fallback elsewhere.
             IAgentStatusSource statusSource = OperatingSystem.IsLinux()
-                ? new SystemInfoStatusSource(new ServerCenter.Agent.Linux.LinuxSystemInfo())
+                ? new SystemInfoStatusSource(new ServerCenter.Agent.Linux.LinuxSystemInfo(runner))
                 : new BasicAgentStatusSource();
 
             await AgentConnection.RunAsync(

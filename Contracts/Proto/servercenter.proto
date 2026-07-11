@@ -69,6 +69,7 @@ message NodeStatus {
   ServiceHealth agent_health = 1;
   ResourceSample resources   = 2;
   bool reboot_pending        = 3;
+  repeated string services   = 4; // systemd unit names on the node (for the operator's service picker)
 }
 
 message ResourceSample {

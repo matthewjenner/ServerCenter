@@ -16,6 +16,9 @@ public interface IAdminClient
 
     // The defined server instances (their bindings; the secret instance params are NOT included).
     Task<IReadOnlyList<ServerInstanceRow>> ListServerInstancesAsync(CancellationToken ct);
+
+    // The systemd services on a node (from its last heartbeat), for the operator's service picker.
+    Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct);
 }
 
 // A server instance as shown in the read view: its node + the descriptor/recipe/policy it is bound to.

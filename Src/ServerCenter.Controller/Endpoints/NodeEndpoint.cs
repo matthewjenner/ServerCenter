@@ -1,4 +1,5 @@
 using ServerCenter.Controller.Persistence;
+using ServerCenter.Controller.Services;
 
 namespace ServerCenter.Controller.Endpoints;
 
@@ -13,6 +14,23 @@ public static class NodeEndpoint
             {
                 await nodes.SetLibvirtDomainAsync(nodeId, request.Domain, ct);
                 return Results.Ok(new { nodeId, request.Domain });
+            });
+
+        // The node's systemd services, as last reported by its agent's heartbeat (cached in presence).
+        // Powers the operator's service picker - no round-trip to the agent, no SSH.
+        app.MapGet("/nodes/{nodeId}/services",
+            async (string nodeId, AgentNodeRepository nodes, AgentPresenceStore presence, CancellationToken ct) =>
+            {
+                NodeRow? node = await nodes.GetNodeAsync(nodeId, ct);
+                if (node is null)
+                {
+                    return Results.NotFound();
+                }
+
+                IReadOnlyList<string> services = presence.TryGet(node.AgentId, out AgentPresence? entry) && entry?.LastStatus is not null
+                    ? entry.LastStatus.Services
+                    : [];
+                return Results.Json(services);
             });
 
         // Record a node the controller is about to bring up (lifecycle 'provisioning'). Its agent

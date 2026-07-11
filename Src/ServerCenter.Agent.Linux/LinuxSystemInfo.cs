@@ -7,10 +7,33 @@ namespace ServerCenter.Agent.Linux;
 // Real host/guest facts + resource sampling on Linux, read from /proc and the root filesystem. The
 // parsers are pure static methods so they can be unit-tested cross-platform (CI runs on Windows too);
 // only SampleAsync/GetFactsAsync/RebootPendingAsync touch the actual filesystem.
-public sealed class LinuxSystemInfo : ISystemInfo
+public sealed class LinuxSystemInfo(IProcessRunner runner) : ISystemInfo
 {
     // Ubuntu (and apt's update-notifier) drops this file when a package upgrade needs a reboot.
     private const string RebootRequiredPath = "/var/run/reboot-required";
+
+    public async Task<IReadOnlyList<string>> ListServicesAsync(CancellationToken ct)
+    {
+        ProcessResult result = await runner.RunAsync(
+            "systemctl", ["list-units", "--type=service", "--no-legend", "--plain", "--no-pager"], ct);
+        return ParseServiceUnits(result.StandardOutput);
+    }
+
+    // First whitespace-delimited token of each line, kept if it is a *.service unit; sorted + unique.
+    public static IReadOnlyList<string> ParseServiceUnits(string listUnitsOutput)
+    {
+        SortedSet<string> units = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (string line in listUnitsOutput.Split('\n'))
+        {
+            string unit = line.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+            if (unit.EndsWith(".service", StringComparison.Ordinal))
+            {
+                units.Add(unit);
+            }
+        }
+
+        return units.ToList();
+    }
 
     public async Task<SystemFacts> GetFactsAsync(CancellationToken ct)
     {

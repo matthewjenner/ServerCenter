@@ -166,5 +166,8 @@ public sealed class MainWindowViewModelTests
 
         public Task<IReadOnlyList<ServerInstanceRow>> ListServerInstancesAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<ServerInstanceRow>>([]);
+
+        public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
     }
 }

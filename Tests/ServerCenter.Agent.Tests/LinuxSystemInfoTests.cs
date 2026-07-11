@@ -47,6 +47,20 @@ public sealed class LinuxSystemInfoTests
     }
 
     [Fact]
+    public void Parses_service_unit_names_from_list_units()
+    {
+        string output =
+            "  nginx.service          loaded active running A high performance web server\n" +
+            "  plexmediaserver.service loaded active running Plex Media Server\n" +
+            "  dbus.socket            loaded active running D-Bus System Message Bus Socket\n" +   // not a .service
+            "  nginx.service          loaded active running duplicate line\n";                    // dedup
+
+        IReadOnlyList<string> services = LinuxSystemInfo.ParseServiceUnits(output);
+
+        services.Should().Equal("nginx.service", "plexmediaserver.service");   // sorted, unique, .service only
+    }
+
+    [Fact]
     public void Parsers_are_defensive_against_empty_input()
     {
         LinuxSystemInfo.ParseCpuTotals(string.Empty).Should().Be((0L, 0L));

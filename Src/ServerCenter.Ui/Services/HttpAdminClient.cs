@@ -55,6 +55,15 @@ public sealed class HttpAdminClient : IAdminClient
         return rows ?? [];
     }
 
+    public async Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct)
+    {
+        using HttpResponseMessage response = await _http.GetAsync($"/nodes/{Uri.EscapeDataString(nodeId)}/services", ct);
+        response.EnsureSuccessStatusCode();
+        await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
+        List<string>? services = await JsonSerializer.DeserializeAsync<List<string>>(stream, JsonSerializerOptions.Web, ct);
+        return services ?? [];
+    }
+
     private async Task<string> PostAsync(string path, string json, CancellationToken ct)
     {
         using StringContent content = new StringContent(json, Encoding.UTF8, "application/json");

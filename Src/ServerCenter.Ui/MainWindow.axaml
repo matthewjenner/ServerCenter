@@ -41,11 +41,13 @@
                          Text="{Binding Fleet.SelectedNode.NodeId, StringFormat='Actions - {0}'}" />
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBlock Text="Service" VerticalAlignment="Center" Width="56" />
-                <TextBox PlaceholderText="unit (e.g. plex.service)" Text="{Binding Fleet.RestartUnit}" Width="230" />
+                <AutoCompleteBox Width="230" PlaceholderText="unit (pick or type)" FilterMode="Contains"
+                                 ItemsSource="{Binding Fleet.Services}" Text="{Binding Fleet.RestartUnit, Mode=TwoWay}" />
                 <Button Content="Restart service" Command="{Binding Fleet.RestartServiceCommand}" />
                 <TextBlock Text="Update" VerticalAlignment="Center" Margin="18,0,0,0" />
                 <TextBox PlaceholderText="policy id" Text="{Binding Fleet.UpdatePolicyId}" Width="160" />
-                <TextBox PlaceholderText="service unit (optional)" Text="{Binding Fleet.UpdateServiceUnit}" Width="170" />
+                <AutoCompleteBox Width="170" PlaceholderText="service unit (optional)" FilterMode="Contains"
+                                 ItemsSource="{Binding Fleet.Services}" Text="{Binding Fleet.UpdateServiceUnit, Mode=TwoWay}" />
                 <Button Content="Run update" Command="{Binding Fleet.RunUpdateCommand}" />
               </StackPanel>
               <StackPanel Orientation="Horizontal" Spacing="6">

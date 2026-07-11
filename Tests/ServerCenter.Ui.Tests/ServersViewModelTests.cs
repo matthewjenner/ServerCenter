@@ -135,5 +135,8 @@ public sealed class ServersViewModelTests
 
             return Task.FromResult(Instances);
         }
+
+        public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
     }
 }

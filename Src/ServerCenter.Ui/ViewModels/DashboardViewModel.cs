@@ -28,10 +28,37 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     public ObservableCollection<NodeRowViewModel> Nodes { get; } = [];
 
+    // The selected node's systemd services, loaded on selection - feeds the service pickers.
+    public ObservableCollection<string> Services { get; } = [];
+
     public void UseClients(IJobClient jobs, IAdminClient admin)
     {
         _jobs = jobs;
         _admin = admin;
+    }
+
+    // When the selection changes, load that node's services for the pickers (best effort).
+    partial void OnSelectedNodeChanged(NodeRowViewModel? value) => _ = LoadServicesAsync(value);
+
+    private async Task LoadServicesAsync(NodeRowViewModel? node)
+    {
+        Services.Clear();
+        if (node is null || _admin is null)
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (string service in await _admin.ListServicesAsync(node.NodeId, CancellationToken.None))
+            {
+                Services.Add(service);
+            }
+        }
+        catch
+        {
+            // leave empty - the picker still lets the operator type a unit
+        }
     }
 
     public void Apply(FleetSnapshot snapshot)

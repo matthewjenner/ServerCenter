@@ -117,8 +117,25 @@ public sealed class DashboardViewModelTests
             Task.FromResult(new UpdateTriggerResult("Dispatched", "vm1", string.Empty));
     }
 
+    [Fact]
+    public void Selecting_a_node_loads_its_services()
+    {
+        NoopAdminClient admin = new NoopAdminClient { Services = ["nginx.service", "plexmediaserver.service"] };
+        DashboardViewModel vm = new DashboardViewModel();
+        vm.UseClients(new RecordingJobClient(), admin);
+        vm.Apply(Snapshot(Node("web-server", "web", "guest", AgentLiveness.Online)));
+
+        vm.SelectedNode = vm.Nodes.Single();   // triggers the (synchronous, faked) service load
+
+        admin.LastServicesNode.Should().Be("web-server");
+        vm.Services.Should().BeEquivalentTo(["nginx.service", "plexmediaserver.service"]);
+    }
+
     private sealed class NoopAdminClient : IAdminClient
     {
+        public IReadOnlyList<string> Services { get; set; } = [];
+        public string? LastServicesNode { get; private set; }
+
         public Task<string> LinkDomainAsync(string nodeId, string domain, CancellationToken ct) => Task.FromResult(string.Empty);
 
         public Task<string> StoreAsync(string surface, string bodyJson, CancellationToken ct) => Task.FromResult(string.Empty);
@@ -127,5 +144,11 @@ public sealed class DashboardViewModelTests
 
         public Task<IReadOnlyList<ServerInstanceRow>> ListServerInstancesAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<ServerInstanceRow>>([]);
+
+        public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct)
+        {
+            LastServicesNode = nodeId;
+            return Task.FromResult(Services);
+        }
     }
 }
