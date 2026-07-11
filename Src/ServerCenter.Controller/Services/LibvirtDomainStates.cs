@@ -13,4 +13,7 @@ public sealed class LibvirtDomainStates
     public void Set(string domain, DomainState state) => _states[domain] = state;
 
     public bool TryGet(string domain, out DomainState state) => _states.TryGetValue(domain, out state);
+
+    // The known libvirt domain names (for auto-link and the operator's domain picker).
+    public IReadOnlyList<string> Names() => _states.Keys.OrderBy(n => n, StringComparer.Ordinal).ToArray();
 }

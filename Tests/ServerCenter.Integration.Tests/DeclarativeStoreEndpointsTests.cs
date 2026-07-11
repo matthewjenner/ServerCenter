@@ -112,6 +112,22 @@ public sealed class DeclarativeStoreEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Update_policy_round_trips_through_store_and_list()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HttpClient client = _factory.CreateClient();
+        string policyJson =
+            "{\"id\":\"host-apt\",\"version\":1,\"what\":{\"provider\":\"apt\"},\"how\":\"in-place\"," +
+            "\"when\":{\"mode\":\"manual\"},\"reboot\":\"if-required\",\"preflight\":[\"notify\"],\"approval\":\"auto\"}";
+
+        HttpResponseMessage post = await client.PostAsync("/update-policies", Body(policyJson), ct);
+        post.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        string listed = await client.GetStringAsync("/update-policies", ct);
+        listed.Should().Contain("host-apt");
+    }
+
+    [Fact]
     public async Task Server_instance_with_a_bad_body_is_a_bad_request()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;

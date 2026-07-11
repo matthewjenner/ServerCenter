@@ -118,22 +118,31 @@ public sealed class DashboardViewModelTests
     }
 
     [Fact]
-    public void Selecting_a_node_loads_its_services()
+    public void Selecting_a_node_loads_its_services_domains_and_policies()
     {
-        NoopAdminClient admin = new NoopAdminClient { Services = ["nginx.service", "plexmediaserver.service"] };
+        NoopAdminClient admin = new NoopAdminClient
+        {
+            Services = ["nginx.service", "plexmediaserver.service"],
+            Domains = ["web-server", "plex-vm"],
+            Policies = ["apt-nightly"]
+        };
         DashboardViewModel vm = new DashboardViewModel();
         vm.UseClients(new RecordingJobClient(), admin);
         vm.Apply(Snapshot(Node("web-server", "web", "guest", AgentLiveness.Online)));
 
-        vm.SelectedNode = vm.Nodes.Single();   // triggers the (synchronous, faked) service load
+        vm.SelectedNode = vm.Nodes.Single();   // triggers the (synchronous, faked) picker load
 
         admin.LastServicesNode.Should().Be("web-server");
         vm.Services.Should().BeEquivalentTo(["nginx.service", "plexmediaserver.service"]);
+        vm.Domains.Should().BeEquivalentTo(["web-server", "plex-vm"]);
+        vm.Policies.Should().BeEquivalentTo(["apt-nightly"]);
     }
 
     private sealed class NoopAdminClient : IAdminClient
     {
         public IReadOnlyList<string> Services { get; set; } = [];
+        public IReadOnlyList<string> Domains { get; set; } = [];
+        public IReadOnlyList<string> Policies { get; set; } = [];
         public string? LastServicesNode { get; private set; }
 
         public Task<string> LinkDomainAsync(string nodeId, string domain, CancellationToken ct) => Task.FromResult(string.Empty);
@@ -150,5 +159,9 @@ public sealed class DashboardViewModelTests
             LastServicesNode = nodeId;
             return Task.FromResult(Services);
         }
+
+        public Task<IReadOnlyList<string>> ListLibvirtDomainsAsync(CancellationToken ct) => Task.FromResult(Domains);
+
+        public Task<IReadOnlyList<string>> ListPolicyIdsAsync(CancellationToken ct) => Task.FromResult(Policies);
     }
 }

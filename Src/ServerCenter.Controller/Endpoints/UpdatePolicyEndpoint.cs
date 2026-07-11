@@ -22,6 +22,14 @@ public static class UpdatePolicyEndpoint
                 return Results.Ok(new { policy.Id, policy.Version });
             });
 
+        app.MapGet("/update-policies",
+            async (UpdatePolicyRepository policies, CancellationToken ct) =>
+            {
+                IReadOnlyList<UpdatePolicy> list = await policies.ListLatestAsync(ct);
+                string json = "[" + string.Join(",", list.Select(UpdatePolicySerializer.Serialize)) + "]";
+                return Results.Text(json, "application/json");
+            });
+
         app.MapPost("/jobs/update-apply",
             async (UpdateApplyRequest request, UpdateJobDispatcher dispatcher, CancellationToken ct) =>
             {

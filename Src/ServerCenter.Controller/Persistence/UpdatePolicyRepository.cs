@@ -48,4 +48,24 @@ public sealed class UpdatePolicyRepository(ServerCenterDatabase database)
         string? body = (string?)await cmd.ExecuteScalarAsync(ct);
         return body is null ? null : UpdatePolicySerializer.Deserialize(body);
     }
+
+    // The latest revision of each policy id, for the operator list/picker.
+    public async Task<IReadOnlyList<UpdatePolicy>> ListLatestAsync(CancellationToken ct)
+    {
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
+        cmd.CommandText =
+            "SELECT body_json FROM update_policy up " +
+            "WHERE version = (SELECT MAX(version) FROM update_policy WHERE id = up.id) " +
+            "ORDER BY id;";
+
+        List<UpdatePolicy> list = new List<UpdatePolicy>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(UpdatePolicySerializer.Deserialize(reader.GetString(0)));
+        }
+
+        return list;
+    }
 }

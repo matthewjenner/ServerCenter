@@ -55,14 +55,31 @@ public sealed class HttpAdminClient : IAdminClient
         return rows ?? [];
     }
 
-    public async Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct)
+    public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct) =>
+        GetStringListAsync($"/nodes/{Uri.EscapeDataString(nodeId)}/services", ct);
+
+    public Task<IReadOnlyList<string>> ListLibvirtDomainsAsync(CancellationToken ct) =>
+        GetStringListAsync("/libvirt-domains", ct);
+
+    public async Task<IReadOnlyList<string>> ListPolicyIdsAsync(CancellationToken ct)
     {
-        using HttpResponseMessage response = await _http.GetAsync($"/nodes/{Uri.EscapeDataString(nodeId)}/services", ct);
+        using HttpResponseMessage response = await _http.GetAsync("/update-policies", ct);
         response.EnsureSuccessStatusCode();
         await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
-        List<string>? services = await JsonSerializer.DeserializeAsync<List<string>>(stream, JsonSerializerOptions.Web, ct);
-        return services ?? [];
+        List<PolicyRef>? policies = await JsonSerializer.DeserializeAsync<List<PolicyRef>>(stream, JsonSerializerOptions.Web, ct);
+        return policies?.Select(p => p.Id).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList() ?? [];
     }
+
+    private async Task<IReadOnlyList<string>> GetStringListAsync(string path, CancellationToken ct)
+    {
+        using HttpResponseMessage response = await _http.GetAsync(path, ct);
+        response.EnsureSuccessStatusCode();
+        await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
+        List<string>? items = await JsonSerializer.DeserializeAsync<List<string>>(stream, JsonSerializerOptions.Web, ct);
+        return items ?? [];
+    }
+
+    private sealed record PolicyRef(string Id);
 
     private async Task<string> PostAsync(string path, string json, CancellationToken ct)
     {

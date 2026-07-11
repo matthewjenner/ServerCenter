@@ -33,6 +33,10 @@ public static class NodeEndpoint
                 return Results.Json(services);
             });
 
+        // The libvirt domains the controller can see, for the operator's domain picker (auto-link
+        // handles the common case; this is the manual override for mismatched names).
+        app.MapGet("/libvirt-domains", (LibvirtDomainStates domains) => Results.Json(domains.Names()));
+
         // Record a node the controller is about to bring up (lifecycle 'provisioning'). Its agent
         // flips it to 'managed' on first check-in. The actual VM define + cloud-init is out of band.
         app.MapPost("/nodes/provision",

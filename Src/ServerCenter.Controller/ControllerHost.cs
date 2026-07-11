@@ -72,6 +72,7 @@ public static class ControllerHost
             services.AddSingleton<ILibvirtHost>(sp =>
                 new VirshLibvirtHost(sp.GetRequiredService<TimeProvider>(), "virsh", libvirtConnectUri));
             services.AddHostedService<LibvirtStatePoller>();
+            services.AddHostedService<LibvirtAutoLinker>();
         }
         else
         {

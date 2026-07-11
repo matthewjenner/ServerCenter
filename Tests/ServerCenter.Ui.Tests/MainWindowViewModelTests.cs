@@ -169,5 +169,11 @@ public sealed class MainWindowViewModelTests
 
         public Task<IReadOnlyList<string>> ListServicesAsync(string nodeId, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<IReadOnlyList<string>> ListLibvirtDomainsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<IReadOnlyList<string>> ListPolicyIdsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
     }
 }

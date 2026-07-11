@@ -28,8 +28,13 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     public ObservableCollection<NodeRowViewModel> Nodes { get; } = [];
 
-    // The selected node's systemd services, loaded on selection - feeds the service pickers.
+    // Picker sources, refreshed when the selection changes: the node's services, and the (global)
+    // libvirt domains + update-policy ids.
     public ObservableCollection<string> Services { get; } = [];
+
+    public ObservableCollection<string> Domains { get; } = [];
+
+    public ObservableCollection<string> Policies { get; } = [];
 
     public void UseClients(IJobClient jobs, IAdminClient admin)
     {
@@ -37,27 +42,43 @@ public sealed partial class DashboardViewModel : ObservableObject
         _admin = admin;
     }
 
-    // When the selection changes, load that node's services for the pickers (best effort).
-    partial void OnSelectedNodeChanged(NodeRowViewModel? value) => _ = LoadServicesAsync(value);
+    // When the selection changes, refresh the pickers for it (best effort - failures leave them empty).
+    partial void OnSelectedNodeChanged(NodeRowViewModel? value) => _ = LoadForSelectionAsync(value);
 
-    private async Task LoadServicesAsync(NodeRowViewModel? node)
+    private async Task LoadForSelectionAsync(NodeRowViewModel? node)
     {
+        RestartUnit = string.Empty;         // reset the pickers when the node changes
+        UpdateServiceUnit = string.Empty;
+        LinkDomain = string.Empty;
+        UpdatePolicyId = string.Empty;
         Services.Clear();
-        if (node is null || _admin is null)
+        Domains.Clear();
+        Policies.Clear();
+        if (_admin is null)
         {
             return;
         }
 
+        await LoadIntoAsync(Domains, _admin.ListLibvirtDomainsAsync);
+        await LoadIntoAsync(Policies, _admin.ListPolicyIdsAsync);
+        if (node is not null)
+        {
+            await LoadIntoAsync(Services, ct => _admin.ListServicesAsync(node.NodeId, ct));
+        }
+    }
+
+    private static async Task LoadIntoAsync(ObservableCollection<string> target, Func<CancellationToken, Task<IReadOnlyList<string>>> fetch)
+    {
         try
         {
-            foreach (string service in await _admin.ListServicesAsync(node.NodeId, CancellationToken.None))
+            foreach (string item in await fetch(CancellationToken.None))
             {
-                Services.Add(service);
+                target.Add(item);
             }
         }
         catch
         {
-            // leave empty - the picker still lets the operator type a unit
+            // best effort - leave empty
         }
     }
 

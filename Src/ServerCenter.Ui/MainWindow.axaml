@@ -41,13 +41,14 @@
                          Text="{Binding Fleet.SelectedNode.NodeId, StringFormat='Actions - {0}'}" />
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBlock Text="Service" VerticalAlignment="Center" Width="56" />
-                <AutoCompleteBox Width="230" PlaceholderText="unit (pick or type)" FilterMode="Contains"
-                                 ItemsSource="{Binding Fleet.Services}" Text="{Binding Fleet.RestartUnit, Mode=TwoWay}" />
+                <ComboBox Width="230" PlaceholderText="pick a service"
+                          ItemsSource="{Binding Fleet.Services}" SelectedItem="{Binding Fleet.RestartUnit, Mode=TwoWay}" />
                 <Button Content="Restart service" Command="{Binding Fleet.RestartServiceCommand}" />
                 <TextBlock Text="Update" VerticalAlignment="Center" Margin="18,0,0,0" />
-                <TextBox PlaceholderText="policy id" Text="{Binding Fleet.UpdatePolicyId}" Width="160" />
-                <AutoCompleteBox Width="170" PlaceholderText="service unit (optional)" FilterMode="Contains"
-                                 ItemsSource="{Binding Fleet.Services}" Text="{Binding Fleet.UpdateServiceUnit, Mode=TwoWay}" />
+                <ComboBox Width="170" PlaceholderText="pick a policy"
+                          ItemsSource="{Binding Fleet.Policies}" SelectedItem="{Binding Fleet.UpdatePolicyId, Mode=TwoWay}" />
+                <ComboBox Width="190" PlaceholderText="service unit (optional)"
+                          ItemsSource="{Binding Fleet.Services}" SelectedItem="{Binding Fleet.UpdateServiceUnit, Mode=TwoWay}" />
                 <Button Content="Run update" Command="{Binding Fleet.RunUpdateCommand}" />
               </StackPanel>
               <StackPanel Orientation="Horizontal" Spacing="6">
@@ -56,7 +57,8 @@
                 <Button Content="Stop" Command="{Binding Fleet.VmActionCommand}" CommandParameter="stop" />
                 <Button Content="Restart" Command="{Binding Fleet.VmActionCommand}" CommandParameter="restart" />
                 <TextBlock Text="Domain" VerticalAlignment="Center" Margin="18,0,0,0" />
-                <TextBox PlaceholderText="libvirt domain" Text="{Binding Fleet.LinkDomain}" Width="200" />
+                <ComboBox Width="200" PlaceholderText="pick a domain (auto-links by name)"
+                          ItemsSource="{Binding Fleet.Domains}" SelectedItem="{Binding Fleet.LinkDomain, Mode=TwoWay}" />
                 <Button Content="Link VM domain" Command="{Binding Fleet.LinkDomainCommand}" />
               </StackPanel>
               <TextBlock Text="{Binding Fleet.ActionStatus}" Foreground="#8fbcff" />
@@ -104,6 +106,7 @@
                   <Button Content="Store descriptor" Command="{Binding Servers.StoreCommand}" CommandParameter="game-descriptors" />
                   <Button Content="Store recipe" Command="{Binding Servers.StoreCommand}" CommandParameter="build-recipes" />
                   <Button Content="Store instance" Command="{Binding Servers.StoreCommand}" CommandParameter="server-instances" />
+                <Button Content="Store policy" Command="{Binding Servers.StoreCommand}" CommandParameter="update-policies" />
                 </StackPanel>
                 <TextBlock Text="{Binding Servers.DefinitionStatus}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300" />
               </StackPanel>
