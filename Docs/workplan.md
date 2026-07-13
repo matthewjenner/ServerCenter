@@ -9,7 +9,7 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- NOW AT v0.1.22 (2026-07-13), real hardware LIVE; the user runs the INSTALLED (Velopack) UI, not from
+- NOW AT v0.1.24 (2026-07-13), real hardware LIVE; the user runs the INSTALLED (Velopack) UI, not from
   source. Everything below is detailed in the Decisions Log. Since the v0.1.9-0.1.12 hardening: UI
   VELOPACK auto-update (0.1.13, release-ui.yml + in-app banner); window/tab-state persistence (0.1.14);
   app icon (0.1.15). Then the GAME-SERVER SECTION arc (approved multi-slice plan, file
@@ -24,6 +24,11 @@ Decisions Log / Known Edges before starting the next phase (house rule:
   opens ConfigEditorWindow; it lists the instance's rendered config paths, reads one back (dispatch
   server.config-read -> poll GET /jobs/{id}/logs for the stdout line the read executor emits), edits it,
   and writes it (server.config-write). Raw-edit vs template-apply tension surfaced in the modal copy.
+  Then (0.1.23) the Settings-tab UPDATE-POLICY EDITOR went from a freeform JSON box to a STRUCTURED form
+  (dropdowns for the strict enums how/when/reboot/approval, an AutoCompleteBox for the open provider,
+  preflight checkboxes, a live read-only JSON preview, auto version-bump on Store). Confirmed plex +
+  steamcmd policies WERE already seeded (DefaultPolicies, idempotent per startup) - the gap was only
+  that authoring/reading them meant hand-writing JSON.
   >>> REMAINING / NEXT: game-server slice 4b SECOND HALF = the nested-under-nodes visual for the Servers
   tab (instances grouped under their host node). After that: pending->approve trust gate
   ([[trust-onboarding-model]]); mTLS default-on (transport still plaintext h2c); Velopack UI installer
@@ -618,6 +623,36 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-13: REFERENCE-DATA REFRESH ON RECONNECT (v0.1.24). Bug: the controller-backed dropdowns
+  (policy pickers, game picker) loaded ONCE at Connect and never again - so a controller restart that
+  re-seeded policies (or added games/instances) stayed invisible until an app reload. Root cause:
+  DashboardViewModel.RunAsync silently reconnects the fleet stream on failure (catch -> 3s -> re-Watch)
+  WITHOUT going back through Connect(), so node cards recovered but reference lists did not. Fix: the
+  fleet stream re-establishing IS the "controller is (back) up" signal. DashboardViewModel now tracks a
+  _streamConnected flag; the watch loop calls NotifyStreamConnected() on each snapshot (fires only on
+  the down->up transition, so no per-snapshot flood) and NotifyStreamDisconnected() in the catch. On the
+  up-transition it refreshes its own shared policy list and raises a Reconnected event;
+  MainWindowViewModel handles it by refreshing the Settings policy list + the Servers tab (instances +
+  games). RefreshPoliciesAsync now MERGES (add new / remove gone / keep existing) instead of clear+add,
+  so a card's in-flight policy selection is not nulled by a refresh. Event-driven, ONE refresh per
+  (re)connect - no polling, no controller flood. +3 UI tests (47->50), full suite 336 green.
+
+- 2026-07-13: STRUCTURED UPDATE-POLICY EDITOR (v0.1.23). The Settings-tab policy editor was a freeform
+  JSON TextBox over a strictly-shaped record - unusable without memorizing the dialect. Replaced it with
+  a STRUCTURED form in SettingsViewModel + the Settings tab: Id (text), Provider (AutoCompleteBox seeded
+  apt/plex/steamcmd/wu - open per the contract, so a loaded policy's unknown provider is added to the
+  list), How / When-mode / Reboot / Approval (ComboBoxes whose items ARE the exact wire tokens - no
+  display->wire mapping to drift), Service unit (text, gated on How=stop-update-start|drain-then-update
+  via NeedsServiceUnit), Cron + Window minutes (gated on When=window via IsWindowed), preflight as 4
+  checkboxes. A live READ-ONLY JSON preview (BuildPolicyJson, updated from every field's OnXChanged)
+  shows exactly what Store will send, in the canonical dialect (camelCase props, kebab enum tokens,
+  irrelevant fields omitted) - doubling as documentation. Clicking a defined-policy chip parses it back
+  into the fields (ApplyToFields). Store AUTO-BUMPS the version (NextVersionFor = latest-for-that-id + 1,
+  or 1) so it never collides on the (id, version) PK and an edit is a clean new revision. NOTE for the
+  record: the plex + steamcmd policies were ALREADY seeded in 0.1.21 (DefaultPolicies.EnsureAsync, wired
+  in Program.cs, idempotent) - the user's "forgot to seed" was a misremember; the real gap was the
+  freeform editor. +7 UI tests (40->47), full suite 333 green. See [[build-and-update-model]].
 
 - 2026-07-13: GAME-SERVER SLICE 4b (first half) - RAW CONFIG-EDITOR UI (v0.1.22). Wired the config
   read/edit backend (shipped in 0.1.17) to an operator UI. A "Config files..." button on the selected

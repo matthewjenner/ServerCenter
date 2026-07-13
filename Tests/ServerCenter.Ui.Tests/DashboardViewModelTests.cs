@@ -74,6 +74,38 @@ public sealed class DashboardViewModelTests
         vm.Nodes[0].LastSeen.Should().Be("15s ago");
     }
 
+    [Fact]
+    public void Reconnect_fires_once_per_connection_and_rearms_after_a_disconnect()
+    {
+        DashboardViewModel vm = new DashboardViewModel();
+        int fired = 0;
+        vm.Reconnected += () => fired++;
+
+        vm.NotifyStreamConnected();   // first snapshot after connecting
+        vm.NotifyStreamConnected();   // still connected: does not refire on every snapshot
+        fired.Should().Be(1);
+
+        vm.NotifyStreamDisconnected();
+        vm.NotifyStreamConnected();   // controller came back
+        fired.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task RefreshPolicies_merges_so_new_ids_appear_without_dropping_the_existing_ones()
+    {
+        NoopAdminClient admin = new NoopAdminClient { Policies = ["apt", "plex"] };
+        DashboardViewModel vm = new DashboardViewModel();
+        vm.UseClients(new NoopJobClient(), admin);   // initial load
+
+        vm.Policies.Should().BeEquivalentTo(["apt", "plex"]);
+
+        admin.Policies = ["apt", "steamcmd"];   // controller re-seeded: plex gone, steamcmd new
+        await vm.RefreshPoliciesAsync();
+
+        vm.Policies.Should().BeEquivalentTo(["apt", "steamcmd"]);
+        vm.Policies[0].Should().Be("apt");   // apt kept its instance/slot (merge, not clear+add)
+    }
+
     private static FleetSnapshot Snapshot(params NodeState[] nodes)
     {
         FleetSnapshot snapshot = new FleetSnapshot { GeneratedUnixMs = 1000 };

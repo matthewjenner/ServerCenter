@@ -33,6 +33,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _clientFactory = clientFactory;
         _settings = settings;
         _controllerAddress = settings.ResolveStartupAddress();
+
+        // When the fleet stream (re)connects, the controller is (back) up - refresh the OTHER
+        // controller-backed dropdowns too (the Fleet tab refreshes its own policy list). Keeps seeded/
+        // new policies, games, and instances current after a controller restart without an app reload.
+        Fleet.Reconnected += OnControllerReconnected;
+    }
+
+    private void OnControllerReconnected()
+    {
+        Settings.RefreshPoliciesCommand.Execute(null);   // Settings-tab policy list
+        Servers.RefreshCommand.Execute(null);            // defined instances + the game picker
     }
 
     public DashboardViewModel Fleet { get; }
@@ -81,6 +92,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        Fleet.Reconnected -= OnControllerReconnected;
         _cts?.Cancel();
         _cts?.Dispose();
     }

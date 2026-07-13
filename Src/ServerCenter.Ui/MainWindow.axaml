@@ -283,7 +283,7 @@
             <StackPanel Spacing="6">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBlock Text="Update policies" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
-                <Border Classes="info" ToolTip.Tip="An update policy is a reusable 'profile' the fleet cards pick from. Fields: what.provider (apt | plex | wu); how (in-place | stop-update-start | drain-then-update); when.mode (manual | window - window adds cron + windowMinutes); reboot (never | if-required | always-after | prompt); preflight (notify | snapshot-first | drain-players-via-rcon | quiesce); approval (auto | require-confirmation).">
+                <Border Classes="info" ToolTip.Tip="An update policy is a reusable 'profile' the fleet cards pick from. Fields: provider (apt | plex | steamcmd | wu - the plex/steamcmd providers only act if that software is present); how (in-place | stop-update-start | drain-then-update); service unit (stopped/started around the update, for stop-update-start / drain); when (manual | window - window adds cron + window minutes); reboot (never | if-required | always-after | prompt); preflight (notify | snapshot-first | drain-players-via-rcon | quiesce); approval (auto | require-confirmation). apt/plex/steamcmd are seeded for you.">
                   <TextBlock Text="i" />
                 </Border>
               </StackPanel>
@@ -305,19 +305,75 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Content="Load example" Command="{Binding Settings.LoadExampleCommand}"
-                        ToolTip.Tip="Fill the editor with a valid starter policy you can edit." />
+                <Button Content="New policy" Command="{Binding Settings.NewPolicyCommand}"
+                        ToolTip.Tip="Reset the fields to a starter policy you can name and edit." />
                 <Button Content="Refresh" Command="{Binding Settings.RefreshPoliciesCommand}"
                         ToolTip.Tip="Re-read the policies defined on the controller." />
               </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBox Width="480" Height="120" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,monospace"
-                         VerticalContentAlignment="Top" Text="{Binding Settings.PolicyJson}"
-                         PlaceholderText="Load example or click a policy above to start, then edit the JSON here" />
-                <Button Content="Store policy" Command="{Binding Settings.StorePolicyCommand}" VerticalAlignment="Top"
-                        ToolTip.Tip="Save this JSON as a new policy revision on the controller." />
+
+              <!-- Structured editor: the fields ARE the policy shape, so there is no freeform JSON to
+                   get wrong. The dropdown values are the exact wire tokens; the preview shows the JSON. -->
+              <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Id" Width="70" VerticalAlignment="Center" Foreground="#9aa0a6" />
+                  <TextBox Width="200" Text="{Binding Settings.PolicyId}" PlaceholderText="e.g. plex" />
+                  <TextBlock Text="Provider" Width="64" VerticalAlignment="Center" Foreground="#9aa0a6" />
+                  <AutoCompleteBox Width="170" FilterMode="Contains" MinimumPrefixLength="0"
+                                   ItemsSource="{Binding Settings.ProviderOptions}" Text="{Binding Settings.PolicyProvider, Mode=TwoWay}"
+                                   ToolTip.Tip="What to update. apt = system packages; plex / steamcmd only act if that software is present." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="How" Width="70" VerticalAlignment="Center" Foreground="#9aa0a6" />
+                  <ComboBox Width="200" ItemsSource="{Binding Settings.HowOptions}" SelectedItem="{Binding Settings.PolicyHow, Mode=TwoWay}"
+                            ToolTip.Tip="in-place keeps the service running; stop-update-start brackets it; drain-then-update drains players (RCON) first." />
+                  <TextBlock Text="Service" Width="64" VerticalAlignment="Center" Foreground="#9aa0a6" />
+                  <TextBox Width="170" Text="{Binding Settings.PolicyServiceUnit}" IsEnabled="{Binding Settings.NeedsServiceUnit}"
+                           PlaceholderText="unit to bracket" ToolTip.Tip="The systemd unit stopped/started around the update (only for stop-update-start / drain), e.g. plexmediaserver.service." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="When" Width="70" VerticalAlignment="Center" Foreground="#9aa0a6" />
+                  <ComboBox Width="130" ItemsSource="{Binding Settings.WhenModeOptions}" SelectedItem="{Binding Settings.PolicyWhenMode, Mode=TwoWay}"
+                            ToolTip.Tip="manual = only runs when you trigger it; window = eligible to run itself inside a cron-opened window." />
+                  <TextBox Width="150" Text="{Binding Settings.PolicyCron}" IsEnabled="{Binding Settings.IsWindowed}"
+                           PlaceholderText="cron (UTC)" ToolTip.Tip="Cron expression (UTC) that opens each window. Only used when When = window." />
+                  <NumericUpDown Width="130" Minimum="0" Increment="15" FormatString="0 'min'"
+                                 Value="{Binding Settings.PolicyWindowMinutes}" IsEnabled="{Binding Settings.IsWindowed}"
+                                 ToolTip.Tip="How long the window stays open after each cron occurrence. Only used when When = window." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Reboot" Width="70" VerticalAlignment="Center" Foreground="#9aa0a6" />
+                  <ComboBox Width="160" ItemsSource="{Binding Settings.RebootOptions}" SelectedItem="{Binding Settings.PolicyReboot, Mode=TwoWay}"
+                            ToolTip.Tip="never; if-required (only when the update reports a pending reboot); always-after; prompt (surface to the operator)." />
+                  <TextBlock Text="Approval" Width="64" VerticalAlignment="Center" Foreground="#9aa0a6" />
+                  <ComboBox Width="180" ItemsSource="{Binding Settings.ApprovalOptions}" SelectedItem="{Binding Settings.PolicyApproval, Mode=TwoWay}"
+                            ToolTip.Tip="auto runs without confirmation; require-confirmation gates it on an operator OK." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Preflight" Width="70" VerticalAlignment="Center" Foreground="#9aa0a6" />
+                  <WrapPanel>
+                    <CheckBox Content="notify" Margin="0,0,12,0" IsChecked="{Binding Settings.PreflightNotify}" />
+                    <CheckBox Content="snapshot-first" Margin="0,0,12,0" IsChecked="{Binding Settings.PreflightSnapshotFirst}" />
+                    <CheckBox Content="drain-players-via-rcon" Margin="0,0,12,0" IsChecked="{Binding Settings.PreflightDrainPlayers}" />
+                    <CheckBox Content="quiesce" IsChecked="{Binding Settings.PreflightQuiesce}" />
+                  </WrapPanel>
+                </StackPanel>
               </StackPanel>
-              <TextBlock Text="{Binding Settings.PolicyStatus}" Foreground="#8fbcff" FontSize="12" TextWrapping="Wrap" />
+
+              <!-- Live preview of the exact JSON that Store will send (read-only; documents the shape). -->
+              <Expander Header="Preview (the JSON that will be stored)" IsExpanded="False">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" Margin="0,6,0,0">
+                  <TextBox Grid.Column="0" Height="150" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                           FontFamily="Consolas,monospace" VerticalContentAlignment="Top" Text="{Binding Settings.PolicyPreview}" />
+                  <Button Grid.Column="1" Content="Copy" Click="Copy_Click" Tag="{Binding Settings.PolicyPreview}" VerticalAlignment="Top"
+                          ToolTip.Tip="Copy the policy JSON to the clipboard." />
+                </Grid>
+              </Expander>
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Store policy" Command="{Binding Settings.StorePolicyCommand}"
+                        ToolTip.Tip="Save these settings as a new policy revision on the controller (the version is bumped automatically)." />
+                <TextBlock Text="{Binding Settings.PolicyStatus}" Foreground="#8fbcff" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+              </StackPanel>
             </StackPanel>
 
           </StackPanel>

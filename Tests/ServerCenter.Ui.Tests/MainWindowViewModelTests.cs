@@ -103,6 +103,37 @@ public sealed class MainWindowViewModelTests
         }
     }
 
+    [Fact]
+    public void A_fleet_reconnect_refreshes_the_controller_backed_dropdowns()
+    {
+        string settingsPath = Path.Combine(Path.GetTempPath(), $"sc-ui-{Guid.NewGuid():N}.json");
+        try
+        {
+            RecordingAdminClient admin = new RecordingAdminClient();
+            DashboardViewModel fleet = new DashboardViewModel();
+            MainWindowViewModel vm = new MainWindowViewModel(
+                fleet, Jobs(), Servers(), Settings(),
+                _ => (new NoopFleetClient(), new RecordingJobClient(), admin), new ConnectionSettings(settingsPath))
+            {
+                ControllerAddress = "http://host:5080"
+            };
+
+            vm.ConnectCommand.Execute(null);   // swaps Servers/Settings/Fleet onto `admin`
+            int gamesBefore = admin.ListGamesCalls;
+            int policiesBefore = admin.ListPoliciesCalls;
+
+            fleet.NotifyStreamConnected();   // simulate the fleet stream (re)connecting
+
+            admin.ListGamesCalls.Should().BeGreaterThan(gamesBefore);        // Servers tab refreshed
+            admin.ListPoliciesCalls.Should().BeGreaterThan(policiesBefore);  // Settings tab refreshed
+            vm.Dispose();
+        }
+        finally
+        {
+            File.Delete(settingsPath);
+        }
+    }
+
     private static JobsViewModel Jobs() => new(new RecordingJobClient());
 
     private static ServersViewModel Servers() => new(new RecordingAdminClient());
@@ -151,6 +182,8 @@ public sealed class MainWindowViewModelTests
     private sealed class RecordingAdminClient : IAdminClient
     {
         public string? LastServicesNode { get; private set; }
+        public int ListGamesCalls { get; private set; }
+        public int ListPoliciesCalls { get; private set; }
 
         public Task<string> LinkDomainAsync(string nodeId, string domain, CancellationToken ct) => Task.FromResult(string.Empty);
 
@@ -176,11 +209,17 @@ public sealed class MainWindowViewModelTests
         public Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct) =>
             Task.FromResult(new EnrollmentTokenResult("tok", displayName, 0));
 
-        public Task<IReadOnlyList<PolicyDoc>> ListPoliciesAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<PolicyDoc>>([]);
+        public Task<IReadOnlyList<PolicyDoc>> ListPoliciesAsync(CancellationToken ct)
+        {
+            ListPoliciesCalls++;
+            return Task.FromResult<IReadOnlyList<PolicyDoc>>([]);
+        }
 
-        public Task<IReadOnlyList<GameOption>> ListGamesAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<GameOption>>([]);
+        public Task<IReadOnlyList<GameOption>> ListGamesAsync(CancellationToken ct)
+        {
+            ListGamesCalls++;
+            return Task.FromResult<IReadOnlyList<GameOption>>([]);
+        }
 
         public Task<string> RemoveServerInstanceAsync(string instanceId, CancellationToken ct) => Task.FromResult(string.Empty);
 

@@ -15,6 +15,13 @@ public sealed partial class DashboardViewModel : ObservableObject
 {
     private IJobClient? _jobs;
     private IAdminClient? _admin;
+    private bool _streamConnected;
+
+    // Raised when the fleet stream (re)connects - i.e. the controller is (back) up. The controller
+    // restarting is exactly when its reference data (seeded policies, games) may have changed, so this
+    // is the app's cue to refresh the controller-backed dropdowns. Fires once per connect, not per
+    // snapshot, so it never floods the controller.
+    public event Action? Reconnected;
 
     [ObservableProperty] private string _connectionStatus = "Connecting...";
 
@@ -30,8 +37,26 @@ public sealed partial class DashboardViewModel : ObservableObject
     {
         _jobs = jobs;
         _admin = admin;
-        _ = LoadPoliciesAsync();
+        _streamConnected = false;   // a fresh connection: let the next snapshot re-announce (re)connect
+        _ = RefreshPoliciesAsync();
     }
+
+    // Called by the watch loop when a snapshot arrives (stream up) and when it drops. The up-transition
+    // refreshes the shared policy list (card Update pickers) and raises Reconnected once, so a controller
+    // that restarted with new seeds is reflected without an app restart - and without polling.
+    public void NotifyStreamConnected()
+    {
+        if (_streamConnected)
+        {
+            return;
+        }
+
+        _streamConnected = true;
+        _ = RefreshPoliciesAsync();
+        Reconnected?.Invoke();
+    }
+
+    public void NotifyStreamDisconnected() => _streamConnected = false;
 
     // The controller's clock minus ours, captured at each snapshot, so the live "last seen" counter is
     // anchored to controller time but advances on our local clock (keeps counting when the controller
@@ -109,6 +134,7 @@ public sealed partial class DashboardViewModel : ObservableObject
                             ? string.Empty
                             : $" - controller {snapshot.ControllerVersion}";
                         ConnectionStatus = $"Connected - {snapshot.Nodes.Count} node(s){controller}";
+                        NotifyStreamConnected();   // first snapshot after a (re)connect refreshes reference data
                     });
                 }
             }
@@ -118,7 +144,11 @@ public sealed partial class DashboardViewModel : ObservableObject
             }
             catch (Exception ex)
             {
-                await Dispatcher.UIThread.InvokeAsync(() => ConnectionStatus = $"Disconnected: {ex.Message}. Retrying...");
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ConnectionStatus = $"Disconnected: {ex.Message}. Retrying...";
+                    NotifyStreamDisconnected();   // arm the next snapshot to re-announce the reconnect
+                });
             }
 
             try
@@ -132,7 +162,7 @@ public sealed partial class DashboardViewModel : ObservableObject
         }
     }
 
-    private async Task LoadPoliciesAsync()
+    public async Task RefreshPoliciesAsync()
     {
         if (_admin is null)
         {
@@ -141,17 +171,29 @@ public sealed partial class DashboardViewModel : ObservableObject
 
         try
         {
-            // Called from Connect on the UI thread; the await resumes on the UI sync context.
+            // Called on the UI thread (Connect / the watch loop's snapshot dispatch); the await resumes
+            // on the UI sync context. MERGE rather than clear+add so a card's in-flight policy selection
+            // survives a refresh (a Clear would null every ComboBox's SelectedItem).
             IReadOnlyList<string> ids = await _admin.ListPolicyIdsAsync(CancellationToken.None);
-            Policies.Clear();
             foreach (string id in ids)
             {
-                Policies.Add(id);
+                if (!Policies.Contains(id))
+                {
+                    Policies.Add(id);
+                }
+            }
+
+            for (int i = Policies.Count - 1; i >= 0; i--)
+            {
+                if (!ids.Contains(Policies[i]))
+                {
+                    Policies.RemoveAt(i);
+                }
             }
         }
         catch
         {
-            // best effort - the pickers stay empty
+            // best effort - the pickers stay as they are
         }
     }
 }
