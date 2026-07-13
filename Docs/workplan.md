@@ -598,6 +598,12 @@ Windows, reuse before bespoke.
 
 ## Decisions Log
 
+- 2026-07-13: APP ICON (v0.1.15). Added a real ServerCenter icon: `Src/ServerCenter.Ui/Assets/icon.ico`
+  (multi-res 16-256, generated from a transparent-PNG source via ImageMagick `icon:auto-resize`) +
+  a 1024 master `icon.png`. Wired as `<ApplicationIcon>` (Windows exe/taskbar, in the Windows-guarded
+  PropertyGroup) and `Icon="/Assets/icon.ico"` on MainWindow (title bar/taskbar at runtime, via a
+  cross-platform `<AvaloniaResource Include="Assets/**" />`). Source PNG cleaned up from the repo root.
+
 - 2026-07-11: WINDOW/APP STATE PERSISTENCE (v0.1.14, QoL). The UI now remembers window size, location,
   maximized state, and the selected tab across restarts, alongside the controller address - all in the
   one merged `%APPDATA%\ServerCenter\settings.json`. ConnectionSettings became the single settings

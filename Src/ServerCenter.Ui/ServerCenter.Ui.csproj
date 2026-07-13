@@ -12,11 +12,18 @@
     <OutputType>WinExe</OutputType>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Embeds the icon into the .exe (Windows Explorer / taskbar). -->
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
     <OutputType>Exe</OutputType>
   </PropertyGroup>
+
+  <!-- Bundles the icon so the window can reference it via avares (Icon="/Assets/icon.ico"). -->
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />

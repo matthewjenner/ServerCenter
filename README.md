@@ -7,7 +7,7 @@ truth.
 
 > Status: early and Linux-first. Phases 0-7 are complete (control plane, jobs, identity/mTLS,
 > declarative update policies + game descriptors + build recipes, VM lifecycle). Windows agent
-> support and S3 backup are intentionally deferred. Version `0.1.14`.
+> support and S3 backup are intentionally deferred. Version `0.1.15`.
 
 ## What it is
 
@@ -59,8 +59,8 @@ from the GitHub release + the public controller image):
 
 ```bash
 # On the hypervisor (node zero): stand up the controller AND install the host agent in one command.
-curl -L -O https://github.com/matthewjenner/ServerCenter/releases/download/agent-v0.1.14/servercenter-agent-0.1.14-linux-x64.tar.gz
-mkdir agent && tar -xzf servercenter-agent-0.1.14-linux-x64.tar.gz -C agent && cd agent
+curl -L -O https://github.com/matthewjenner/ServerCenter/releases/download/agent-v0.1.15/servercenter-agent-0.1.15-linux-x64.tar.gz
+mkdir agent && tar -xzf servercenter-agent-0.1.15-linux-x64.tar.gz -C agent && cd agent
 sudo ./install.sh --with-controller
 ```
 
