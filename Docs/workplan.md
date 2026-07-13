@@ -9,6 +9,32 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
+- NOW AT v0.1.20 (2026-07-13). Since the v0.1.9-0.1.12 hardening below, delivered (full detail in the
+  Decisions Log): UI VELOPACK auto-update (0.1.13, release-ui.yml + in-app banner, installed app
+  self-updates - the user now runs the installed app, NOT from source); WINDOW/tab-state persistence
+  (0.1.14); APP ICON (0.1.15). Then the big arc: the GAME-SERVER SECTION (approved multi-slice plan,
+  file shiny-gathering-finch, see [[game-server-model]]) - slice 1 per-instance scoping via reserved
+  {{instance.*}} tokens so N-of-a-game coexist on one VM (0.1.16), slice 2 server.remove + cleanup
+  (0.1.16), slice 3 config raw read/edit + GET /jobs/{id}/logs (0.1.17), slice 4a seeded CS2 descriptor+
+  recipe + guided add/remove UI (0.1.18). Plus QoL: a top MENU BAR with a manual Check-for-Updates
+  (0.1.19) and an ADD-SERVER MODAL (0.1.20). REMAINING on the game-server section: slice 4b (raw
+  config-editor UI - backend done; nested-under-nodes visual). UPDATE PROVIDERS EXTENDED (DONE v0.1.21,
+  see Decisions Log): Plex presence-guard, steamcmd self-update provider, policy default ServiceUnit,
+  seeded apt+plex+steamcmd. Reference model (still accurate): an UpdatePolicy's what.provider selects a
+  pluggable
+  IUpdateProvider on the agent (apt/plex/steamcmd/...); update.apply brackets stop->update->start when
+  How=stop-update-start AND a serviceUnit is given. (1) PLEX provider ALREADY EXISTS (PlexUpdateProvider,
+  channel "plex", registered on the agent) but its ApplyAsync installs UNCONDITIONALLY (download .deb +
+  dpkg -i) - dispatching "plex" to a non-Plex node would ACCIDENTALLY INSTALL Plex. GAP/plan: add a
+  presence guard (it already has InstalledVersionAsync via dpkg-query) -> if not installed, skip as a
+  no-op success; seed a "plex" policy (how=stop-update-start, service plexmediaserver.service - the stop
+  is already handled by the bracket). No seeded plex policy today (only apt). (2) STEAMCMD: NO provider
+  yet - add a "steamcmd" IUpdateProvider that LOCATES steamcmd (which/known path) and runs it to
+  self-update IN THE PLACE FOUND, skipping if absent (never installs it); seed a "steamcmd" policy. Key
+  pattern: "update-only-if-present" is a first-class provider behavior so a policy is safe to dispatch
+  anywhere. (serviceUnit is a dispatch param today, picked in the card's service dropdown; baking a
+  default service into the policy is a possible refinement.)
+
 - LATEST (2026-07-11) - post-Phase-7 PRODUCT HARDENING. The real hardware is LIVE and self-managing:
   the hypervisor (node zero) + 4 guests (plex/satisfactory/web/torrent), all on the same auto-updating
   version. Delivered on top of Phases 0-7 (version 0.1.9):
@@ -597,6 +623,27 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-13: UPDATE PROVIDERS - PLEX GUARD + STEAMCMD + one-click PLEX (v0.1.21). Built the
+  "NEXT DISCUSSION" above. (1) PLEX presence-guard: PlexUpdateProvider.ApplyAsync now checks
+  InstalledVersionAsync first and, if Plex is absent, returns a no-op success - it NEVER installs Plex
+  on a non-Plex node (the accidental-install bug). (2) NEW SteamCmdUpdateProvider (channel "steamcmd",
+  registered on the agent): LOCATES steamcmd (`command -v` + a fallback loop over /usr/games,
+  /usr/local/bin, /usr/bin via `sh -c`) and, if found, runs `<path> +quit` to self-update IN PLACE;
+  skips (no-op success) if absent - never installs it. Update-a-game-APP (CS2) still goes through
+  server.install, distinct from this tool-updater. (3) UpdatePolicy gained an optional default
+  ServiceUnit; UpdateJobDispatcher uses `dispatch-serviceUnit ?? policy.ServiceUnit`, so the seeded
+  "plex" policy (how=stop-update-start, serviceUnit=plexmediaserver.service) stops/starts Plex
+  one-click. (4) DefaultPolicies now seeds apt + plex + steamcmd. Known provider channels: apt, plex,
+  steamcmd, and wu/Windows-Update (DEFERRED with Windows). See [[build-and-update-model]].
+  BUNDLED into 0.1.21 (small UI): (a) STATUS PILL COLORS - Fleet card Agent/VM pills are now GREEN when
+  Online/Running, RED when Offline/Stopped, amber when Stale, gray when Unknown (NodeRowViewModel
+  AgentPillBrush/VmPillBrush -> pill Border.Background). (b) LIVE "last seen" - the counter used the
+  controller's SNAPSHOT time, so it FROZE when the controller/host went offline. Fixed: NodeRowViewModel
+  stores the last heartbeat + RefreshLastSeen(nowMs); DashboardViewModel captures a controller-clock
+  OFFSET per snapshot (skew-proof) and a 1s DispatcherTimer in MainWindow code-behind ticks
+  Fleet.RefreshLastSeen() so the count keeps advancing on the LOCAL clock even with no new snapshot.
+  320 tests green (Controller flake is pre-existing - passes on re-run).
 
 - 2026-07-13: ADD-SERVER MODAL (v0.1.20, UX). The always-present "Add a server" form ate the Servers tab
   and crammed params into a small box. Moved it into a modal: the tab is now just a "+ Add server" button

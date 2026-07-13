@@ -12,7 +12,17 @@ public static class DefaultPolicies
     [
         // "apt": apt update/upgrade in place; reboot only if the update requires it; no confirmation.
         "{\"id\":\"apt\",\"version\":1,\"what\":{\"provider\":\"apt\"},\"how\":\"in-place\"," +
-        "\"when\":{\"mode\":\"manual\"},\"reboot\":\"if-required\",\"preflight\":[\"notify\"],\"approval\":\"auto\"}"
+        "\"when\":{\"mode\":\"manual\"},\"reboot\":\"if-required\",\"preflight\":[\"notify\"],\"approval\":\"auto\"}",
+
+        // "plex": update the Plex app channel; stop/start plexmediaserver around it (one-click via the
+        // policy's default serviceUnit). The provider skips nodes where Plex isn't installed.
+        "{\"id\":\"plex\",\"version\":1,\"what\":{\"provider\":\"plex\"},\"how\":\"stop-update-start\"," +
+        "\"serviceUnit\":\"plexmediaserver.service\",\"when\":{\"mode\":\"manual\"},\"reboot\":\"never\"," +
+        "\"preflight\":[\"notify\"],\"approval\":\"auto\"}",
+
+        // "steamcmd": self-update the SteamCMD tool in place; the provider skips nodes without it.
+        "{\"id\":\"steamcmd\",\"version\":1,\"what\":{\"provider\":\"steamcmd\"},\"how\":\"in-place\"," +
+        "\"when\":{\"mode\":\"manual\"},\"reboot\":\"never\",\"preflight\":[\"notify\"],\"approval\":\"auto\"}"
     ];
 
     public static async Task EnsureAsync(UpdatePolicyRepository repository, TimeProvider clock, CancellationToken ct)

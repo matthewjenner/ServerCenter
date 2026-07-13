@@ -79,6 +79,20 @@ public sealed class UpdateJobDispatcherTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Falls_back_to_the_policy_default_service_unit_when_the_dispatch_omits_one()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await StoreAsync(PlexPolicy() with { ServiceUnit = "plexmediaserver.service" });
+
+        // No serviceUnit passed at dispatch - the policy's default should fill in (one-click Plex stop).
+        UpdateDispatchResult result = await _dispatcher.DispatchAsync(
+            "agent-1", "plex-nightly", null, UpdatePolicyResolver.Trigger.Manual, [], null, ct);
+
+        UpdateJobParams request = UpdateJobParamsSerializer.Deserialize((await _jobs.GetAsync(result.JobId!, ct))!.ParamsJson);
+        request.ServiceUnit.Should().Be("plexmediaserver.service");
+    }
+
+    [Fact]
     public async Task Reports_policy_not_found()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;

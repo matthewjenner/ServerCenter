@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ServerCenter.Contracts.V1;
@@ -23,12 +24,15 @@ public sealed partial class NodeRowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsGuest), nameof(CanStartVm), nameof(CanStopVm))]
     private string _kind = string.Empty;
 
-    [ObservableProperty] private string _agentLivenessText = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AgentPillBrush))]
+    private string _agentLivenessText = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanStartVm), nameof(CanStopVm))]
+    [NotifyPropertyChangedFor(nameof(CanStartVm), nameof(CanStopVm), nameof(VmPillBrush))]
     private string _vmStateText = string.Empty;
     [ObservableProperty] private string _lastSeen = string.Empty;
+    private long _lastHeartbeatUnixMs;
     [ObservableProperty] private string _version = string.Empty;
     [ObservableProperty] private string _os = string.Empty;
     [ObservableProperty] private bool _rebootPending;
@@ -66,15 +70,42 @@ public sealed partial class NodeRowViewModel : ObservableObject
 
     public bool CanStopVm => IsGuest && VmStateText == "Running";
 
+    // Status-pill colors: green = good (Online / Running), red = bad (Offline / Stopped), amber = Stale,
+    // gray = Unknown - so an offline agent or a stopped VM reads at a glance.
+    private static readonly IBrush Good = new SolidColorBrush(Color.Parse("#16a34a"));
+    private static readonly IBrush Bad = new SolidColorBrush(Color.Parse("#dc2626"));
+    private static readonly IBrush Warn = new SolidColorBrush(Color.Parse("#d97706"));
+    private static readonly IBrush Neutral = new SolidColorBrush(Color.Parse("#374151"));
+
+    public IBrush AgentPillBrush => AgentLivenessText switch
+    {
+        "Online" => Good,
+        "Offline" => Bad,
+        "Stale" => Warn,
+        _ => Neutral
+    };
+
+    public IBrush VmPillBrush => VmStateText switch
+    {
+        "Running" => Good,
+        "Stopped" => Bad,
+        _ => Neutral
+    };
+
+    // Re-render "last seen" against a caller-supplied (live, local-clock) now, so the counter keeps
+    // advancing even when the controller is offline and no new snapshot arrives (the old code used the
+    // snapshot's generated time, which freezes on controller/host restart).
+    public void RefreshLastSeen(long nowUnixMs) =>
+        LastSeen = _lastHeartbeatUnixMs > 0 ? $"{Math.Max(0, (nowUnixMs - _lastHeartbeatUnixMs) / 1000)}s ago" : "never";
+
     public void Update(NodeState node, long generatedUnixMs)
     {
         DisplayName = node.DisplayName;
         Kind = node.Kind;
         AgentLivenessText = Format(node.AgentLiveness);
         VmStateText = Format(node.VmState);
-        LastSeen = node.LastHeartbeatUnixMs > 0
-            ? $"{Math.Max(0, (generatedUnixMs - node.LastHeartbeatUnixMs) / 1000)}s ago"
-            : "never";
+        _lastHeartbeatUnixMs = node.LastHeartbeatUnixMs;
+        RefreshLastSeen(generatedUnixMs);
         Version = string.IsNullOrEmpty(node.AgentVersion) ? "-" : node.AgentVersion;
         Os = string.IsNullOrEmpty(node.OsFamily)
             ? "-"

@@ -33,8 +33,26 @@ public sealed partial class DashboardViewModel : ObservableObject
         _ = LoadPoliciesAsync();
     }
 
+    // The controller's clock minus ours, captured at each snapshot, so the live "last seen" counter is
+    // anchored to controller time but advances on our local clock (keeps counting when the controller
+    // is offline, and is skew-proof against a difference between the two machines' clocks).
+    private long _controllerOffsetMs;
+
+    private static long NowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    // Ticked ~1s by the view so every card's "last seen" keeps advancing without a new snapshot.
+    public void RefreshLastSeen()
+    {
+        long now = NowMs() + _controllerOffsetMs;
+        foreach (NodeRowViewModel card in Nodes)
+        {
+            card.RefreshLastSeen(now);
+        }
+    }
+
     public void Apply(FleetSnapshot snapshot)
     {
+        _controllerOffsetMs = snapshot.GeneratedUnixMs - NowMs();
         HashSet<string> seen = new HashSet<string>(snapshot.Nodes.Count);
         foreach (NodeState? node in snapshot.Nodes)
         {

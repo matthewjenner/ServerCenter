@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using ServerCenter.Ui.Services;
 using ServerCenter.Ui.ViewModels;
 
@@ -18,6 +19,7 @@ public partial class MainWindow : Window
 
     private ConnectionSettings? _settings;
     private UiWindowState? _pending;
+    private readonly DispatcherTimer _lastSeenTimer;
 
     public MainWindow()
     {
@@ -25,6 +27,12 @@ public partial class MainWindow : Window
         Title = $"ServerCenter {AppVersion.Current}";
         Opened += OnOpened;
         Closing += OnClosing;
+
+        // Tick every second so each card's "last seen" keeps counting even when no snapshot arrives
+        // (e.g. the controller/host is down). The view drives this; the VM does the clock math.
+        _lastSeenTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _lastSeenTimer.Tick += (_, _) => (DataContext as MainWindowViewModel)?.Fleet.RefreshLastSeen();
+        _lastSeenTimer.Start();
     }
 
     // Called by App before the window is shown: restore the saved size now (no flicker) and stash the

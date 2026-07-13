@@ -40,7 +40,12 @@ public sealed class AgentWorker(
             ProcessRunner runner = new ProcessRunner();
             IReadOnlyList<IUpdateProvider> updateProviders = OperatingSystem.IsWindows()
                 ? []
-                : [new AptUpdateProvider(runner), new PlexUpdateProvider(new HttpFetcher(new HttpClient()), runner, new PlexUpdateOptions())];
+                :
+                [
+                    new AptUpdateProvider(runner),
+                    new PlexUpdateProvider(new HttpFetcher(new HttpClient()), runner, new PlexUpdateOptions()),
+                    new SteamCmdUpdateProvider(runner)
+                ];
 
             AgentJobStore jobStore = new AgentJobStore();
             JobExecutingCommandHandler commandHandler = new JobExecutingCommandHandler(

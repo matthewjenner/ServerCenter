@@ -31,6 +31,15 @@ public sealed class PlexUpdateProvider(
 
     public async Task<UpdateOutcome> ApplyAsync(UpdatePlan plan, IJobSink sink, CancellationToken ct)
     {
+        // Update-only-if-present: never INSTALL Plex on a node that doesn't have it. A "plex" policy
+        // dispatched fleet-wide only touches the Plex box; everywhere else this is a no-op success.
+        string installed = await InstalledVersionAsync(ct);
+        if (installed.Length == 0)
+        {
+            sink.Progress(100, "Plex is not installed on this node; skipped");
+            return new UpdateOutcome(Success: true, RebootRequired: false, FailReason: null);
+        }
+
         PlexRelease release = await FetchReleaseAsync(ct);
 
         string destination = Path.Combine(options.DownloadDirectory, $"plexmediaserver-{release.Version}.deb");

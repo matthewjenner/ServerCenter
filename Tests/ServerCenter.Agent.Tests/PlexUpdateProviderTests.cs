@@ -94,6 +94,21 @@ public sealed class PlexUpdateProviderTests
     }
 
     [Fact]
+    public async Task Apply_skips_when_plex_is_not_installed()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeHttpFetcher http = new FakeHttpFetcher { Body = Manifest };
+        FakeProcessRunner runner = RunnerWithInstalled(string.Empty);   // dpkg-query non-zero -> not installed
+
+        UpdateOutcome outcome = await Provider(http, runner)
+            .ApplyAsync(new UpdatePlan([], AllowReboot: false), new RecordingJobSink(), ct);
+
+        outcome.Success.Should().BeTrue();                         // no-op success, never installs Plex
+        http.Downloads.Should().BeEmpty();                         // never downloaded a .deb
+        runner.Invocations.Should().NotContain(i => i.File == "dpkg");
+    }
+
+    [Fact]
     public async Task Apply_fails_when_dpkg_fails()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;

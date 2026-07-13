@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
+using Avalonia.Media;
 using AwesomeAssertions;
 using ServerCenter.Contracts.V1;
 using ServerCenter.Ui.Services;
@@ -107,6 +108,34 @@ public sealed class NodeRowViewModelTests
 
         card.CanStartVm.Should().BeFalse();
         card.CanStopVm.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Status_pills_are_green_when_online_running_and_red_when_offline_stopped()
+    {
+        NodeRowViewModel good = new(
+            new NodeState { NodeId = "g", DisplayName = "g", Kind = "guest", AgentLiveness = AgentLiveness.Online, VmState = VmState.Running },
+            1000, new FakeJobClient(), new FakeAdminClient(), []);
+        NodeRowViewModel bad = new(
+            new NodeState { NodeId = "g", DisplayName = "g", Kind = "guest", AgentLiveness = AgentLiveness.Offline, VmState = VmState.Stopped },
+            1000, new FakeJobClient(), new FakeAdminClient(), []);
+
+        ((SolidColorBrush)good.AgentPillBrush).Color.Should().Be(Color.Parse("#16a34a"));
+        ((SolidColorBrush)good.VmPillBrush).Color.Should().Be(Color.Parse("#16a34a"));
+        ((SolidColorBrush)bad.AgentPillBrush).Color.Should().Be(Color.Parse("#dc2626"));
+        ((SolidColorBrush)bad.VmPillBrush).Color.Should().Be(Color.Parse("#dc2626"));
+    }
+
+    [Fact]
+    public void RefreshLastSeen_counts_against_the_supplied_now()
+    {
+        NodeRowViewModel card = new(
+            new NodeState { NodeId = "g", DisplayName = "g", Kind = "guest", LastHeartbeatUnixMs = 10_000 },
+            10_000, new FakeJobClient(), new FakeAdminClient(), []);
+
+        card.RefreshLastSeen(25_000);   // 15s after the last heartbeat
+
+        card.LastSeen.Should().Be("15s ago");
     }
 
     private static NodeRowViewModel Card(string id, string kind, IJobClient jobs, IAdminClient admin) =>

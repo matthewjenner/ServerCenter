@@ -130,10 +130,10 @@
                         <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
                           <TextBlock Text="{Binding Os}" Foreground="White" FontSize="11" />
                         </Border>
-                        <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
+                        <Border Background="{Binding AgentPillBrush}" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
                           <TextBlock Text="{Binding AgentLivenessText, StringFormat='Agent {0}'}" Foreground="White" FontSize="11" />
                         </Border>
-                        <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
+                        <Border Background="{Binding VmPillBrush}" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">
                           <TextBlock Text="{Binding VmStateText, StringFormat='VM {0}'}" Foreground="White" FontSize="11" />
                         </Border>
                         <Border Background="#374151" CornerRadius="6" Padding="6,2" Margin="0,0,6,0">

@@ -58,6 +58,22 @@ public sealed class DashboardViewModelTests
         vm.Policies.Should().BeEquivalentTo(["apt", "plex"]);
     }
 
+    [Fact]
+    public void RefreshLastSeen_stays_anchored_to_the_last_snapshot_and_survives_a_dead_controller()
+    {
+        DashboardViewModel vm = new DashboardViewModel();
+        FleetSnapshot snapshot = new FleetSnapshot { GeneratedUnixMs = 25_000 };
+        snapshot.Nodes.Add(new NodeState { NodeId = "n1", DisplayName = "n1", Kind = "guest", LastHeartbeatUnixMs = 10_000 });
+        vm.Apply(snapshot);
+
+        vm.Nodes[0].LastSeen.Should().Be("15s ago");   // snapshot time 25000 - heartbeat 10000
+
+        // A tick with no new snapshot (controller offline): the clock offset cancels the wall clock, so
+        // the count is anchored to controller time - it keeps advancing on our clock, never freezes.
+        vm.RefreshLastSeen();
+        vm.Nodes[0].LastSeen.Should().Be("15s ago");
+    }
+
     private static FleetSnapshot Snapshot(params NodeState[] nodes)
     {
         FleetSnapshot snapshot = new FleetSnapshot { GeneratedUnixMs = 1000 };

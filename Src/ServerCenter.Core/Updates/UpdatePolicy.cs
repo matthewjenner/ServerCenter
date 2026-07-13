@@ -25,6 +25,11 @@ public sealed record UpdatePolicy
     public IReadOnlyList<PreflightStep> Preflight { get; init; } = [];
 
     public ApprovalMode Approval { get; init; } = ApprovalMode.Auto;
+
+    // The service to stop/start around the update (for How=stop-update-start / drain-then-update).
+    // A per-policy DEFAULT so a profile like "plex" (plexmediaserver.service) is one-click; a dispatch
+    // can still override it. Null when the update touches no service (apt, steamcmd).
+    public string? ServiceUnit { get; init; }
 }
 
 public sealed record UpdateWhat(string Provider);

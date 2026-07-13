@@ -44,7 +44,9 @@ public sealed class UpdateJobDispatcher(UpdatePolicyRepository policies, JobDisp
             How = policy.How,
             Preflight = decision.Preflight,
             Reboot = policy.Reboot,
-            ServiceUnit = serviceUnit
+            // A dispatch-supplied unit wins; otherwise fall back to the policy's default (e.g. the
+            // "plex" policy carries plexmediaserver.service so the stop/start is one-click).
+            ServiceUnit = string.IsNullOrWhiteSpace(serviceUnit) ? policy.ServiceUnit : serviceUnit
         };
 
         // A mid-transaction apt is not cancellable, and an interrupted update is not blindly
