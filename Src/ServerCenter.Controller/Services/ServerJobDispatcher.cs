@@ -26,8 +26,20 @@ public sealed class ServerJobDispatcher(
         }
 
         SteamAppSpec app = resolved.Descriptor!.SteamApp;
+        string installDir;
+        try
+        {
+            // Render the (possibly {{instance.id}}-templated) install dir so N instances of the same
+            // game land in distinct directories.
+            installDir = BuildTokens(resolved.Instance!, app.InstallDir)[InstanceContext.InstanceDirKey];
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return ServerDispatchResult.NotConfigured($"install dir template token error: {ex.Message}");
+        }
+
         string paramsJson = ServerJobParamsSerializer.Serialize(
-            new ServerInstallParams(app.AppId, app.InstallDir, app.BetaBranch, Validate: true));
+            new ServerInstallParams(app.AppId, installDir, app.BetaBranch, Validate: true));
 
         // SteamCMD ensure is convergent, so an install is safely requeueable after a disconnect.
         string jobId = await jobs.DispatchAsync(
@@ -43,13 +55,26 @@ public sealed class ServerJobDispatcher(
             return error;
         }
 
-        ConfigGenSpec? configGen = resolved.Descriptor!.Capabilities.ConfigGen;
+        GameDescriptor descriptor = resolved.Descriptor!;
+        ConfigGenSpec? configGen = descriptor.Capabilities.ConfigGen;
         if (configGen is null)
         {
             return ServerDispatchResult.NotConfigured("descriptor declares no configGen capability");
         }
 
-        IReadOnlyDictionary<string, string> instanceParams = InstanceParamsResolver.Flatten(resolved.Instance!.InstanceParamsJson);
+        // Tokens include instance.dir (rendered from the descriptor's install dir) so config file
+        // PATHS - and the file contents the agent renders - can be per-instance.
+        IReadOnlyList<ConfigFileSpec> renderedFiles;
+        Dictionary<string, string> tokens;
+        try
+        {
+            tokens = BuildTokens(resolved.Instance!, descriptor.SteamApp.InstallDir);
+            renderedFiles = RenderPaths(configGen.Files, tokens);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return ServerDispatchResult.NotConfigured($"config path template token error: {ex.Message}");
+        }
 
         Dictionary<string, string> templateMap = new Dictionary<string, string>();
         foreach (ConfigFileSpec file in configGen.Files)
@@ -58,7 +83,7 @@ public sealed class ServerJobDispatcher(
         }
 
         string paramsJson = ServerJobParamsSerializer.Serialize(
-            new ServerConfigApplyParams(configGen.Files, templateMap, instanceParams));
+            new ServerConfigApplyParams(renderedFiles, templateMap, tokens));
 
         string jobId = await jobs.DispatchAsync(
             agentId, "server.config-apply", paramsJson, cancellable: false, requeueable: true, ct);
@@ -84,7 +109,19 @@ public sealed class ServerJobDispatcher(
             return ServerDispatchResult.NotFound($"recipe '{instance.RecipeId}' v{instance.RecipeVersion} not found");
         }
 
-        IReadOnlyDictionary<string, string> instanceParams = InstanceParamsResolver.Flatten(instance.InstanceParamsJson);
+        // Render the recipe's per-instance strings (install dir, unit name, ExecStart, config paths)
+        // controller-side so the agent writes concrete, per-instance values.
+        BuildRecipe renderedRecipe;
+        Dictionary<string, string> tokens;
+        try
+        {
+            tokens = BuildTokens(instance, recipe.SteamApp?.InstallDir);
+            renderedRecipe = RenderRecipe(recipe, tokens);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return ServerDispatchResult.NotConfigured($"recipe template token error: {ex.Message}");
+        }
 
         Dictionary<string, string> templateMap = new Dictionary<string, string>();
         foreach (ConfigFileSpec file in recipe.ConfigFiles)
@@ -93,13 +130,116 @@ public sealed class ServerJobDispatcher(
         }
 
         string paramsJson = RecipeApplyParamsSerializer.Serialize(
-            new RecipeApplyParams(recipe, instanceParams, templateMap));
+            new RecipeApplyParams(renderedRecipe, tokens, templateMap));
 
         // A recipe is convergent (every step is idempotent), so it is safely requeueable.
         string jobId = await jobs.DispatchAsync(
             agentId, "recipe.apply", paramsJson, cancellable: false, requeueable: true, ct);
         return ServerDispatchResult.Dispatched(jobId);
     }
+
+    // Tears a server instance down: renders its per-instance unit / install dir / config paths from the
+    // pinned descriptor + recipe and dispatches server.remove to the instance's node. The caller deletes
+    // the controller row. An instance with no recipe has no unit; with no descriptor/recipe, empty
+    // strings tell the executor there is nothing on disk to clean (the row delete still happens).
+    public async Task<ServerDispatchResult> RemoveAsync(string instanceId, CancellationToken ct)
+    {
+        ServerInstance? instance = await instances.GetAsync(instanceId, ct);
+        if (instance is null)
+        {
+            return ServerDispatchResult.NotFound($"server instance '{instanceId}' not found");
+        }
+
+        GameDescriptor? descriptor = instance.DescriptorId is not null && instance.DescriptorVersion is not null
+            ? await descriptors.GetAsync(instance.DescriptorId, instance.DescriptorVersion.Value, ct)
+            : null;
+        BuildRecipe? recipe = instance.RecipeId is not null && instance.RecipeVersion is not null
+            ? await recipes.GetAsync(instance.RecipeId, instance.RecipeVersion.Value, ct)
+            : null;
+
+        string? installDirTemplate = recipe?.SteamApp?.InstallDir ?? descriptor?.SteamApp.InstallDir;
+
+        ServerRemoveParams removeParams;
+        try
+        {
+            Dictionary<string, string> tokens = BuildTokens(instance, installDirTemplate);
+            string unit = recipe?.ServiceDefinition is { } service
+                ? ConfigTemplateRenderer.Render(service.Unit, tokens)
+                : string.Empty;
+            string installDir = installDirTemplate is not null ? tokens[InstanceContext.InstanceDirKey] : string.Empty;
+
+            List<string> configPaths = new List<string>();
+            if (descriptor?.Capabilities.ConfigGen is { } configGen)
+            {
+                foreach (ConfigFileSpec file in configGen.Files)
+                {
+                    configPaths.Add(ConfigTemplateRenderer.Render(file.Path, tokens));
+                }
+            }
+
+            if (recipe is not null)
+            {
+                foreach (ConfigFileSpec file in recipe.ConfigFiles)
+                {
+                    configPaths.Add(ConfigTemplateRenderer.Render(file.Path, tokens));
+                }
+            }
+
+            removeParams = new ServerRemoveParams(unit, installDir, configPaths.Distinct().ToList());
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return ServerDispatchResult.NotConfigured($"remove template token error: {ex.Message}");
+        }
+
+        string paramsJson = ServerJobParamsSerializer.Serialize(removeParams);
+        string jobId = await jobs.DispatchAsync(
+            instance.NodeId, "server.remove", paramsJson, cancellable: false, requeueable: true, ct);
+        return ServerDispatchResult.Dispatched(jobId);
+    }
+
+    // Flatten the instance params + reserved instance.*/node.* tokens, and (when an install-dir
+    // template is given) render it into instance.dir so unit/ExecStart/config paths can reference it.
+    private static Dictionary<string, string> BuildTokens(ServerInstance instance, string? installDirTemplate)
+    {
+        Dictionary<string, string> tokens = InstanceContext.Build(instance.Id, instance.NodeId, instance.InstanceParamsJson);
+        if (!string.IsNullOrEmpty(installDirTemplate))
+        {
+            tokens[InstanceContext.InstanceDirKey] = ConfigTemplateRenderer.Render(installDirTemplate, tokens);
+        }
+
+        return tokens;
+    }
+
+    // Render each config file's destination PATH per-instance (contents are rendered agent-side).
+    private static IReadOnlyList<ConfigFileSpec> RenderPaths(IReadOnlyList<ConfigFileSpec> files, IReadOnlyDictionary<string, string> tokens)
+    {
+        List<ConfigFileSpec> rendered = new List<ConfigFileSpec>(files.Count);
+        foreach (ConfigFileSpec file in files)
+        {
+            rendered.Add(file with { Path = ConfigTemplateRenderer.Render(file.Path, tokens) });
+        }
+
+        return rendered;
+    }
+
+    // A copy of the recipe with its per-instance strings resolved: install dir, unit name + ExecStart,
+    // and config-file paths. Base packages / scripts / descriptor ref are unchanged.
+    private static BuildRecipe RenderRecipe(BuildRecipe recipe, IReadOnlyDictionary<string, string> tokens) =>
+        recipe with
+        {
+            SteamApp = recipe.SteamApp is { } app
+                ? app with { InstallDir = ConfigTemplateRenderer.Render(app.InstallDir, tokens) }
+                : null,
+            ConfigFiles = RenderPaths(recipe.ConfigFiles, tokens),
+            ServiceDefinition = recipe.ServiceDefinition is { } service
+                ? service with
+                {
+                    Unit = ConfigTemplateRenderer.Render(service.Unit, tokens),
+                    ExecStart = ConfigTemplateRenderer.Render(service.ExecStart, tokens)
+                }
+                : null
+        };
 
     private async Task<ResolvedInstance> ResolveAsync(string instanceId, CancellationToken ct)
     {

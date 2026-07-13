@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using ServerCenter.Agent.Jobs;
+using ServerCenter.Core.Capabilities;
 using ServerCenter.Core.Games;
 using ServerCenter.Core.Jobs;
 using ServerCenter.Core.Primitives;
@@ -75,5 +76,54 @@ public sealed class ServerJobExecutorTests
             Context("server.config-apply", payload), new RecordingJobSink(), ct);
 
         outcome.Succeeded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Remove_stops_disables_and_deletes_unit_install_dir_and_configs()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeServiceController services = new FakeServiceController();
+        RecordingPathCleaner cleaner = new RecordingPathCleaner();
+        ServerRemoveParams payload = new ServerRemoveParams(
+            "sc-cs2-arena1.service",
+            "/opt/servercenter/cs2/arena1",
+            ["/opt/servercenter/cs2/arena1/cfg/server.cfg"]);
+
+        JobOutcome outcome = await new ServerRemoveExecutor(services, cleaner).ExecuteAsync(
+            Context("server.remove", payload), new RecordingJobSink(), ct);
+
+        outcome.Succeeded.Should().BeTrue();
+        services.Calls.Should().Contain(("stop", "sc-cs2-arena1.service"));
+        services.Calls.Should().Contain(("disable", "sc-cs2-arena1.service"));
+        services.Calls.Should().Contain(("daemon-reload", string.Empty));
+        cleaner.Deleted.Should().Contain("/etc/systemd/system/sc-cs2-arena1.service");
+        cleaner.Deleted.Should().Contain("/opt/servercenter/cs2/arena1");
+        cleaner.Deleted.Should().Contain("/opt/servercenter/cs2/arena1/cfg/server.cfg");
+    }
+
+    [Fact]
+    public async Task Remove_with_no_unit_only_deletes_paths()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        FakeServiceController services = new FakeServiceController();
+        RecordingPathCleaner cleaner = new RecordingPathCleaner();
+
+        JobOutcome outcome = await new ServerRemoveExecutor(services, cleaner).ExecuteAsync(
+            Context("server.remove", new ServerRemoveParams(string.Empty, "/opt/x/y", [])), new RecordingJobSink(), ct);
+
+        outcome.Succeeded.Should().BeTrue();
+        services.Calls.Should().BeEmpty();   // no unit -> no systemctl calls
+        cleaner.Deleted.Should().Equal("/opt/x/y");
+    }
+
+    private sealed class RecordingPathCleaner : IPathCleaner
+    {
+        public List<string> Deleted { get; } = [];
+
+        public Task DeletePathAsync(string path, CancellationToken ct)
+        {
+            Deleted.Add(path);
+            return Task.CompletedTask;
+        }
     }
 }

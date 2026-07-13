@@ -75,6 +75,15 @@ public sealed class ServerInstanceRepository(ServerCenterDatabase database)
         return instances;
     }
 
+    public async Task DeleteAsync(string id, CancellationToken ct)
+    {
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM server_instance WHERE id = @id;";
+        cmd.Parameters.AddWithValue("@id", id);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     private static ServerInstance Map(SqliteDataReader r) => new()
     {
         Id = r.GetString(0),

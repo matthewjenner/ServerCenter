@@ -598,6 +598,26 @@ Windows, reuse before bespoke.
 
 ## Decisions Log
 
+- 2026-07-13: GAME-SERVER SECTION - BACKEND (v0.1.16, slices 1-2 of an approved multi-slice plan;
+  plan file shiny-gathering-finch). Goal: define games, add/remove concrete server instances, run
+  MULTIPLE of the same game per VM. SLICE 1 (per-instance scoping, the linchpin): the multi-instance
+  collision was three CLASS-level constants - SteamAppSpec.InstallDir, ServiceDefinition.Unit/ExecStart,
+  ConfigFileSpec.Path. Fix is data-over-code: a reserved token namespace (InstanceContext -> instance.id,
+  instance.name, node.id, instance.dir) rendered through the EXISTING ConfigTemplateRenderer, done
+  controller-side in ServerJobDispatcher before packing job params (install/config-apply/recipe.apply).
+  A descriptor/recipe authored once (installDir `/opt/servercenter/<game>/{{instance.id}}`, unit
+  `sc-<game>-{{instance.id}}.service`) yields per-instance paths+units; the agent stays dumb. SLICE 2
+  (remove + cleanup): new job type `server.remove` + ServerRemoveParams; new IPathCleaner/FilePathCleaner
+  teardown primitive; ServerRemoveExecutor (stop+disable+delete unit best-effort -> daemon-reload ->
+  delete install dir + config files, idempotent) wired in AgentWorker; ServerJobDispatcher.RemoveAsync
+  renders the per-instance unit/dir/paths; ServerInstanceRepository.DeleteAsync; `DELETE
+  /server-instances/{id}` (delete-after-dispatch: cleanup job dispatched, then the row is deleted - a
+  failed cleanup leaves the failed job visible) + `GET /nodes/{id}/server-instances`. 300 tests green.
+  REMAINING: slice 3 (config raw read/edit - server.config-read emits contents on the job log, needs a
+  UI job-log surface - confirm) + slice 4 (guided UI nested under nodes, client list/remove methods,
+  seeded CS2 descriptor+recipe). Acceptance = 2 CS2 instances on one guest, end to end. See
+  [[game-server-model]].
+
 - 2026-07-13: APP ICON (v0.1.15). Added a real ServerCenter icon: `Src/ServerCenter.Ui/Assets/icon.ico`
   (multi-res 16-256, generated from a transparent-PNG source via ImageMagick `icon:auto-resize`) +
   a 1024 master `icon.png`. Wired as `<ApplicationIcon>` (Windows exe/taskbar, in the Windows-guarded

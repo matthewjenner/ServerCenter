@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using ServerCenter.Controller.Persistence;
+using ServerCenter.Controller.Services;
 using ServerCenter.Core.Games;
 
 namespace ServerCenter.Controller.Endpoints;
@@ -53,5 +54,31 @@ public static class ServerInstanceEndpoint
         app.MapGet("/server-instances",
             async (ServerInstanceRepository repo, CancellationToken ct) =>
                 Results.Json(await repo.ListAllAsync(ct), Json));
+
+        // The instances defined on one node (for the per-node game-server list in the UI).
+        app.MapGet("/nodes/{nodeId}/server-instances",
+            async (string nodeId, ServerInstanceRepository repo, CancellationToken ct) =>
+                Results.Json(await repo.ListByNodeAsync(nodeId, ct), Json));
+
+        // Remove an instance: dispatch a server.remove cleanup job to its node, then delete the row.
+        // (Delete-after-dispatch: if the cleanup job later fails, the row is already gone and the
+        // failed job shows the orphaned footprint - the operator can re-create + re-remove.)
+        app.MapDelete("/server-instances/{id}",
+            async (string id, ServerInstanceRepository repo, ServerJobDispatcher dispatcher, CancellationToken ct) =>
+            {
+                ServerDispatchResult result = await dispatcher.RemoveAsync(id, ct);
+                if (result.Outcome == ServerDispatchOutcome.NotFound)
+                {
+                    return Results.NotFound(new { error = result.Reason });
+                }
+
+                if (result.Outcome != ServerDispatchOutcome.Dispatched)
+                {
+                    return Results.BadRequest(new { error = result.Reason });
+                }
+
+                await repo.DeleteAsync(id, ct);
+                return Results.Ok(new { removed = id, jobId = result.JobId });
+            });
     }
 }

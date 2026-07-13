@@ -52,6 +52,7 @@ public sealed class AgentWorker(
                     // IObjectStore; install (SteamCMD) + config-apply need no extra infra.
                     new ServerInstallExecutor(new SteamCmd(runner)),
                     new ServerConfigApplyExecutor(new FileConfigWriter()),
+                    new ServerRemoveExecutor(services, new FilePathCleaner()),
                     // Recipe-driven provisioning (Phase 7): compose the convergent primitives.
                     new RecipeApplyExecutor(
                         new AptPackageInstaller(runner), new SteamCmd(runner), new FileConfigWriter(),

@@ -13,3 +13,11 @@ public interface IConfigWriter
 {
     Task WriteAsync(string path, string content, CancellationToken ct);
 }
+
+// Deletes a path (file or directory, recursively) if it exists; a no-op when absent. The teardown
+// seam for removing a server instance's on-disk footprint (install dir, config files, unit file).
+// Kept behind an interface so remove logic is Tier 1 testable without touching a real filesystem.
+public interface IPathCleaner
+{
+    Task DeletePathAsync(string path, CancellationToken ct);
+}

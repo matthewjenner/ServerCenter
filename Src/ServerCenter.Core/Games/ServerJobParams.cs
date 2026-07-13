@@ -13,6 +13,10 @@ public sealed record ServerConfigApplyParams(
     IReadOnlyDictionary<string, string> Templates,     // schemaRef -> template text (shipped with the job)
     IReadOnlyDictionary<string, string> InstanceParams); // flattened dotted tokens
 
+// Teardown for a removed instance: the (per-instance, already-rendered) systemd unit, install dir, and
+// config file paths to delete. Any field may be empty (an instance with no recipe has no unit, etc.).
+public sealed record ServerRemoveParams(string Unit, string InstallDir, IReadOnlyList<string> ConfigPaths);
+
 public static class ServerJobParamsSerializer
 {
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, GameDescriptorSerializer.Options);
