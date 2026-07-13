@@ -78,6 +78,10 @@ public sealed class UpdateService : IDisposable
         SetAvailable(null);
     }
 
+    // Force an immediate check (the Help > Check for Updates menu item), returning the available
+    // version or null. Independent of the background poll; safe to call any time.
+    public Task<string?> CheckNowAsync() => CheckOnceAsync();
+
     private async Task PollLoopAsync(CancellationToken ct)
     {
         try
@@ -95,11 +99,11 @@ public sealed class UpdateService : IDisposable
         }
     }
 
-    private async Task CheckOnceAsync()
+    private async Task<string?> CheckOnceAsync()
     {
         if (_manager is null)
         {
-            return;
+            return null;
         }
 
         try
@@ -108,22 +112,24 @@ public sealed class UpdateService : IDisposable
             if (info is null)
             {
                 SetAvailable(null);
-                return;
+                return null;
             }
 
             string version = info.TargetFullRelease.Version.ToString();
             if (string.Equals(version, _skipped, StringComparison.Ordinal))
             {
                 SetAvailable(null);
-                return;
+                return null;
             }
 
             _pending = info;
             SetAvailable(version);
+            return version;
         }
         catch
         {
             // Network down, no releases yet, dev mode without an installed app, etc. Stay quiet.
+            return null;
         }
     }
 

@@ -3,8 +3,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Platform;
 using ServerCenter.Ui.Services;
+using ServerCenter.Ui.ViewModels;
 
 namespace ServerCenter.Ui;
 
@@ -127,6 +130,74 @@ public partial class MainWindow : Window
         }
 
         return false;
+    }
+
+    private void Exit_Click(object? sender, RoutedEventArgs e) => Close();
+
+    // Settings is the 3rd tab (Fleet, Servers, Settings, Jobs).
+    private void OpenSettings_Click(object? sender, RoutedEventArgs e)
+    {
+        if (Tabs is not null)
+        {
+            Tabs.SelectedIndex = 2;
+        }
+    }
+
+    private async void Docs_Click(object? sender, RoutedEventArgs e)
+    {
+        if (Launcher is not null)
+        {
+            await Launcher.LaunchUriAsync(new Uri("https://github.com/matthewjenner/ServerCenter"));
+        }
+    }
+
+    // Force an immediate update check (no restart needed) and report the result.
+    private async void CheckUpdates_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel main)
+        {
+            return;
+        }
+
+        string? available = await main.Update.CheckNowAsync();
+        string message = available is null
+            ? $"You are on the latest version ({AppVersion.Current})."
+            : $"Version {available} is available." +
+              (main.Update.CanInstall ? " Use the banner at the top to install it." : " Install the packaged app to auto-update.");
+        await ShowInfoAsync("Check for Updates", message);
+    }
+
+    private async void About_Click(object? sender, RoutedEventArgs e) => await ShowInfoAsync(
+        "About ServerCenter",
+        $"ServerCenter {AppVersion.Current}\n\n" +
+        "A self-hosted control plane for a home virtualization rack.\n" +
+        "https://github.com/matthewjenner/ServerCenter");
+
+    // A minimal modal info dialog (About / update result), built in code to avoid a second XAML file.
+    private Task ShowInfoAsync(string title, string message)
+    {
+        Button ok = new Button { Content = "OK", HorizontalAlignment = HorizontalAlignment.Right };
+        Window dialog = new Window
+        {
+            Title = title,
+            Width = 440,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Icon = Icon,
+            Content = new StackPanel
+            {
+                Margin = new Thickness(18),
+                Spacing = 14,
+                Children =
+                {
+                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                    ok
+                }
+            }
+        };
+        ok.Click += (_, _) => dialog.Close();
+        return dialog.ShowDialog(this);
     }
 
     // Copy the string in the button's Tag to the clipboard. Clipboard access is a view concern, so it

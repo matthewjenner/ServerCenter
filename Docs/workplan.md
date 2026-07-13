@@ -598,6 +598,14 @@ Windows, reuse before bespoke.
 
 ## Decisions Log
 
+- 2026-07-13: UI MENU BAR (v0.1.19, QoL while testing). Added a top Menu (DockPanel-docked) to
+  MainWindow: File (Reconnect -> ConnectCommand, Settings -> selects the Settings tab, Exit) and Help
+  (Check for Updates, Documentation -> launches the repo URL, About). The driver was a MANUAL update
+  check without restarting: UpdateService.CheckNowAsync() (public, forces CheckOnceAsync and returns the
+  available version) -> UpdateBannerViewModel.CheckNowAsync -> the menu handler reports "latest (vX)" or
+  "vY available" in a small in-code modal (ShowInfoAsync, reused by About). No new XAML file. UI 31 tests
+  green, render-checked.
+
 - 2026-07-13: GAME-SERVER SECTION - SEEDED CS2 + GUIDED ADD/REMOVE UI (v0.1.18, slice 4a). SEEDED game
   data (DefaultGames.cs, mirrors DefaultPolicies, wired in Program.cs): a **CS2** GameDescriptor + a
   matching BuildRecipe, id "cs2", authored with the reserved {{instance.id}}/{{instance.dir}} tokens so

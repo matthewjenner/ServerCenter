@@ -23,6 +23,24 @@
     </Style>
   </Window.Styles>
 
+  <DockPanel>
+
+    <!-- Top menu bar: quick, responsive actions (esp. manual update check) without a restart. -->
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="_File">
+        <MenuItem Header="_Reconnect" Command="{Binding ConnectCommand}" />
+        <MenuItem Header="_Settings" Click="OpenSettings_Click" />
+        <Separator />
+        <MenuItem Header="E_xit" Click="Exit_Click" />
+      </MenuItem>
+      <MenuItem Header="_Help">
+        <MenuItem Header="_Check for Updates" Click="CheckUpdates_Click" />
+        <MenuItem Header="_Documentation" Click="Docs_Click" />
+        <Separator />
+        <MenuItem Header="_About" Click="About_Click" />
+      </MenuItem>
+    </Menu>
+
   <Grid Margin="12" RowDefinitions="Auto,Auto,*">
 
     <!-- Self-update banner: appears when a newer UI release is available (Velopack). -->
@@ -345,4 +363,5 @@
 
     </TabControl>
   </Grid>
+  </DockPanel>
 </Window>

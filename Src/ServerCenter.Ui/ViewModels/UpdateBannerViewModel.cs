@@ -49,4 +49,7 @@ public sealed partial class UpdateBannerViewModel : ObservableObject
 
     [RelayCommand]
     private void Skip() => _service?.SkipCurrentVersion();
+
+    // Force an immediate check (Help > Check for Updates); returns the available version or null.
+    public Task<string?> CheckNowAsync() => _service?.CheckNowAsync() ?? Task.FromResult<string?>(null);
 }
