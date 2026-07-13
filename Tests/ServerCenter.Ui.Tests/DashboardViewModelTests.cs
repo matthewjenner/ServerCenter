@@ -138,5 +138,16 @@ public sealed class DashboardViewModelTests
             Task.FromResult<IReadOnlyList<GameOption>>([]);
 
         public Task<string> RemoveServerInstanceAsync(string instanceId, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public Task<IReadOnlyList<string>> ListConfigFilesAsync(string instanceId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<string> DispatchConfigReadAsync(string instanceId, string path, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public Task<string> DispatchConfigWriteAsync(string instanceId, string path, string content, CancellationToken ct) =>
+            Task.FromResult(string.Empty);
+
+        public Task<IReadOnlyList<JobLogEntry>> GetJobLogsAsync(string jobId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<JobLogEntry>>([]);
     }
 }

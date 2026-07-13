@@ -208,5 +208,16 @@ public sealed class ServersViewModelTests
             LastRemoved = instanceId;
             return Task.FromResult(Response);
         }
+
+        public Task<IReadOnlyList<string>> ListConfigFilesAsync(string instanceId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<string> DispatchConfigReadAsync(string instanceId, string path, CancellationToken ct) => Task.FromResult(string.Empty);
+
+        public Task<string> DispatchConfigWriteAsync(string instanceId, string path, string content, CancellationToken ct) =>
+            Task.FromResult(string.Empty);
+
+        public Task<IReadOnlyList<JobLogEntry>> GetJobLogsAsync(string jobId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<JobLogEntry>>([]);
     }
 }

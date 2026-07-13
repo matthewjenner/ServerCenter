@@ -138,6 +138,51 @@ public sealed class HttpAdminClient : IAdminClient
         return body;
     }
 
+    public async Task<IReadOnlyList<string>> ListConfigFilesAsync(string instanceId, CancellationToken ct)
+    {
+        using HttpResponseMessage response = await _http.GetAsync(
+            $"/server-instances/{Uri.EscapeDataString(instanceId)}/config-files", ct);
+        string body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"{(int)response.StatusCode}: {body}");
+        }
+
+        return JsonSerializer.Deserialize<List<string>>(body, JsonSerializerOptions.Web) ?? [];
+    }
+
+    public Task<string> DispatchConfigReadAsync(string instanceId, string path, CancellationToken ct) =>
+        PostForJobIdAsync("/jobs/server-config-read", new { instanceId, path }, ct);
+
+    public Task<string> DispatchConfigWriteAsync(string instanceId, string path, string content, CancellationToken ct) =>
+        PostForJobIdAsync("/jobs/server-config-write", new { instanceId, path, content }, ct);
+
+    public async Task<IReadOnlyList<JobLogEntry>> GetJobLogsAsync(string jobId, CancellationToken ct)
+    {
+        using HttpResponseMessage response = await _http.GetAsync($"/jobs/{Uri.EscapeDataString(jobId)}/logs", ct);
+        response.EnsureSuccessStatusCode();
+        await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
+        List<JobLogEntry>? logs = await JsonSerializer.DeserializeAsync<List<JobLogEntry>>(
+            stream, JsonSerializerOptions.Web, ct);
+        return logs ?? [];
+    }
+
+    // POST a JSON body and pull the "jobId" out of the { jobId } success response (server-config jobs).
+    private async Task<string> PostForJobIdAsync(string path, object body, CancellationToken ct)
+    {
+        string json = JsonSerializer.Serialize(body, JsonSerializerOptions.Web);
+        using StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
+        using HttpResponseMessage response = await _http.PostAsync(path, content, ct);
+        string respBody = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"{(int)response.StatusCode}: {respBody}");
+        }
+
+        using JsonDocument doc = JsonDocument.Parse(respBody);
+        return doc.RootElement.TryGetProperty("jobId", out JsonElement jobId) ? jobId.GetString() ?? string.Empty : string.Empty;
+    }
+
     public async Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct)
     {
         string requestJson = JsonSerializer.Serialize(new { displayName, ttlMinutes });

@@ -191,6 +191,19 @@ public sealed partial class ServersViewModel : ObservableObject
         }
     }
 
+    // Build a raw config editor for the selected instance (opened as a modal). Null (with a status
+    // hint) when nothing is selected. Keeps the admin client encapsulated in this view-model.
+    public ConfigEditorViewModel? CreateConfigEditor()
+    {
+        if (SelectedServer is null)
+        {
+            ActionStatus = "select a server first";
+            return null;
+        }
+
+        return new ConfigEditorViewModel(_client, SelectedServer.Id, SelectedServer.Node);
+    }
+
     // kind (button CommandParameter): "server-install" | "server-config-apply" | "recipe-apply".
     [RelayCommand]
     private async Task ServerJobAsync(string? kind)

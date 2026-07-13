@@ -1,0 +1,33 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ServerCenter.Ui.ConfigEditorWindow"
+        Title="Config editor"
+        Icon="/Assets/icon.ico"
+        Width="820" Height="620"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="16" RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="10">
+
+    <TextBlock Grid.Row="0" FontSize="16" FontWeight="Bold"
+               Text="{Binding InstanceId, StringFormat='Config editor - {0}'}" />
+
+    <TextBlock Grid.Row="1" Foreground="#9aa0a6" FontSize="12" TextWrapping="Wrap"
+               Text="Pick a config file, edit the raw contents, and Save. This writes the file on the node directly - a later 'Config apply' re-renders the descriptor template over it, so use one or the other." />
+
+    <Grid Grid.Row="2" ColumnDefinitions="240,*" ColumnSpacing="12">
+      <ListBox Grid.Column="0" ItemsSource="{Binding Files}"
+               SelectedItem="{Binding SelectedFile, Mode=TwoWay}" />
+      <TextBox Grid.Column="1" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,monospace"
+               VerticalContentAlignment="Top" IsEnabled="{Binding Loaded}"
+               Text="{Binding Content}"
+               PlaceholderText="select a config file on the left to load its contents" />
+    </Grid>
+
+    <TextBlock Grid.Row="3" Text="{Binding Status}" Foreground="#8fbcff" TextWrapping="Wrap" />
+
+    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Reload" Command="{Binding ReloadCommand}" />
+      <Button Content="Save" Command="{Binding SaveCommand}" IsEnabled="{Binding Loaded}" IsDefault="True" />
+      <Button Content="Close" Click="Close_Click" />
+    </StackPanel>
+  </Grid>
+</Window>

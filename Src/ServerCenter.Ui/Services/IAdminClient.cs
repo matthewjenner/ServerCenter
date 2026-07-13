@@ -40,7 +40,23 @@ public interface IAdminClient
 
     // Remove a server instance: dispatches the cleanup job to its node and deletes the row.
     Task<string> RemoveServerInstanceAsync(string instanceId, CancellationToken ct);
+
+    // The rendered config-file paths of an instance (the raw config editor's file list).
+    Task<IReadOnlyList<string>> ListConfigFilesAsync(string instanceId, CancellationToken ct);
+
+    // Dispatch a raw config-read job; returns the job id whose stdout log carries the file's contents
+    // (read back via GetJobLogsAsync).
+    Task<string> DispatchConfigReadAsync(string instanceId, string path, CancellationToken ct);
+
+    // Dispatch a raw config-write job (writes content back to the file verbatim); returns the job id.
+    Task<string> DispatchConfigWriteAsync(string instanceId, string path, string content, CancellationToken ct);
+
+    // A job's persisted log lines in order; the config editor reads a read-job's emitted stdout back.
+    Task<IReadOnlyList<JobLogEntry>> GetJobLogsAsync(string jobId, CancellationToken ct);
 }
+
+// One persisted job log line (stream is "stdout" | "stderr" | "note"), as returned by GET /jobs/{id}/logs.
+public sealed record JobLogEntry(long Seq, string Stream, string Line);
 
 // A game the operator can create a server from: the descriptor id + its latest version, plus the
 // same-id build recipe's version if one is defined (null = descriptor only, no build recipe).

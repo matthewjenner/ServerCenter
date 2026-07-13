@@ -9,31 +9,26 @@ Decisions Log / Known Edges before starting the next phase (house rule:
 
 ## Current State
 
-- NOW AT v0.1.20 (2026-07-13). Since the v0.1.9-0.1.12 hardening below, delivered (full detail in the
-  Decisions Log): UI VELOPACK auto-update (0.1.13, release-ui.yml + in-app banner, installed app
-  self-updates - the user now runs the installed app, NOT from source); WINDOW/tab-state persistence
-  (0.1.14); APP ICON (0.1.15). Then the big arc: the GAME-SERVER SECTION (approved multi-slice plan,
-  file shiny-gathering-finch, see [[game-server-model]]) - slice 1 per-instance scoping via reserved
+- NOW AT v0.1.22 (2026-07-13), real hardware LIVE; the user runs the INSTALLED (Velopack) UI, not from
+  source. Everything below is detailed in the Decisions Log. Since the v0.1.9-0.1.12 hardening: UI
+  VELOPACK auto-update (0.1.13, release-ui.yml + in-app banner); window/tab-state persistence (0.1.14);
+  app icon (0.1.15). Then the GAME-SERVER SECTION arc (approved multi-slice plan, file
+  shiny-gathering-finch, see [[game-server-model]]): slice 1 per-instance scoping via reserved
   {{instance.*}} tokens so N-of-a-game coexist on one VM (0.1.16), slice 2 server.remove + cleanup
-  (0.1.16), slice 3 config raw read/edit + GET /jobs/{id}/logs (0.1.17), slice 4a seeded CS2 descriptor+
-  recipe + guided add/remove UI (0.1.18). Plus QoL: a top MENU BAR with a manual Check-for-Updates
-  (0.1.19) and an ADD-SERVER MODAL (0.1.20). REMAINING on the game-server section: slice 4b (raw
-  config-editor UI - backend done; nested-under-nodes visual). UPDATE PROVIDERS EXTENDED (DONE v0.1.21,
-  see Decisions Log): Plex presence-guard, steamcmd self-update provider, policy default ServiceUnit,
-  seeded apt+plex+steamcmd. Reference model (still accurate): an UpdatePolicy's what.provider selects a
-  pluggable
-  IUpdateProvider on the agent (apt/plex/steamcmd/...); update.apply brackets stop->update->start when
-  How=stop-update-start AND a serviceUnit is given. (1) PLEX provider ALREADY EXISTS (PlexUpdateProvider,
-  channel "plex", registered on the agent) but its ApplyAsync installs UNCONDITIONALLY (download .deb +
-  dpkg -i) - dispatching "plex" to a non-Plex node would ACCIDENTALLY INSTALL Plex. GAP/plan: add a
-  presence guard (it already has InstalledVersionAsync via dpkg-query) -> if not installed, skip as a
-  no-op success; seed a "plex" policy (how=stop-update-start, service plexmediaserver.service - the stop
-  is already handled by the bracket). No seeded plex policy today (only apt). (2) STEAMCMD: NO provider
-  yet - add a "steamcmd" IUpdateProvider that LOCATES steamcmd (which/known path) and runs it to
-  self-update IN THE PLACE FOUND, skipping if absent (never installs it); seed a "steamcmd" policy. Key
-  pattern: "update-only-if-present" is a first-class provider behavior so a policy is safe to dispatch
-  anywhere. (serviceUnit is a dispatch param today, picked in the card's service dropdown; baking a
-  default service into the policy is a possible refinement.)
+  (0.1.16), slice 3 config raw read/edit + GET /jobs/{id}/logs (0.1.17), slice 4a seeded CS2 + guided
+  add/remove UI (0.1.18). QoL: top MENU BAR with manual Check-for-Updates (0.1.19), ADD-SERVER MODAL
+  (0.1.20), and (0.1.21) UPDATE PROVIDERS extended (Plex presence-guard, new steamcmd self-update
+  provider, policy default ServiceUnit, seeded apt+plex+steamcmd - all "update-only-if-present") PLUS
+  colored Agent/VM status pills + a live (never-freezing) "last seen" counter. Then (0.1.22) game-server
+  slice 4b FIRST HALF: the raw CONFIG-EDITOR modal - "Config files..." button on a selected instance
+  opens ConfigEditorWindow; it lists the instance's rendered config paths, reads one back (dispatch
+  server.config-read -> poll GET /jobs/{id}/logs for the stdout line the read executor emits), edits it,
+  and writes it (server.config-write). Raw-edit vs template-apply tension surfaced in the modal copy.
+  >>> REMAINING / NEXT: game-server slice 4b SECOND HALF = the nested-under-nodes visual for the Servers
+  tab (instances grouped under their host node). After that: pending->approve trust gate
+  ([[trust-onboarding-model]]); mTLS default-on (transport still plaintext h2c); Velopack UI installer
+  is DONE. Windows (Phases 8/9) + S3 backup remain DEFERRED. CS2 seed still UNVERIFIED on hardware
+  (2-instance acceptance test pending).
 
 - LATEST (2026-07-11) - post-Phase-7 PRODUCT HARDENING. The real hardware is LIVE and self-managing:
   the hypervisor (node zero) + 4 guests (plex/satisfactory/web/torrent), all on the same auto-updating
@@ -623,6 +618,23 @@ Windows, reuse before bespoke.
   wrapped behind `ILibvirtHost` so it is swappable.
 
 ## Decisions Log
+
+- 2026-07-13: GAME-SERVER SLICE 4b (first half) - RAW CONFIG-EDITOR UI (v0.1.22). Wired the config
+  read/edit backend (shipped in 0.1.17) to an operator UI. A "Config files..." button on the selected
+  Servers-tab instance opens a new ConfigEditorWindow modal (DataContext = ConfigEditorViewModel, built
+  by ServersViewModel.CreateConfigEditor() so the admin client stays encapsulated). The modal: (a) on
+  open, GET /server-instances/{id}/config-files -> the file ListBox; (b) selecting a file dispatches
+  POST /jobs/server-config-read then POLLS GET /jobs/{id}/logs for the single "stdout" line the read
+  executor emits (the file's exact bytes; empty = absent/fresh file, still a valid load), 40 x 250ms
+  budget before a "timed out (node offline?)" status; (c) edit in a monospace TextBox; (d) Save ->
+  POST /jobs/server-config-write with the raw content. IAdminClient gained ListConfigFilesAsync /
+  DispatchConfigReadAsync / DispatchConfigWriteAsync / GetJobLogsAsync (+ JobLogEntry record);
+  HttpAdminClient implements them (PostForJobIdAsync pulls jobId out of the { jobId } response). The
+  raw-edit-vs-"Config apply" tension (a later config-apply re-renders the template over raw edits) is
+  surfaced in the modal's subtext, NOT auto-reconciled. The read-back poll delay is injectable so tests
+  run instant; a synchronous fake completes a file selection inline (same pattern as NodeRowViewModel's
+  service load). +6 UI tests (34->40), full suite 326 green. STILL TODO in 4b: the nested-under-nodes
+  visual (instances grouped under their host node); and the CS2 seed is still unverified on hardware.
 
 - 2026-07-13: UPDATE PROVIDERS - PLEX GUARD + STEAMCMD + one-click PLEX (v0.1.21). Built the
   "NEXT DISCUSSION" above. (1) PLEX presence-guard: PlexUpdateProvider.ApplyAsync now checks

@@ -149,6 +149,15 @@ public partial class MainWindow : Window
         }
     }
 
+    // Open the raw config-editor modal for the selected server instance.
+    private void ConfigFiles_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel main && main.Servers.CreateConfigEditor() is ConfigEditorViewModel editor)
+        {
+            _ = new ConfigEditorWindow { DataContext = editor, Icon = Icon }.ShowDialog(this);
+        }
+    }
+
     private void Exit_Click(object? sender, RoutedEventArgs e) => Close();
 
     // Settings is the 3rd tab (Fleet, Servers, Settings, Jobs).

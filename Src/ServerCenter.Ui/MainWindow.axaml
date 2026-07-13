@@ -197,6 +197,8 @@
                         ToolTip.Tip="Install/refresh the selected server via SteamCMD on its node." />
                 <Button Content="Config apply" Command="{Binding Servers.ServerJobCommand}" CommandParameter="server-config-apply"
                         ToolTip.Tip="Render the descriptor's config templates with this instance's params." />
+                <Button Content="Config files..." Click="ConfigFiles_Click"
+                        ToolTip.Tip="Read and edit this server's raw config files on the node (opens a dialog)." />
                 <Button Content="Recipe apply" Command="{Binding Servers.ServerJobCommand}" CommandParameter="recipe-apply"
                         ToolTip.Tip="Build/repair the server from its recipe (packages, SteamCMD, config, systemd unit)." />
                 <Button Content="Remove" Command="{Binding Servers.RemoveCommand}"
