@@ -91,6 +91,53 @@ public sealed class HttpAdminClient : IAdminClient
         return docs;
     }
 
+    public async Task<IReadOnlyList<GameOption>> ListGamesAsync(CancellationToken ct)
+    {
+        Dictionary<string, int> descriptors = await IdVersionsAsync("/game-descriptors", ct);
+        Dictionary<string, int> recipes = await IdVersionsAsync("/build-recipes", ct);
+        List<GameOption> games = new List<GameOption>();
+        foreach (KeyValuePair<string, int> descriptor in descriptors)
+        {
+            int? recipeVersion = recipes.TryGetValue(descriptor.Key, out int rv) ? rv : null;
+            games.Add(new GameOption(descriptor.Key, descriptor.Value, recipeVersion));
+        }
+
+        return games;
+    }
+
+    // The latest (id -> version) from a /game-descriptors or /build-recipes list (one row per id).
+    private async Task<Dictionary<string, int>> IdVersionsAsync(string path, CancellationToken ct)
+    {
+        using HttpResponseMessage response = await _http.GetAsync(path, ct);
+        response.EnsureSuccessStatusCode();
+        await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
+        using JsonDocument doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        Dictionary<string, int> map = new Dictionary<string, int>();
+        foreach (JsonElement element in doc.RootElement.EnumerateArray())
+        {
+            string id = element.TryGetProperty("id", out JsonElement idEl) ? idEl.GetString() ?? string.Empty : string.Empty;
+            int version = element.TryGetProperty("version", out JsonElement verEl) ? verEl.GetInt32() : 0;
+            if (!string.IsNullOrEmpty(id))
+            {
+                map[id] = version;
+            }
+        }
+
+        return map;
+    }
+
+    public async Task<string> RemoveServerInstanceAsync(string instanceId, CancellationToken ct)
+    {
+        using HttpResponseMessage response = await _http.DeleteAsync($"/server-instances/{Uri.EscapeDataString(instanceId)}", ct);
+        string body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"{(int)response.StatusCode}: {body}");
+        }
+
+        return body;
+    }
+
     public async Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct)
     {
         string requestJson = JsonSerializer.Serialize(new { displayName, ttlMinutes });

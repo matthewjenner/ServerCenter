@@ -43,6 +43,53 @@ public sealed class ServersViewModelTests
     }
 
     [Fact]
+    public async Task Create_posts_a_server_instance_from_the_form()
+    {
+        FakeAdminClient client = new FakeAdminClient { Response = "{}" };
+        ServersViewModel vm = new ServersViewModel(client)
+        {
+            SelectedGame = new GameOption("cs2", 1, 1),
+            SelectedNode = "web-server",
+            NewName = "Arena 1",
+            NewParamsJson = "{\"ports\":{\"game\":27015}}"
+        };
+
+        await vm.CreateCommand.ExecuteAsync(null);
+
+        client.LastStore!.Value.Surface.Should().Be("server-instances");
+        client.LastStore!.Value.Body.Should().Contain("\"id\":\"arena-1\"");        // name slugged
+        client.LastStore!.Value.Body.Should().Contain("\"nodeId\":\"web-server\"");
+        client.LastStore!.Value.Body.Should().Contain("\"descriptorId\":\"cs2\"");
+        client.LastStore!.Value.Body.Should().Contain("\"recipeId\":\"cs2\"");
+    }
+
+    [Fact]
+    public async Task Create_requires_a_game_a_node_and_a_name()
+    {
+        FakeAdminClient client = new FakeAdminClient();
+        ServersViewModel vm = new ServersViewModel(client);   // nothing selected
+
+        await vm.CreateCommand.ExecuteAsync(null);
+
+        client.LastStore.Should().BeNull();
+        vm.CreateStatus.Should().Contain("game");
+    }
+
+    [Fact]
+    public async Task Remove_removes_the_selected_instance()
+    {
+        FakeAdminClient client = new FakeAdminClient { Response = "{}" };
+        ServersViewModel vm = new ServersViewModel(client)
+        {
+            SelectedServer = new ServerRowViewModel(new ServerInstanceRow("arena1", "web-server", "cs2", 1, "cs2", 1, null, null))
+        };
+
+        await vm.RemoveCommand.ExecuteAsync(null);
+
+        client.LastRemoved.Should().Be("arena1");
+    }
+
+    [Fact]
     public async Task Server_job_uses_the_selected_server_as_the_target()
     {
         FakeAdminClient client = new FakeAdminClient { Response = "{\"jobId\":\"abc\"}" };
@@ -150,5 +197,16 @@ public sealed class ServersViewModelTests
 
         public Task<IReadOnlyList<PolicyDoc>> ListPoliciesAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<PolicyDoc>>([]);
+
+        public IReadOnlyList<GameOption> Games { get; set; } = [];
+        public string? LastRemoved { get; private set; }
+
+        public Task<IReadOnlyList<GameOption>> ListGamesAsync(CancellationToken ct) => Task.FromResult(Games);
+
+        public Task<string> RemoveServerInstanceAsync(string instanceId, CancellationToken ct)
+        {
+            LastRemoved = instanceId;
+            return Task.FromResult(Response);
+        }
     }
 }

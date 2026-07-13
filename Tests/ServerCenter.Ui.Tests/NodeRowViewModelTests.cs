@@ -174,5 +174,10 @@ public sealed class NodeRowViewModelTests
 
         public Task<IReadOnlyList<PolicyDoc>> ListPoliciesAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<PolicyDoc>>([]);
+
+        public Task<IReadOnlyList<GameOption>> ListGamesAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<GameOption>>([]);
+
+        public Task<string> RemoveServerInstanceAsync(string instanceId, CancellationToken ct) => Task.FromResult(string.Empty);
     }
 }

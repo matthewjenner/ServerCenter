@@ -598,6 +598,22 @@ Windows, reuse before bespoke.
 
 ## Decisions Log
 
+- 2026-07-13: GAME-SERVER SECTION - SEEDED CS2 + GUIDED ADD/REMOVE UI (v0.1.18, slice 4a). SEEDED game
+  data (DefaultGames.cs, mirrors DefaultPolicies, wired in Program.cs): a **CS2** GameDescriptor + a
+  matching BuildRecipe, id "cs2", authored with the reserved {{instance.id}}/{{instance.dir}} tokens so
+  N coexist - installDir `/opt/servercenter/cs2/{{instance.id}}`, unit `sc-cs2-{{instance.id}}.service`,
+  config `{{instance.dir}}/game/csgo/cfg/gameserver.cfg`, ExecStart `.../cs2.sh -dedicated -usercon
+  +game_type +game_mode +map +sv_setsteamaccount {{gslt}} +rcon_password -port {{ports.game}}` (verified
+  vs current CS2 docs 2026-07: appid 730, binary game/bin/linuxsteamrt64/cs2.sh, port 27015 +2/instance).
+  Ships a `templates/cs2/gameserver.cfg` template (schemaRef). UI: the Servers tab gained an **Add a
+  server** form (pick game [ListGamesAsync] + node [shared live NodeIds from the fleet] + name ->
+  filesystem-safe slug id + params prefilled per game) that POSTs a server-instance, and a **Remove**
+  action (DELETE -> cleanup job + row). New client methods ListGamesAsync/RemoveServerInstanceAsync; the
+  paste-JSON define box moved into an Expander. 311 tests green, UI render-checked. REMAINING (slice 4b):
+  config-editor UI (dispatch server.config-read -> poll GET /jobs/{id}/logs -> edit -> server.config-write)
+  and nested-under-nodes visual polish. Acceptance still to run on hardware: 2 CS2 on one guest. See
+  [[game-server-model]].
+
 - 2026-07-13: GAME-SERVER SECTION - CONFIG RAW READ/EDIT (v0.1.17, slice 3). New job types
   `server.config-read` (reads one rendered config path, emits the whole file as a single stdout log
   line) + `server.config-write` (writes raw content back via IConfigWriter; INDEPENDENT of config-apply,

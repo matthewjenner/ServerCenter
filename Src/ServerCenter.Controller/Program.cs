@@ -62,6 +62,10 @@ public class Program
         await DefaultPolicies.EnsureAsync(
             app.Services.GetRequiredService<UpdatePolicyRepository>(),
             app.Services.GetRequiredService<TimeProvider>(), CancellationToken.None);
+        await DefaultGames.EnsureAsync(
+            app.Services.GetRequiredService<GameDescriptorRepository>(),
+            app.Services.GetRequiredService<BuildRecipeRepository>(),
+            app.Services.GetRequiredService<TimeProvider>(), CancellationToken.None);
 
         app.MapControllerEndpoints();
 

@@ -33,6 +33,20 @@ public interface IAdminClient
     // Operator action: mint a one-time bootstrap token for a new node. Returns the plaintext token
     // (delivered to the node out-of-band); ttlMinutes is clamped server-side.
     Task<EnrollmentTokenResult> MintEnrollmentTokenAsync(string displayName, int ttlMinutes, CancellationToken ct);
+
+    // The seeded/defined games (descriptor id + latest version, paired with the same-id recipe version
+    // if one exists), for the "pick a game" dropdown in the add-server form.
+    Task<IReadOnlyList<GameOption>> ListGamesAsync(CancellationToken ct);
+
+    // Remove a server instance: dispatches the cleanup job to its node and deletes the row.
+    Task<string> RemoveServerInstanceAsync(string instanceId, CancellationToken ct);
+}
+
+// A game the operator can create a server from: the descriptor id + its latest version, plus the
+// same-id build recipe's version if one is defined (null = descriptor only, no build recipe).
+public sealed record GameOption(string Id, int DescriptorVersion, int? RecipeVersion)
+{
+    public string Display => RecipeVersion is null ? $"{Id} (descriptor v{DescriptorVersion})" : Id;
 }
 
 // The minted bootstrap token + when it expires (unix ms). The token is shown once for the operator

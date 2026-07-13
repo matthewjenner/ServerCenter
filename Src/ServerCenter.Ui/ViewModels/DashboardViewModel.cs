@@ -23,6 +23,9 @@ public sealed partial class DashboardViewModel : ObservableObject
     // The defined update-policy ids, shared by every card's Update picker (loaded once on connect).
     public ObservableCollection<string> Policies { get; } = [];
 
+    // Live node ids, shared with the Servers tab's add-server node picker.
+    public ObservableCollection<string> NodeIds { get; } = [];
+
     public void UseClients(IJobClient jobs, IAdminClient admin)
     {
         _jobs = jobs;
@@ -52,6 +55,23 @@ public sealed partial class DashboardViewModel : ObservableObject
             if (!seen.Contains(Nodes[i].NodeId))
             {
                 Nodes.RemoveAt(i);
+            }
+        }
+
+        // Keep the shared node-id list (add-server picker) in sync with the live fleet.
+        foreach (string nodeId in seen)
+        {
+            if (!NodeIds.Contains(nodeId))
+            {
+                NodeIds.Add(nodeId);
+            }
+        }
+
+        for (int i = NodeIds.Count - 1; i >= 0; i--)
+        {
+            if (!seen.Contains(NodeIds[i]))
+            {
+                NodeIds.RemoveAt(i);
             }
         }
     }

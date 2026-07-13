@@ -21,7 +21,7 @@ public partial class App : Application
             string startAddress = settings.ResolveStartupAddress();
             DashboardViewModel fleet = new DashboardViewModel();
             JobsViewModel jobs = new JobsViewModel(new GrpcJobClient(startAddress));
-            ServersViewModel servers = new ServersViewModel(new HttpAdminClient(startAddress));
+            ServersViewModel servers = new ServersViewModel(new HttpAdminClient(startAddress), fleet.NodeIds);
             SettingsViewModel settingsTab = new SettingsViewModel();
 
             _updates = new UpdateService();
