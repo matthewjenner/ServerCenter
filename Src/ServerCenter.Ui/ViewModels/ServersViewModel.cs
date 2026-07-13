@@ -37,6 +37,9 @@ public sealed partial class ServersViewModel : ObservableObject
 
     public void UseClient(IAdminClient client) => _client = client;
 
+    // Raised after a server is successfully created, so the add-server modal can close itself.
+    public event Action? ServerCreated;
+
     [ObservableProperty] private string _status = string.Empty;
     [ObservableProperty] private ServerRowViewModel? _selectedServer;
     [ObservableProperty] private string _actionStatus = string.Empty;
@@ -92,6 +95,12 @@ public sealed partial class ServersViewModel : ObservableObject
             Status = $"error: {ex.Message}";
         }
 
+        await LoadGamesAsync();
+    }
+
+    // Load the game picker (called on refresh and when the add-server modal opens).
+    public async Task LoadGamesAsync()
+    {
         try
         {
             IReadOnlyList<GameOption> games = await _client.ListGamesAsync(CancellationToken.None);
@@ -153,6 +162,7 @@ public sealed partial class ServersViewModel : ObservableObject
             CreateStatus = $"created '{id}' on {SelectedNode}";
             NewName = string.Empty;
             await RefreshAsync();
+            ServerCreated?.Invoke();
         }
         catch (Exception ex)
         {

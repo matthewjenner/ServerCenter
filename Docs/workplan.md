@@ -598,6 +598,12 @@ Windows, reuse before bespoke.
 
 ## Decisions Log
 
+- 2026-07-13: ADD-SERVER MODAL (v0.1.20, UX). The always-present "Add a server" form ate the Servers tab
+  and crammed params into a small box. Moved it into a modal: the tab is now just a "+ Add server" button
+  + Refresh + the instance list + actions; clicking opens AddServerWindow (its DataContext is the shared
+  ServersViewModel, so the same form fields/CreateCommand drive it; roomy params editor). The window
+  loads games on open (ServersViewModel.LoadGamesAsync) and closes itself on the new ServerCreated event.
+
 - 2026-07-13: UI MENU BAR (v0.1.19, QoL while testing). Added a top Menu (DockPanel-docked) to
   MainWindow: File (Reconnect -> ConnectCommand, Settings -> selects the Settings tab, Exit) and Help
   (Check for Updates, Documentation -> launches the repo URL, About). The driver was a MANUAL update

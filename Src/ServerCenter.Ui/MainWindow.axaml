@@ -165,41 +165,17 @@
 
       <!-- ===================== SERVERS ===================== -->
       <TabItem Header="Servers">
-        <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <Grid RowDefinitions="Auto,*,Auto">
 
-          <!-- Add a server: pick a seeded game + a node, name it, tweak params, Create. -->
-          <Border Grid.Row="0" BorderBrush="#3a3a3a" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,8">
-            <StackPanel Spacing="6">
-              <TextBlock Text="Add a server" FontWeight="Bold" />
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <ComboBox Width="200" PlaceholderText="game" ItemsSource="{Binding Servers.Games}"
-                          SelectedItem="{Binding Servers.SelectedGame, Mode=TwoWay}"
-                          ToolTip.Tip="A seeded/defined game (descriptor + recipe). Manage games via the Define expander below.">
-                  <ComboBox.ItemTemplate>
-                    <DataTemplate><TextBlock Text="{Binding Display}" /></DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-                <ComboBox Width="170" PlaceholderText="node" ItemsSource="{Binding Servers.Nodes}"
-                          SelectedItem="{Binding Servers.SelectedNode, Mode=TwoWay}"
-                          ToolTip.Tip="The node (VM/host) this server runs on." />
-                <TextBox Width="170" PlaceholderText="name (e.g. arena1)" Text="{Binding Servers.NewName}"
-                         ToolTip.Tip="Becomes the instance id ({{instance.id}}) - the per-instance scoping key. Two of the same game on one node just need different names." />
-                <Button Content="Create" Command="{Binding Servers.CreateCommand}" />
-                <TextBlock Text="{Binding Servers.CreateStatus}" VerticalAlignment="Center" Foreground="#8fbcff"
-                           TextWrapping="Wrap" MaxWidth="240" />
-              </StackPanel>
-              <TextBox Height="150" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,monospace"
-                       VerticalContentAlignment="Top" Text="{Binding Servers.NewParamsJson}"
-                       ToolTip.Tip="Instance params (ports, passwords, GSLT, slots) - prefilled when you pick a game. For a 2nd instance on a node, bump ports.game by 2." />
-            </StackPanel>
-          </Border>
-
-          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+          <!-- Toolbar: add a server (opens a modal), refresh, count. -->
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6" Margin="4,0,4,8">
+            <Button Content="+ Add server" Click="AddServer_Click"
+                    ToolTip.Tip="Create a new game server from a seeded game (opens a dialog)." />
             <Button Content="Refresh" Command="{Binding Servers.RefreshCommand}" />
             <TextBlock Text="{Binding Servers.Status}" VerticalAlignment="Center" />
           </StackPanel>
 
-          <DataGrid Grid.Row="2"
+          <DataGrid Grid.Row="1"
                     ItemsSource="{Binding Servers.Rows}"
                     SelectedItem="{Binding Servers.SelectedServer, Mode=TwoWay}"
                     IsReadOnly="True" AutoGenerateColumns="False" GridLinesVisibility="Horizontal">
@@ -212,7 +188,7 @@
             </DataGrid.Columns>
           </DataGrid>
 
-          <Border Grid.Row="3" BorderBrush="#444" BorderThickness="0,1,0,0" Padding="4,10,4,4" Margin="0,8,0,0">
+          <Border Grid.Row="2" BorderBrush="#444" BorderThickness="0,1,0,0" Padding="4,10,4,4" Margin="0,8,0,0">
             <StackPanel Spacing="8">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBlock FontWeight="Bold" VerticalAlignment="Center"

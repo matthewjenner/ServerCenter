@@ -132,6 +132,15 @@ public partial class MainWindow : Window
         return false;
     }
 
+    // Open the add-server modal, bound to the shared ServersViewModel.
+    private void AddServer_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel main)
+        {
+            _ = new AddServerWindow { DataContext = main.Servers, Icon = Icon }.ShowDialog(this);
+        }
+    }
+
     private void Exit_Click(object? sender, RoutedEventArgs e) => Close();
 
     // Settings is the 3rd tab (Fleet, Servers, Settings, Jobs).

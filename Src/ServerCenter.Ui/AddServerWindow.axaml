@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ServerCenter.Ui.AddServerWindow"
+        Title="Add a server"
+        Icon="/Assets/icon.ico"
+        Width="660" Height="560"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="16" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" RowSpacing="10">
+
+    <TextBlock Grid.Row="0" Text="Add a server" FontSize="16" FontWeight="Bold" />
+
+    <TextBlock Grid.Row="1" Foreground="#9aa0a6" FontSize="12" TextWrapping="Wrap"
+               Text="Pick a game and a node, name it (the name becomes the instance id - two of the same game on one node just need different names), then edit the params below." />
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+      <ComboBox Width="220" PlaceholderText="game" ItemsSource="{Binding Games}"
+                SelectedItem="{Binding SelectedGame, Mode=TwoWay}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate><TextBlock Text="{Binding Display}" /></DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+      <ComboBox Width="190" PlaceholderText="node" ItemsSource="{Binding Nodes}"
+                SelectedItem="{Binding SelectedNode, Mode=TwoWay}" />
+      <TextBox Width="180" PlaceholderText="name (e.g. arena1)" Text="{Binding NewName}" />
+    </StackPanel>
+
+    <TextBox Grid.Row="3" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas,monospace"
+             VerticalContentAlignment="Top" Text="{Binding NewParamsJson}"
+             PlaceholderText="pick a game to prefill its params (ports, passwords, GSLT, slots)" />
+
+    <TextBlock Grid.Row="4" Text="{Binding CreateStatus}" Foreground="#8fbcff" TextWrapping="Wrap" />
+
+    <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Cancel" Click="Cancel_Click" />
+      <Button Content="Create" Command="{Binding CreateCommand}" IsDefault="True" />
+    </StackPanel>
+  </Grid>
+</Window>
