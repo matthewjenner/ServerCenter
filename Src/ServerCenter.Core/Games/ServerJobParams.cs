@@ -17,6 +17,12 @@ public sealed record ServerConfigApplyParams(
 // config file paths to delete. Any field may be empty (an instance with no recipe has no unit, etc.).
 public sealed record ServerRemoveParams(string Unit, string InstallDir, IReadOnlyList<string> ConfigPaths);
 
+// Raw config editing (one already-rendered, per-instance path at a time). Read emits the file's current
+// contents on the job's stdout log (null/missing -> empty); write persists raw content back verbatim.
+public sealed record ServerConfigReadParams(string Path);
+
+public sealed record ServerConfigWriteParams(string Path, string Content);
+
 public static class ServerJobParamsSerializer
 {
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, GameDescriptorSerializer.Options);

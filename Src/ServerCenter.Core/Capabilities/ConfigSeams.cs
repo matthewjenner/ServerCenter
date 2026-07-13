@@ -14,6 +14,14 @@ public interface IConfigWriter
     Task WriteAsync(string path, string content, CancellationToken ct);
 }
 
+// Reads a config file's current on-disk contents (for the operator's raw config editor). Returns null
+// when the file does not exist yet (a fresh instance the operator is about to author). Seam so the
+// read executor is testable without a real filesystem.
+public interface IConfigReader
+{
+    Task<string?> ReadAsync(string path, CancellationToken ct);
+}
+
 // Deletes a path (file or directory, recursively) if it exists; a no-op when absent. The teardown
 // seam for removing a server instance's on-disk footprint (install dir, config files, unit file).
 // Kept behind an interface so remove logic is Tier 1 testable without touching a real filesystem.

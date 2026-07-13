@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ServerCenter.Controller.Persistence;
 using ServerCenter.Controller.Services;
 
 namespace ServerCenter.Controller.Endpoints;
@@ -17,6 +18,11 @@ public static class JobEndpoint
                     request.AgentId, "service.restart", paramsJson, cancellable: false, requeueable: false, ct);
                 return Results.Ok(new { jobId });
             });
+
+        // A job's persisted log lines in order (the config-read editor reads a read-job's stdout back).
+        app.MapGet("/jobs/{id}/logs",
+            async (string id, JobRepository jobs, CancellationToken ct) =>
+                Results.Json(await jobs.ListLogsAsync(id, ct)));
     }
 }
 

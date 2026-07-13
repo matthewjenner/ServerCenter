@@ -116,6 +116,48 @@ public sealed class ServerJobExecutorTests
         cleaner.Deleted.Should().Equal("/opt/x/y");
     }
 
+    [Fact]
+    public async Task ConfigRead_emits_the_file_contents_on_stdout()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        RecordingJobSink sink = new RecordingJobSink();
+
+        JobOutcome outcome = await new ServerConfigReadExecutor(new StubConfigReader("hostname=ffa\nport=27015"))
+            .ExecuteAsync(Context("server.config-read", new ServerConfigReadParams("/opt/cs2/arena1/server.cfg")), sink, ct);
+
+        outcome.Succeeded.Should().BeTrue();
+        sink.Logs.Should().Contain(l => l.Stream == LogStream.Stdout && l.Line == "hostname=ffa\nport=27015");
+    }
+
+    [Fact]
+    public async Task ConfigRead_of_a_missing_file_emits_empty()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        RecordingJobSink sink = new RecordingJobSink();
+
+        JobOutcome outcome = await new ServerConfigReadExecutor(new StubConfigReader(null))
+            .ExecuteAsync(Context("server.config-read", new ServerConfigReadParams("/nope")), sink, ct);
+
+        outcome.Succeeded.Should().BeTrue();
+        sink.Logs.Should().Contain(l => l.Stream == LogStream.Stdout && l.Line == string.Empty);
+    }
+
+    [Fact]
+    public async Task ConfigWrite_persists_raw_content()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        RecordingConfigWriter writer = new RecordingConfigWriter();
+
+        JobOutcome outcome = await new ServerConfigWriteExecutor(writer).ExecuteAsync(
+            Context("server.config-write", new ServerConfigWriteParams("/opt/cs2/arena1/server.cfg", "edited")),
+            new RecordingJobSink(), ct);
+
+        outcome.Succeeded.Should().BeTrue();
+        writer.Writes.Should().ContainSingle();
+        writer.Writes[0].Path.Should().Be("/opt/cs2/arena1/server.cfg");
+        writer.Writes[0].Content.Should().Be("edited");
+    }
+
     private sealed class RecordingPathCleaner : IPathCleaner
     {
         public List<string> Deleted { get; } = [];
@@ -125,5 +167,10 @@ public sealed class ServerJobExecutorTests
             Deleted.Add(path);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class StubConfigReader(string? contents) : IConfigReader
+    {
+        public Task<string?> ReadAsync(string path, CancellationToken ct) => Task.FromResult(contents);
     }
 }

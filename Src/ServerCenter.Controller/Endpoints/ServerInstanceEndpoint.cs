@@ -60,6 +60,23 @@ public static class ServerInstanceEndpoint
             async (string nodeId, ServerInstanceRepository repo, CancellationToken ct) =>
                 Results.Json(await repo.ListByNodeAsync(nodeId, ct), Json));
 
+        // The rendered config-file paths of an instance (for the raw config editor's file list).
+        app.MapGet("/server-instances/{id}/config-files",
+            async (string id, ServerJobDispatcher dispatcher, CancellationToken ct) =>
+            {
+                IReadOnlyList<string>? paths;
+                try
+                {
+                    paths = await dispatcher.ResolveConfigPathsAsync(id, ct);
+                }
+                catch (KeyNotFoundException ex)
+                {
+                    return Results.BadRequest(new { error = ex.Message });
+                }
+
+                return paths is null ? Results.NotFound(new { error = $"server instance '{id}' not found" }) : Results.Json(paths);
+            });
+
         // Remove an instance: dispatch a server.remove cleanup job to its node, then delete the row.
         // (Delete-after-dispatch: if the cleanup job later fails, the row is already gone and the
         // failed job shows the orphaned footprint - the operator can re-create + re-remove.)

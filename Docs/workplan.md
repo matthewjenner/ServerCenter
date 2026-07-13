@@ -598,6 +598,21 @@ Windows, reuse before bespoke.
 
 ## Decisions Log
 
+- 2026-07-13: GAME-SERVER SECTION - CONFIG RAW READ/EDIT (v0.1.17, slice 3). New job types
+  `server.config-read` (reads one rendered config path, emits the whole file as a single stdout log
+  line) + `server.config-write` (writes raw content back via IConfigWriter; INDEPENDENT of config-apply,
+  which re-renders from the template and would clobber a raw edit). New IConfigReader/FileConfigReader
+  seam; both executors wired in AgentWorker. ServerJobDispatcher gained ConfigReadAsync/ConfigWriteAsync
+  (path-guarded: refuses any path that isn't one of the instance's rendered config files, so it can't
+  read/write arbitrary files) + ResolveConfigPathsAsync (the file list), all sharing a ResolveFootprint
+  helper with RemoveAsync. Endpoints: POST /jobs/server-config-read|server-config-write (take instanceId,
+  node derived), GET /server-instances/{id}/config-files, and GET /jobs/{id}/logs (new
+  JobRepository.ListLogsAsync - surfaces persisted job output; the editor reads the read-job's stdout
+  back). 306 tests green. REMAINING: slice 4 (guided UI nested under nodes: add-server form, per-instance
+  Install/Config-edit/Restart/Remove, config editor that dispatches read -> polls /jobs/{id}/logs ->
+  edit -> write; client list/remove/config methods; SEEDED CS2 descriptor+recipe - needs real CS2
+  specifics: dedicated-server appid, ExecStart, config schema). See [[game-server-model]].
+
 - 2026-07-13: GAME-SERVER SECTION - BACKEND (v0.1.16, slices 1-2 of an approved multi-slice plan;
   plan file shiny-gathering-finch). Goal: define games, add/remove concrete server instances, run
   MULTIPLE of the same game per VM. SLICE 1 (per-instance scoping, the linchpin): the multi-instance

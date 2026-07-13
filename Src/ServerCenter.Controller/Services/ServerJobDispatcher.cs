@@ -144,10 +144,81 @@ public sealed class ServerJobDispatcher(
     // strings tell the executor there is nothing on disk to clean (the row delete still happens).
     public async Task<ServerDispatchResult> RemoveAsync(string instanceId, CancellationToken ct)
     {
+        Footprint? footprint;
+        try
+        {
+            footprint = await ResolveFootprintAsync(instanceId, ct);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return ServerDispatchResult.NotConfigured($"remove template token error: {ex.Message}");
+        }
+
+        if (footprint is null)
+        {
+            return ServerDispatchResult.NotFound($"server instance '{instanceId}' not found");
+        }
+
+        ServerRemoveParams removeParams = new ServerRemoveParams(
+            footprint.Unit, footprint.InstallDir, footprint.ConfigPaths);
+        string paramsJson = ServerJobParamsSerializer.Serialize(removeParams);
+        string jobId = await jobs.DispatchAsync(
+            footprint.Instance.NodeId, "server.remove", paramsJson, cancellable: false, requeueable: true, ct);
+        return ServerDispatchResult.Dispatched(jobId);
+    }
+
+    // The rendered config-file paths of an instance (for the operator's file list). Null if the instance
+    // doesn't exist. Throws KeyNotFoundException on a bad token (the endpoint maps it to a 400).
+    public async Task<IReadOnlyList<string>?> ResolveConfigPathsAsync(string instanceId, CancellationToken ct) =>
+        (await ResolveFootprintAsync(instanceId, ct))?.ConfigPaths;
+
+    public Task<ServerDispatchResult> ConfigReadAsync(string instanceId, string path, CancellationToken ct) =>
+        DispatchConfigAsync(instanceId, path, "server.config-read",
+            _ => new ServerConfigReadParams(path), ct);
+
+    public Task<ServerDispatchResult> ConfigWriteAsync(string instanceId, string path, string content, CancellationToken ct) =>
+        DispatchConfigAsync(instanceId, path, "server.config-write",
+            _ => new ServerConfigWriteParams(path, content), ct);
+
+    // Shared read/write dispatch: resolve the instance's footprint, refuse a path that isn't one of its
+    // rendered config files (so this can't read/write arbitrary files), then dispatch to its node.
+    private async Task<ServerDispatchResult> DispatchConfigAsync(
+        string instanceId, string path, string jobType, Func<Footprint, object> paramsFactory, CancellationToken ct)
+    {
+        Footprint? footprint;
+        try
+        {
+            footprint = await ResolveFootprintAsync(instanceId, ct);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return ServerDispatchResult.NotConfigured($"config template token error: {ex.Message}");
+        }
+
+        if (footprint is null)
+        {
+            return ServerDispatchResult.NotFound($"server instance '{instanceId}' not found");
+        }
+
+        if (!footprint.ConfigPaths.Contains(path))
+        {
+            return ServerDispatchResult.NotConfigured($"'{path}' is not a config file of this instance");
+        }
+
+        string paramsJson = ServerJobParamsSerializer.Serialize(paramsFactory(footprint));
+        string jobId = await jobs.DispatchAsync(
+            footprint.Instance.NodeId, jobType, paramsJson, cancellable: false, requeueable: true, ct);
+        return ServerDispatchResult.Dispatched(jobId);
+    }
+
+    // Resolves an instance + its pinned descriptor/recipe and renders its full per-instance footprint:
+    // the systemd unit, install dir, and config-file paths. Shared by remove and config read/write.
+    private async Task<Footprint?> ResolveFootprintAsync(string instanceId, CancellationToken ct)
+    {
         ServerInstance? instance = await instances.GetAsync(instanceId, ct);
         if (instance is null)
         {
-            return ServerDispatchResult.NotFound($"server instance '{instanceId}' not found");
+            return null;
         }
 
         GameDescriptor? descriptor = instance.DescriptorId is not null && instance.DescriptorVersion is not null
@@ -158,45 +229,34 @@ public sealed class ServerJobDispatcher(
             : null;
 
         string? installDirTemplate = recipe?.SteamApp?.InstallDir ?? descriptor?.SteamApp.InstallDir;
+        Dictionary<string, string> tokens = BuildTokens(instance, installDirTemplate);
 
-        ServerRemoveParams removeParams;
-        try
+        string unit = recipe?.ServiceDefinition is { } service
+            ? ConfigTemplateRenderer.Render(service.Unit, tokens)
+            : string.Empty;
+        string installDir = installDirTemplate is not null ? tokens[InstanceContext.InstanceDirKey] : string.Empty;
+
+        List<string> configPaths = new List<string>();
+        if (descriptor?.Capabilities.ConfigGen is { } configGen)
         {
-            Dictionary<string, string> tokens = BuildTokens(instance, installDirTemplate);
-            string unit = recipe?.ServiceDefinition is { } service
-                ? ConfigTemplateRenderer.Render(service.Unit, tokens)
-                : string.Empty;
-            string installDir = installDirTemplate is not null ? tokens[InstanceContext.InstanceDirKey] : string.Empty;
-
-            List<string> configPaths = new List<string>();
-            if (descriptor?.Capabilities.ConfigGen is { } configGen)
+            foreach (ConfigFileSpec file in configGen.Files)
             {
-                foreach (ConfigFileSpec file in configGen.Files)
-                {
-                    configPaths.Add(ConfigTemplateRenderer.Render(file.Path, tokens));
-                }
+                configPaths.Add(ConfigTemplateRenderer.Render(file.Path, tokens));
             }
-
-            if (recipe is not null)
-            {
-                foreach (ConfigFileSpec file in recipe.ConfigFiles)
-                {
-                    configPaths.Add(ConfigTemplateRenderer.Render(file.Path, tokens));
-                }
-            }
-
-            removeParams = new ServerRemoveParams(unit, installDir, configPaths.Distinct().ToList());
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return ServerDispatchResult.NotConfigured($"remove template token error: {ex.Message}");
         }
 
-        string paramsJson = ServerJobParamsSerializer.Serialize(removeParams);
-        string jobId = await jobs.DispatchAsync(
-            instance.NodeId, "server.remove", paramsJson, cancellable: false, requeueable: true, ct);
-        return ServerDispatchResult.Dispatched(jobId);
+        if (recipe is not null)
+        {
+            foreach (ConfigFileSpec file in recipe.ConfigFiles)
+            {
+                configPaths.Add(ConfigTemplateRenderer.Render(file.Path, tokens));
+            }
+        }
+
+        return new Footprint(instance, unit, installDir, configPaths.Distinct().ToList());
     }
+
+    private sealed record Footprint(ServerInstance Instance, string Unit, string InstallDir, IReadOnlyList<string> ConfigPaths);
 
     // Flatten the instance params + reserved instance.*/node.* tokens, and (when an install-dir
     // template is given) render it into instance.dir so unit/ExecStart/config paths can reference it.

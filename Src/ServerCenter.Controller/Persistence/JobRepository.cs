@@ -147,6 +147,25 @@ public sealed class JobRepository(ServerCenterDatabase database)
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    // A job's log lines in order. Surfaces persisted output to operators (the config-read editor reads
+    // a job's stdout line back; the Jobs view can show full logs).
+    public async Task<IReadOnlyList<JobLogLine>> ListLogsAsync(string jobId, CancellationToken ct)
+    {
+        await using SqliteConnection connection = await database.OpenConnectionAsync(ct);
+        await using SqliteCommand cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT seq, stream, line FROM job_log WHERE job_id = @job ORDER BY seq;";
+        cmd.Parameters.AddWithValue("@job", jobId);
+
+        List<JobLogLine> lines = new List<JobLogLine>();
+        await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            lines.Add(new JobLogLine(reader.GetInt64(0), reader.GetString(1), reader.GetString(2)));
+        }
+
+        return lines;
+    }
+
     // Move the ack watermark forward only (bounds the agent's replay buffer, 2.3).
     public async Task AckLogAsync(string jobId, long seq, CancellationToken ct)
     {
@@ -207,3 +226,6 @@ public sealed class JobRepository(ServerCenterDatabase database)
         _ => throw new ArgumentOutOfRangeException(nameof(stream), stream, null)
     };
 }
+
+// One persisted job log line (stream is "stdout" | "stderr" | "note").
+public sealed record JobLogLine(long Seq, string Stream, string Line);

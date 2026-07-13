@@ -53,6 +53,8 @@ public sealed class AgentWorker(
                     new ServerInstallExecutor(new SteamCmd(runner)),
                     new ServerConfigApplyExecutor(new FileConfigWriter()),
                     new ServerRemoveExecutor(services, new FilePathCleaner()),
+                    new ServerConfigReadExecutor(new FileConfigReader()),
+                    new ServerConfigWriteExecutor(new FileConfigWriter()),
                     // Recipe-driven provisioning (Phase 7): compose the convergent primitives.
                     new RecipeApplyExecutor(
                         new AptPackageInstaller(runner), new SteamCmd(runner), new FileConfigWriter(),

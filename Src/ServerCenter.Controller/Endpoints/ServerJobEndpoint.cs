@@ -19,6 +19,16 @@ public static class ServerJobEndpoint
         app.MapPost("/jobs/recipe-apply",
             async (ServerJobRequest request, ServerJobDispatcher dispatcher, CancellationToken ct) =>
                 Respond(await dispatcher.ApplyRecipeAsync(request.AgentId, request.InstanceId, ct)));
+
+        // Raw config read/edit: the node is derived from the instance, so these take instanceId (not
+        // agentId) + the target path. Read emits contents on the job's stdout log (GET /jobs/{id}/logs).
+        app.MapPost("/jobs/server-config-read",
+            async (ConfigReadRequest request, ServerJobDispatcher dispatcher, CancellationToken ct) =>
+                Respond(await dispatcher.ConfigReadAsync(request.InstanceId, request.Path, ct)));
+
+        app.MapPost("/jobs/server-config-write",
+            async (ConfigWriteRequest request, ServerJobDispatcher dispatcher, CancellationToken ct) =>
+                Respond(await dispatcher.ConfigWriteAsync(request.InstanceId, request.Path, request.Content, ct)));
     }
 
     private static IResult Respond(ServerDispatchResult result) =>
@@ -28,3 +38,7 @@ public static class ServerJobEndpoint
 }
 
 public sealed record ServerJobRequest(string AgentId, string InstanceId);
+
+public sealed record ConfigReadRequest(string InstanceId, string Path);
+
+public sealed record ConfigWriteRequest(string InstanceId, string Path, string Content);

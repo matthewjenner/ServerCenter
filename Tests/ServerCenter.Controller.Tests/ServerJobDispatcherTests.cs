@@ -296,6 +296,58 @@ public sealed class ServerJobDispatcherTests : IAsyncLifetime
         result.Outcome.Should().Be(ServerDispatchOutcome.NotFound);
     }
 
+    [Fact]
+    public async Task ConfigRead_dispatches_for_a_rendered_config_path()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await SeedTemplatedInstanceAsync(ct);
+
+        ServerDispatchResult result = await _dispatcher.ConfigReadAsync(
+            "arena1", "/opt/servercenter/cs2/arena1/cfg/server.cfg", ct);
+
+        result.Outcome.Should().Be(ServerDispatchOutcome.Dispatched);
+        Job job = (await _jobs.GetAsync(result.JobId!, ct))!;
+        job.Type.Should().Be("server.config-read");
+    }
+
+    [Fact]
+    public async Task ConfigWrite_refuses_a_path_that_is_not_a_config_file()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await SeedTemplatedInstanceAsync(ct);
+
+        ServerDispatchResult result = await _dispatcher.ConfigWriteAsync("arena1", "/etc/shadow", "x", ct);
+
+        result.Outcome.Should().Be(ServerDispatchOutcome.NotConfigured);
+    }
+
+    [Fact]
+    public async Task ResolveConfigPaths_returns_the_rendered_paths()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await SeedTemplatedInstanceAsync(ct);
+
+        IReadOnlyList<string>? paths = await _dispatcher.ResolveConfigPathsAsync("arena1", ct);
+
+        paths.Should().Contain("/opt/servercenter/cs2/arena1/cfg/server.cfg");
+    }
+
+    private async Task SeedTemplatedInstanceAsync(CancellationToken ct)
+    {
+        await _descriptors.InsertAsync(new GameDescriptor
+        {
+            Id = "cs2-dedicated",
+            Version = 3,
+            SteamApp = new SteamAppSpec(730, "/opt/servercenter/cs2/{{instance.id}}"),
+            Capabilities = new GameCapabilities
+            {
+                ConfigGen = new ConfigGenSpec("config-template",
+                    [new ConfigFileSpec("cs2/server.cfg", "{{instance.dir}}/cfg/server.cfg", ConfigFormat.Kv)])
+            }
+        }, 1000, ct);
+        await InsertInstanceAsync("arena1", ct, descriptorVersion: 3);
+    }
+
     private async Task InsertInstanceAsync(string id, CancellationToken ct, int? descriptorVersion = null, int? recipeVersion = null, int portGame = 27015)
     {
         await _instances.InsertAsync(new ServerInstance
