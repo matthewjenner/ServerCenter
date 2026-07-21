@@ -48,6 +48,50 @@ a build has run so `obj/` holds the generated files; update the C# / C# Dev Kit 
 `.slnx` support. If an error survives a fresh language-server restart AND a clean `dotnet build`, only
 then treat it as real.
 
+## Known code-level traps
+
+Recurring ones that have bitten more than once. Test-specific traps live in `Docs/testing.md`.
+
+### Proto vs domain enum name clashes
+
+The generated proto namespace (`ServerCenter.Contracts.V1`) and the Core domain **both** define
+`JobState`, `LogStream`, and `AgentLiveness` (and there is a `VmState`). With both namespaces
+`using`-ed, the bare name is ambiguous (CS0104).
+
+Fixes used here: fully qualify one side (`Contracts.V1.JobState.X` or `Core.Jobs.JobState.X`), or -
+in a view-model - **name the property differently from the enum type**. CommunityToolkit's
+`[ObservableProperty]` on a field `_agentLiveness` generates a property `AgentLiveness`, which then
+shadows the enum *type* and yields CS0120. Hence `AgentLivenessText` / `VmStateText` in the UI.
+
+### TLS certificates need a PKCS#12 round-trip
+
+A certificate created by `X509Certificate2.CreateFromPem` carries an **ephemeral key** that
+SChannel/Kestrel cannot use. Round-trip it:
+
+```csharp
+X509CertificateLoader.LoadPkcs12(cert.Export(X509ContentType.Pkcs12), null)
+```
+
+See `CertificateAuthority.ToUsableCertificate`.
+
+### gRPC forbids concurrent stream writes
+
+The transport adapters (`GrpcAgentTransport`, `GrpcControllerStream`) serialize writes behind a
+write lock. This is required once heartbeats and job progress can send concurrently - do not remove
+it. Related: `IAgentCommandHandler.OnCommandAsync` receives the transport so a running job can stream
+`JobProgress`/`CommandResult` upward, and job execution is fire-and-forget from the read loop so it
+never blocks the pump.
+
+### Avalonia 12 renames
+
+`TextBox.Watermark` became **`PlaceholderText`** in Avalonia 12. XAML warnings do not fail the build,
+so a stale name fails silently at runtime instead.
+
+### Node id equals agent id
+
+In the current 1:1 mapping, `EnsureNode` uses the agent id as the node id. Anything assuming a
+separate node identity is premature.
+
 ## Run locally (smoke)
 
 ```bash

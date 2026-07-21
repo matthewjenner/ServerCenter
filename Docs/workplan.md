@@ -624,6 +624,34 @@ Windows, reuse before bespoke.
 
 ## Decisions Log
 
+- 2026-07-13: DOCS MADE SELF-CONTAINED (no version bump - docs only). The repo's standards had drifted
+  into the maintainer's local assistant memories, so handing the repo to another dev would have lost
+  them. Folded every genuine standard back into `/Docs` and deleted the memory copies. NEW:
+  `Docs/conventions.md` (the standard: .slnx + Title Case layout, public-repo/no-secrets, build-enforced
+  code style, TreatWarningsAsErrors bar, bash-only scripts + the PowerShell 5.x rule for future Windows
+  agent scripts, ASCII punctuation, the deliberate dependency pins WITH rationale - SQLitePCLRaw 3.53.3,
+  AwesomeAssertions vs paid FluentAssertions >= 7, Avalonia 12.x not 11.x - the versioning/release-bump
+  rule and WHY - version-gated releases skip an unbumped push - GitHub Actions version verification,
+  contracts-before-code, workplan discipline); `Docs/identity.md` (mTLS/CA/enrollment/authorizer, the
+  Security:RequireClientCertificate gate, WHY THE AGENT RUNS AS ROOT with the apt-lock failure that
+  proved it, known gaps, and the planned pending->approve onboarding gate); `Docs/game-server-model.md`
+  (descriptor/recipe/instance, per-instance scoping via the reserved token namespace, the six job types,
+  the path guard, raw-edit-vs-config-apply, endpoints, seeded CS2, UI surface, the nested-under-nodes
+  direction). EXTENDED: `Docs/testing.md` gained "Practical patterns and traps" (realized test projects
+  + TestFakes, xUnit1051, FakeTimeProvider's 2000-01-01 floor, temp-SQLite pooling/WAL/per-connection
+  foreign_keys, the ambiguous-`id` JOIN column lists, TestServer-has-no-TLS and how real mTLS is
+  actually covered, and the BackgroundService StartAsync race that cost a red CI);
+  `Docs/dev-environment.md` gained "Known code-level traps" (proto-vs-domain enum clashes incl. the
+  [ObservableProperty] type-shadowing case, PKCS#12 round-trip for usable certs, serialized gRPC stream
+  writes, Avalonia 12 Watermark->PlaceholderText, node-id == agent-id); `Docs/build-and-update.md`
+  gained section 5, the in-guest update-profile axis (providers/channels, update-only-if-present, the
+  apt best-effort refresh and why the provider is the right layer, service bracketing, seeded policies,
+  the canonical kebab/camelCase JSON dialect). FIXED: CLAUDE.md pointed at four non-existent docs
+  (`/docs/contracts/`, `/docs/identity.md`, `/docs/phases/`, `/docs/design-brief-archive.md`) and its
+  "Global rules" made the project depend on external memories - it now states the repo docs ARE the
+  standard and are self-contained. README's Contributing section now summarizes and links the standard.
+  Local memories reduced to two non-repo items (maintainer workflow preferences; a cold-start bookmark).
+
 - 2026-07-13: REFERENCE-DATA REFRESH ON RECONNECT (v0.1.24). Bug: the controller-backed dropdowns
   (policy pickers, game picker) loaded ONCE at Connect and never again - so a controller restart that
   re-seeded policies (or added games/instances) stayed invisible until an app reload. Root cause:

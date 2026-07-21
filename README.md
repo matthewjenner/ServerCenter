@@ -84,18 +84,31 @@ dotnet test  ServerCenter.slnx
 - **[Docs/architecture.md](Docs/architecture.md)** - the three tiers, the spine, the invariants.
 - **[Docs/build-and-update.md](Docs/build-and-update.md)** - versioning and the three update models
   (UI Velopack, agent blue-green, controller container image).
-- **[Docs/dev-environment.md](Docs/dev-environment.md)** - build/run/deploy, code style, IDE notes.
+- **[Docs/conventions.md](Docs/conventions.md)** - the standards: code style, scripts, dependency
+  pins, the versioning/release rule, ASCII and secrets policy.
+- **[Docs/dev-environment.md](Docs/dev-environment.md)** - build/run/deploy, code style, IDE notes,
+  known code-level traps.
+- **[Docs/identity.md](Docs/identity.md)** - identity, mTLS, enrollment, why the agent runs as root.
+- **[Docs/game-server-model.md](Docs/game-server-model.md)** - descriptor/recipe/instance,
+  per-instance scoping, the game-server jobs.
 - **[Docs/linux-smoke-runbook.md](Docs/linux-smoke-runbook.md)** - ordered end-to-end bring-up on
   real hardware.
 - **[Docs/backup-restore-runbook.md](Docs/backup-restore-runbook.md)** - consistent snapshot ->
   versioned store, and how to *test the restore*.
-- **[Docs/testing.md](Docs/testing.md)** - test tiers and conventions.
+- **[Docs/testing.md](Docs/testing.md)** - test tiers, plus the practical test traps.
 - **[Docs/phase-0-contracts.md](Docs/phase-0-contracts.md)** - the contract-first foundation.
 - **[Deploy/README.md](Deploy/README.md)** - installing the agent and the controller on a node.
 
 ## Contributing / conventions
 
-Code style is build-enforced: no `var`, no top-level statements, explicit types, file-scoped
-namespaces (`.editorconfig` + `EnforceCodeStyleInBuild` under `TreatWarningsAsErrors`). `dotnet build
-ServerCenter.slnx` is authoritative - the IDE may show phantom errors from stale generated code (see
-[Docs/dev-environment.md](Docs/dev-environment.md)). Contracts land before code.
+**[Docs/conventions.md](Docs/conventions.md) is the full standard** - read it before your first PR.
+The short version:
+
+- Code style is build-enforced: no `var`, no top-level statements, explicit types, file-scoped
+  namespaces (`.editorconfig` + `EnforceCodeStyleInBuild` under `TreatWarningsAsErrors`).
+- `dotnet build ServerCenter.slnx` is authoritative - the IDE may show phantom CS0246/CS1061 from
+  stale generated code (see [Docs/dev-environment.md](Docs/dev-environment.md)).
+- Contracts land before code; `Docs/workplan.md` is the living tracker.
+- Bump `VersionPrefix` (`bash Scripts/bump-version.sh Patch`) on any shippable change - releases are
+  version-gated, so an unbumped change publishes nothing.
+- ASCII punctuation only; repo scripts are bash; the repo is public, so no secrets.

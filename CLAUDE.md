@@ -1,10 +1,10 @@
 # CLAUDE.md — Homelab Fleet Manager
 
-> **This file is a router, not a library.** It carries the durable rules that govern _every_ task, plus pointers to the detailed docs. Pull the heavy docs into context only when the task needs them. The full design reasoning is archived (not auto-loaded) at `/docs/design-brief-archive.md`.
+> **This file is a router, not a library.** It carries the durable rules that govern _every_ task, plus pointers to the detailed docs. Pull the heavy docs into context only when the task needs them.
 
 ## Global rules
 
-Global code-quality / testing / best-practices memories and any repo rules **govern this project** and win on style, testing, structure, and quality bars. Apply them; cite them in docs rather than restating. Flag genuine conflicts instead of guessing.
+**The repo docs are the standard and are self-contained** - anyone (or any agent) can work here from this file plus `/Docs`, with no external context required. `/Docs/conventions.md` governs style, scripts, dependencies, versioning, and the quality bar; `/Docs/testing.md` governs testing. Follow them and cite them rather than restating them. Flag genuine conflicts instead of guessing.
 
 ## What this is
 
@@ -27,14 +27,18 @@ Three declarative surfaces, all controller-owned versioned data: **game capabili
 
 ## Docs (pull in as needed)
 
-- Architecture overview → `/docs/architecture.md`
-- Contracts (protobuf envelope, job state machine, SQLite schema, agent interfaces, capability/`ICapability`, `UpdatePolicy`, `BuildRecipe`) → `/docs/contracts/`
-- Identity & auth model → `/docs/identity.md`
-- Backup/restore runbook (consistent snapshot → versioned S3; **test the restore**) → `/docs/backup.md`
-- Phase plans (contracts touched, primitives built/reused, definition of done) → `/docs/phases/`
 - Living build tracker + Decisions Log (READ FIRST on cold load) → `/Docs/workplan.md`
-- Dev environment: build/run/deploy, code style, IDE phantom errors → `/Docs/dev-environment.md`
+- Architecture overview → `/Docs/architecture.md`
+- Contracts (protobuf envelope, job state machine, SQLite schema, agent interfaces, capability/`ICapability`, `UpdatePolicy`, `BuildRecipe`) → `/Docs/phase-0-contracts.md` (proto files in `/Contracts`)
+- **Conventions and standards** (style, scripts, pins, versioning/release rule, ASCII, secrets) → `/Docs/conventions.md`
+- Identity & auth model (mTLS, enrollment, why the agent runs as root, planned approve-gate) → `/Docs/identity.md`
+- Game-server model (descriptor/recipe/instance, per-instance scoping, jobs) → `/Docs/game-server-model.md`
+- Build/versioning + the three update models + in-guest update profiles → `/Docs/build-and-update.md`
+- Backup/restore runbook (consistent snapshot → versioned S3; **test the restore**) → `/Docs/backup-restore-runbook.md`
+- Test tiers + practical test traps → `/Docs/testing.md`
+- Dev environment: build/run/deploy, code style, IDE phantom errors, code-level traps → `/Docs/dev-environment.md`
 - Linux end-to-end smoke checklist → `/Docs/linux-smoke-runbook.md`
+- Phase plans / definition of done are inside `/Docs/workplan.md` (there is no separate phases dir).
 
 ## Standing reminders
 

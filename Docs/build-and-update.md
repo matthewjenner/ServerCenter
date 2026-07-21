@@ -115,3 +115,70 @@ Per the global rule, action majors are verified against the live latest, not tra
 `actions/checkout@v7`, `actions/setup-dotnet@v5`, and for the controller image
 `docker/login-action@v4`, `docker/metadata-action@v6`, `docker/build-push-action@v7`.
 Re-verify on any workflow edit.
+
+## 5. In-guest update profiles (a separate axis)
+
+**Do not confuse this with the three deploy update models above.** Sections 1-4 are how
+*ServerCenter itself* ships. This section is how ServerCenter updates *the software on a managed
+node* - the "update profiles" an operator picks from on a fleet card.
+
+### The shape
+
+An `UpdatePolicy` (`Src/ServerCenter.Core/Updates`) is pure declarative data: **what** to update,
+**how**, **when**, whether to **reboot**, what **preflight** to run, and whether it needs
+**approval**. `what.provider` selects a pluggable `IUpdateProvider` on the agent, so a new update
+target is a provider plus data, not a new job type.
+
+Policies are versioned by `(id, version)`, exactly like descriptors and recipes, so job history
+reconstructs which policy version ran. Storing an edit therefore requires a **new version** - the UI
+auto-bumps to latest + 1.
+
+### Providers ("channels")
+
+| Channel | Provider | Behavior |
+| ------- | -------- | -------- |
+| `apt` | `AptUpdateProvider` | apt update/upgrade. The refresh is **best-effort** (see below). |
+| `plex` | `PlexUpdateProvider` | Updates the Plex app channel. **Presence-guarded**: no-op success if Plex is not installed - it never installs Plex. |
+| `steamcmd` | `SteamCmdUpdateProvider` | Locates steamcmd (`command -v`, then `/usr/games`, `/usr/local/bin`, `/usr/bin`) and self-updates it **in place**; no-op success if absent. Distinct from updating a game *app*, which goes through `server.install`. |
+| `wu` | - | Windows Update. Named in the contract, deferred with Windows (Phases 8/9). |
+
+The governing pattern is **update-only-if-present**: a provider that cannot find its target returns a
+no-op success rather than installing it. That makes any policy safe to dispatch fleet-wide without
+accidentally installing software on nodes that never had it.
+
+### apt refresh is best-effort (deliberate)
+
+A non-zero `apt-get update` is **not** fatal. On live hardware a single stale third-party source
+(an ExpressVPN `mirror+file:` entry with no Release file) made `apt-get update` exit 100, which
+aborted the provider *before* the upgrade - so the node went unpatched while every other repo had
+refreshed fine, and the job reported a misleading failure.
+
+Behavior now: log the refresh stderr as a warning and continue to `apt-get upgrade` using whatever
+indices did refresh. **The upgrade's exit code decides the job.** A success whose refresh had errors
+surfaces `updated (some repos failed to refresh: <first apt error line>)` in the final progress note.
+`CheckAsync` is likewise best-effort.
+
+There is **no apt flag** that skips one bad repo for a single run, so the provider is the correct
+layer to be tolerant - not a command-line option. This matches the convergent/idempotent spirit: one
+misconfigured source must not block patching the whole node.
+
+### Service bracketing
+
+`UpdatePolicy` carries an optional default `ServiceUnit`. `update.apply` brackets
+stop -> update -> start when `how = stop-update-start` (or `drain-then-update`) **and** a service
+unit is present; the dispatcher resolves it as `dispatch value ?? policy default`. That default is
+what makes a profile like `plex` (`plexmediaserver.service`) one-click.
+
+### Seeded policies
+
+`DefaultPolicies.EnsureAsync` (wired in `Program.cs`) seeds `apt`, `plex`, and `steamcmd` on every
+controller startup. It is **idempotent** - an id that already exists is left untouched, so an
+operator edit is never overwritten. The policy picker is therefore never empty on a fresh install.
+
+### The canonical JSON dialect
+
+Policy bodies use one dialect, defined by `UpdateJson.Options`: **camelCase properties, kebab-case
+enum tokens** (`stop-update-start`, `if-required`, `drain-players-via-rcon`), null fields omitted,
+and integer enum values **rejected** on read so a typo fails loudly instead of binding to 0. The
+Settings tab edits policies through a structured form (dropdowns whose items are the exact wire
+tokens) with a live read-only JSON preview, rather than freeform JSON.

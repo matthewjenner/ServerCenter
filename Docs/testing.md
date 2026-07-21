@@ -121,6 +121,65 @@ add after the fact.
 
 ---
 
+## Practical patterns and traps (learned the hard way)
+
+The tiers above are the strategy; this is what actually bites when writing tests in this repo.
+
+### The realized test projects
+
+| Project | Tier | Shape |
+| ------- | ---- | ----- |
+| `*.Core.Tests`, `*.Ui.Tests`, `*.Agent.Tests`, `*.Capabilities.Tests` | 1 | Pure/fake-driven, no infra. |
+| `*.Controller.Tests` | 1-2 | Real temp-file SQLite. |
+| `*.Integration.Tests` | 2 | Real in-process gRPC + a real Kestrel for mTLS. |
+
+`TestFakes` holds the shared fakes, including `InMemoryDuplexLink` (pairs an `IAgentTransport` with an
+`IControllerStream`) and one fake per seam. Constraint 1 from above is a hard rule: **every seam ships
+with its fake**, and a seam's definition of done includes it.
+
+### Analyzer and framework gotchas
+
+- **xUnit1051**: pass `TestContext.Current.CancellationToken` to any async call that accepts a
+  `CancellationToken`. Under `TreatWarningsAsErrors` this is a build failure, not a warning.
+- **`FakeTimeProvider` starts at 2000-01-01.** Calling `SetUtcNow` with - or minting certificates
+  dated - anything earlier throws "cannot go back in time". Construct it at a realistic date
+  (`new FakeTimeProvider(new DateTimeOffset(2026, ...))`) or compute expected times from
+  `clock.GetUtcNow()`; never hardcode absolute times.
+
+### SQLite tests
+
+- **Temp-file databases**: call `SqliteConnection.ClearAllPools()` before deleting the `.db`, and
+  delete the `-wal` and `-shm` sidecars too, or the next test inherits a locked/stale file.
+- WAL is set **once at init**; `foreign_keys` is **per connection** (so it must be set on every
+  connection, not once at startup).
+- **Ambiguous `id` on JOINs**: `job` and `node` both have an `id` column, so a shared column-list
+  constant breaks the open-jobs query. Keep **two** constants - an unqualified list for `INSERT` and
+  a `job.`-qualified list for `SELECT` - and keep their order in sync with the mapper.
+
+### Integration tests and TLS
+
+`WebApplicationFactory<Program>` uses `TestServer`, which has **no TLS at all**. So:
+
+- In-process integration tests set `Security:RequireClientCertificate` to **false** and exercise the
+  plaintext h2c path.
+- The **real** mTLS path is tested separately by standing up a real Kestrel on an ephemeral
+  `127.0.0.1:0` port through the shared `ControllerHost.AddControllerServices` /
+  `MapControllerEndpoints`. Do not assume TestServer coverage proves the TLS path. See
+  `Docs/identity.md`.
+
+`WebApplicationFactory<Program>` works with this repo's explicit `class Program { Main }` (no
+top-level statements) as long as the test file has `using ServerCenter.Controller;`.
+
+### The BackgroundService race (cost a red CI)
+
+`IHostedService.StartAsync` does **not** run `ExecuteAsync` to completion - it kicks it off and
+returns. A test that calls `StartAsync` and then immediately asserts the service's side effects (for
+example `LibvirtStatePoller` seeding a cache) passes on a fast dev box and fails on CI. **Fix:** wait
+for the side effect with a timeout before asserting; never assume synchronous completion.
+
+Corollary and general rule: **an intermittent local test failure is a real race, not "transient"** -
+chase it.
+
 ## Per-phase tier coverage
 
 Each phase's definition of done in `workplan.md` names its tier(s). Summary map:
